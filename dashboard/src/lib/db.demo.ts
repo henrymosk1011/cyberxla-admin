@@ -3,7 +3,7 @@
 import catalogSeed from "../../../tests/fixtures/catalog.json";
 import { priceQuote } from "./catalog.ts";
 import { catalog as liveCatalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Lead, LeadStatus, Note, Quote, QuoteStatus, ServiceCategory, ServiceRow } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Lead, LeadStatus, Note, PackageRow, Quote, QuoteStatus, ServiceCategory, ServiceRow } from "./types.ts";
 
 const categories: ServiceCategory[] = catalogSeed.map((c, i) => ({ id: c.id, name: c.name, blurb: c.blurb, sort: i * 10 }));
 const services: ServiceRow[] = catalogSeed.flatMap((c) => c.services.map((s, j) => ({
@@ -63,6 +63,11 @@ for (let i = 0; i < 46; i++) {
 // A few existing clients: some converted from won leads, one added by hand.
 const clients: Client[] = [];
 const clientServices: ClientService[] = [];
+const packages: PackageRow[] = [
+  { id: "essential", name: "Essential", rates: [10, 9.5, 9, 8.5], sort: 0 },
+  { id: "secure", name: "Secure", rates: [18, 17, 16, 15], sort: 1 },
+  { id: "shield", name: "Shield", rates: [32, 30, 28.5, 27], sort: 2 },
+];
 const total = (unit: number, qty: number) => Math.round(unit * qty * 100) / 100;
 function clientFromLead(l: Lead): string {
   const q = quotes.filter((x) => x.lead_id === l.id && !x.archived_at).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
@@ -222,6 +227,10 @@ const db: Db = {
     const s = services.find((x) => x.id === id)!;
     if (s.locked) throw new Error(`${s.name} is used by the website packages and can't be deleted`);
     services.splice(services.indexOf(s), 1);
+  },
+  packages: () => wait(packages.map((p) => ({ ...p, rates: [...p.rates] }))),
+  async savePackageRates(id, rates) {
+    packages.find((p) => p.id === id)!.rates = [...rates];
   },
   async reorder(table, ids) {
     const list: { id: string; sort: number }[] = table === "services" ? services : categories;

@@ -4,7 +4,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
 import { catalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Enrollment, Lead, LeadStatus, Note, Quote, QuoteStatus, ServiceRow } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Quote, QuoteStatus, ServiceRow } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -234,6 +234,18 @@ const db: Db = {
     const { error, count } = await sb.from("services").delete({ count: "exact" }).eq("id", id);
     fail(friendly(error));
     if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async packages() {
+    const { data, error } = await sb.from("packages").select("id, name, rates, sort").order("sort");
+    fail(error);
+    return (data ?? []).map((r) => ({ ...(r as PackageRow), rates: (r.rates as unknown[]).map(Number) }));
+  },
+
+  async savePackageRates(id, rates) {
+    const { error, count } = await sb.from("packages").update({ rates }, { count: "exact" }).eq("id", id);
+    fail(friendly(error));
+    if (count === 0) throw new Error("Nothing was saved. Try signing in again.");
   },
 
   async reorder(table, ids) {

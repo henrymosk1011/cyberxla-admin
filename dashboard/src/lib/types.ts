@@ -108,6 +108,8 @@ export interface Db {
   deleteService(id: string): Promise<void>;
   /** Persist a new order: each id gets sort = index * 10. */
   reorder(table: "services" | "service_categories", ids: string[]): Promise<void>;
+  packages(): Promise<PackageRow[]>;
+  savePackageRates(id: PackageId, rates: number[]): Promise<void>;
 
   clients(): Promise<Client[]>;
   client(id: string): Promise<Client | null>;
@@ -127,6 +129,11 @@ export interface Db {
 }
 
 export type Unit = "dev" | "mo" | "once" | "devonce";
+
+export type PackageId = "essential" | "secure" | "shield";
+/** Homepage package; rates are per device per month for 1-24, 25-49, 50-99 and 100+ devices. */
+export type PackageRow = { id: PackageId; name: string; rates: number[]; sort: number };
+export const RATE_TIERS = ["1 to 24", "25 to 49", "50 to 99", "100+"] as const;
 
 export type ServiceCategory = { id: string; name: string; blurb: string; sort: number };
 
