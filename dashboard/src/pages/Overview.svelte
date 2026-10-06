@@ -5,9 +5,12 @@
   import StatusPill from "../components/StatusPill.svelte";
   import { kpis, stages, topServices, weekly } from "../lib/stats.ts";
   import { ago, money, moneyCompact, num, shortDate, STATUS_LABEL } from "../lib/format.ts";
-  import type { Lead, Quote } from "../lib/types.ts";
+  import type { Client, ClientService, Lead, Quote } from "../lib/types.ts";
 
-  let { leads, quotes, stale }: { leads: Lead[]; quotes: Quote[]; stale: boolean } = $props();
+  let { leads, quotes, clients = [], clientLines = [], stale }: { leads: Lead[]; quotes: Quote[]; clients?: Client[]; clientLines?: ClientService[]; stale: boolean } = $props();
+
+  const activeClients = $derived(new Set(clients.filter((c) => c.status === "active").map((c) => c.id)));
+  const mrr = $derived(clientLines.filter((l) => l.billing === "monthly" && activeClients.has(l.client_id)).reduce((s, l) => s + l.amount, 0));
 
   const RANGES = [
     { weeks: 4, label: "4 weeks" },
@@ -41,7 +44,12 @@
 
 <div class="grid rise" class:stale>
   <section class="card hero">
-    <Kpi hero label="Open pipeline" value="{money(k.openMonthly)}/mo" hint="{num(k.openCount)} open {k.openCount === 1 ? 'lead' : 'leads'} · {money(k.openOneTime)} one time" />
+    <a class="hero-link" href="#/clients"><Kpi hero label="Recurring revenue" value="{money(mrr)}/mo" hint="{num(activeClients.size)} active {activeClients.size === 1 ? 'client' : 'clients'} · {moneyCompact(mrr * 12)}/yr" /></a>
+    <div class="pipe">
+      <span class="eyebrow">Open pipeline</span>
+      <span class="pv num">{money(k.openMonthly)}<small>/mo</small></span>
+      <span class="muted">{num(k.openCount)} open {k.openCount === 1 ? "lead" : "leads"} · {money(k.openOneTime)} one time</span>
+    </div>
   </section>
   <section class="card"><Kpi label="New leads" value={num(k.newLeads)} delta={k.newLeads - k.newLeadsPrev} deltaLabel="vs prior" hint="last {rangeLabel}" /></section>
   <section class="card"><Kpi label="Quotes received" value={num(k.quotes)} delta={k.quotes - k.quotesPrev} deltaLabel="vs prior" spark={wk.map((w) => w.count)} /></section>
@@ -121,6 +129,11 @@
   .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; transition: opacity 0.2s; }
   .grid.stale { opacity: 0.6; }
   .hero { grid-column: span 2; display: flex; flex-direction: column; justify-content: flex-end; background: linear-gradient(160deg, rgba(214,255,63,0.08), transparent 55%), var(--surface); }
+  .hero { gap: 16px; }
+  .hero-link { text-decoration: none; color: inherit; }
+  .pipe { display: flex; flex-direction: column; gap: 2px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; }
+  .pv { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+  .pv small { font-size: 13px; color: var(--muted); font-weight: 500; }
   .wide { grid-column: span 4; }
   .side { grid-column: span 2; display: flex; flex-direction: column; }
   .half { grid-column: span 3; }

@@ -54,7 +54,7 @@ export type AuditEntry = {
   actor: string | null;
   actor_role: string;
   action: "insert" | "update" | "delete";
-  table_name: "leads" | "quotes" | "lead_notes";
+  table_name: "leads" | "quotes" | "lead_notes" | "clients" | "client_services" | "services" | "service_categories";
   row_id: string | null;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
@@ -99,7 +99,82 @@ export interface Db {
   updateQuoteServices(id: string, serviceIds: string[], workstations: number, servers: number): Promise<void>;
   deleteQuote(id: string): Promise<void>;
   hideActivity(auditId: number, hidden: boolean): Promise<void>;
+
+  categories(): Promise<ServiceCategory[]>;
+  services(): Promise<ServiceRow[]>;
+  saveCategory(c: ServiceCategory, isNew: boolean): Promise<void>;
+  deleteCategory(id: string): Promise<void>;
+  saveService(s: ServiceRow, isNew: boolean): Promise<void>;
+  deleteService(id: string): Promise<void>;
+  /** Persist a new order: each id gets sort = index * 10. */
+  reorder(table: "services" | "service_categories", ids: string[]): Promise<void>;
+
+  clients(): Promise<Client[]>;
+  client(id: string): Promise<Client | null>;
+  allClientServices(): Promise<ClientService[]>;
+  clientServices(clientId: string): Promise<ClientService[]>;
+  createClient(c: ClientInput): Promise<string>;
+  updateClient(id: string, patch: Partial<ClientInput>): Promise<void>;
+  deleteClient(id: string): Promise<void>;
+  addClientService(s: Omit<ClientService, "id">): Promise<void>;
+  updateClientService(id: string, patch: Partial<Omit<ClientService, "id" | "client_id">>): Promise<void>;
+  deleteClientService(id: string): Promise<void>;
+  clientActivity(clientId: string): Promise<AuditEntry[]>;
+  /** Create (or find) the client for a lead from its newest active quote; returns the client id. */
+  convertLead(leadId: string): Promise<string>;
+
   subscribe(cb: (e: ChangeEvent) => void): () => void;
 }
+
+export type Unit = "dev" | "mo" | "once" | "devonce";
+
+export type ServiceCategory = { id: string; name: string; blurb: string; sort: number };
+
+export type ServiceRow = {
+  id: string;
+  category_id: string;
+  name: string;
+  description: string;
+  price: number;
+  unit: Unit;
+  price_from: boolean;
+  in_packages: boolean;
+  active: boolean;
+  locked: boolean;
+  sort: number;
+};
+
+export const CLIENT_STATUSES = ["active", "paused", "former"] as const;
+export type ClientStatus = (typeof CLIENT_STATUSES)[number];
+
+export type Client = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  company: string | null;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  status: ClientStatus;
+  started_on: string | null;
+  workstations: number;
+  servers: number;
+  notes: string | null;
+  lead_id: string | null;
+};
+
+export type ClientInput = Omit<Client, "id" | "created_at" | "updated_at">;
+
+export type ClientService = {
+  id: string;
+  client_id: string;
+  service_id: string | null;
+  name: string;
+  billing: "monthly" | "once";
+  amount: number;
+  notes: string | null;
+  sort: number;
+};
 
 export type ToastMsg = { id: number; title: string; body: string; href?: string };

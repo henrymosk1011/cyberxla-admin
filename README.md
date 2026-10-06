@@ -28,12 +28,13 @@ access to any table.
 | `supabase/migrations/0002_realtime.sql` | Live updates for leads and quotes |
 | `supabase/migrations/0003_archive_activity_keepalive.sql` | Archive/delete for leads and quotes, hideable activity entries, keep-alive heartbeat |
 | `supabase/migrations/0004_quote_edits.sql` | Lead value follows edits to a quote's services and device counts |
+| `supabase/migrations/0005_catalog_and_clients.sql` | Services catalog (managed in the dashboard, read live by the website and the quote function) and clients |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
 | `supabase/functions/submit-quote/index.ts` | The public endpoint |
-| `supabase/functions/submit-quote/lib.ts` | Validation and pricing (`CATALOG` must match the website) |
+| `supabase/functions/submit-quote/lib.ts` | Validation and pricing (catalog passed in from the database) |
 | `tests/` | Unit tests: `npm test` |
-| `scripts/check-catalog.mjs` | `npm run check-catalog` fails if website prices and `CATALOG` disagree |
+| `scripts/bundle-function.mjs` | `npm run bundle-function` writes `dist/submit-quote.ts`, one file to paste into the Supabase editor |
 
 ## One-time setup
 
@@ -70,11 +71,18 @@ access to any table.
    - CLI: `supabase functions deploy submit-quote --project-ref <ref>`
      (reads `supabase/config.toml`, which already turns JWT verification off).
 
-## Changing prices
+## Services and prices
 
-Prices live in two places: the website's `build-your-quote/index.html` and
-`CATALOG` in `lib.ts`. After changing either, run `npm run check-catalog`
-(it reads the live site by default, or pass a local path to the HTML).
+Services, categories and prices live in the database and are edited on the
+dashboard's **Services** page. The website's Build Your Quote page loads them
+live (`public.service_catalog()`), falling back to the cards built into the
+page if the database is slow or down, and the quote function prices every
+submission from the same catalog. Patching, EDR and 24/7 MDR are used by the
+homepage packages, so they can be edited but not deleted or hidden.
+
+To redeploy the quote function after changing its code: `npm run
+bundle-function`, then paste `dist/submit-quote.ts` into Supabase > Edge
+Functions > submit-quote > Code and deploy.
 
 ## Dashboard
 

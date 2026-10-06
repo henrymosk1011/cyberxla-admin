@@ -1,47 +1,37 @@
 // Validation and pricing for submit-quote. Pure functions, no I/O, so they can
 // be unit-tested (tests/submit-quote.test.ts).
 //
-// Keep CATALOG in sync with build-your-quote/index.html on the website
-// (scripts/check-catalog.mjs compares them).
+// Services and prices live in the database (public.services, managed from the
+// dashboard) and are passed in as a Catalog.
 
 const MIN_MONTHLY = 300;
 const SERVER_MULT = 2.5;
 
-type Unit = "dev" | "mo" | "once" | "devonce";
-type Service = { name: string; price: number; unit: Unit; from?: boolean };
-
-export const CATALOG: Record<string, Service> = {
-  patching: { name: "Patching", price: 10, unit: "dev" },
-  edr: { name: "EDR", price: 8, unit: "dev" },
-  ransomware: { name: "Ransomware Protection", price: 5, unit: "dev" },
-  encryption: { name: "Disk Encryption", price: 3, unit: "dev" },
-  hardening: { name: "Device Hardening", price: 35, unit: "devonce" },
-  firewall: { name: "Firewall and Wi-Fi Security", price: 150, unit: "mo" },
-  mdr: { name: "24/7 MDR", price: 14, unit: "dev" },
-  domain: { name: "Domain Monitoring", price: 49, unit: "mo" },
-  darkweb: { name: "Dark Web Monitoring", price: 75, unit: "mo" },
-  cloudmon: { name: "Microsoft 365 and Google Monitoring", price: 5, unit: "dev" },
-  irretainer: { name: "Incident Response Retainer", price: 400, unit: "mo" },
-  irplan: { name: "Incident Response Plan", price: 2500, unit: "once" },
-  filtering: { name: "Email Filtering", price: 4, unit: "dev" },
-  training: { name: "Phishing Training", price: 3, unit: "dev" },
-  dmarc: { name: "SPF, DKIM, and DMARC", price: 750, unit: "once" },
-  mfa: { name: "MFA Rollout", price: 50, unit: "devonce" },
-  passwords: { name: "Password Manager", price: 6, unit: "dev" },
-  access: { name: "Access Reviews", price: 99, unit: "mo" },
-  pentest: { name: "Penetration Testing", price: 5000, unit: "once", from: true },
-  vuln: { name: "Vulnerability Management", price: 4, unit: "dev" },
-  risk: { name: "Security Risk Assessment", price: 3500, unit: "once" },
-  surface: { name: "External Attack Surface Review", price: 1800, unit: "once" },
-  cloudbackup: { name: "Microsoft 365 and Google Backup", price: 4, unit: "dev" },
-  devbackup: { name: "Device and Server Backup", price: 10, unit: "dev" },
-  restore: { name: "Restore Testing", price: 150, unit: "mo" },
-  drplan: { name: "Disaster Recovery Planning", price: 3000, unit: "once" },
-  insurance: { name: "Cyber Insurance Readiness", price: 2500, unit: "once" },
-  hipaa: { name: "HIPAA Security Support", price: 400, unit: "mo" },
-  policies: { name: "Security Policies", price: 2000, unit: "once" },
-  questionnaire: { name: "Client Security Questionnaires", price: 500, unit: "once" },
+export type Unit = "dev" | "mo" | "once" | "devonce";
+export type Service = { name: string; price: number; unit: Unit; from?: boolean };
+export type Catalog = Record<string, Service>;
+export type CatalogCategory = {
+  id: string;
+  name: string;
+  blurb: string;
+  services: { id: string; name: string; description: string; price: number; unit: Unit; from: boolean; in_packages: boolean }[];
 };
+
+const UNITS = new Set<Unit>(["dev", "mo", "once", "devonce"]);
+
+/** Turn public.service_catalog() output into an id -> service lookup. Skips anything malformed. */
+export function catalogFromRpc(data: unknown): Catalog {
+  const out: Catalog = Object.create(null);
+  if (!Array.isArray(data)) return out;
+  for (const cat of data as CatalogCategory[]) {
+    for (const s of Array.isArray(cat?.services) ? cat.services : []) {
+      const price = Number(s?.price);
+      if (typeof s?.id !== "string" || typeof s.name !== "string" || !Number.isFinite(price) || price < 0 || !UNITS.has(s.unit)) continue;
+      out[s.id] = { name: s.name, price, unit: s.unit, from: !!s.from };
+    }
+  }
+  return out;
+}
 
 export class BadRequest extends Error {}
 
@@ -65,11 +55,11 @@ function int(v: unknown, field: string, min: number, max: number): number {
   return v;
 }
 
-export function priceQuote(ids: string[], ws: number, sv: number) {
+export function priceQuote(catalog: Catalog, ids: string[], ws: number, sv: number) {
   const units = ws + sv * SERVER_MULT, devices = ws + sv;
   let monthlyRaw = 0, once = 0;
   const items = ids.map((id) => {
-    const s = CATALOG[id]!;
+    const s = catalog[id]!;
     const monthly = s.unit === "dev" || s.unit === "mo";
     const cost = s.unit === "dev" ? s.price * units : s.unit === "devonce" ? s.price * devices : s.price;
     if (monthly) monthlyRaw += cost; else once += cost;
@@ -86,7 +76,7 @@ export function priceQuote(ids: string[], ws: number, sv: number) {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function parseSubmission(body: unknown) {
+export function parseSubmission(body: unknown, catalog: Catalog) {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new BadRequest("body");
   const b = body as Record<string, unknown>;
 
@@ -104,14 +94,14 @@ export function parseSubmission(body: unknown) {
   const workstations = int(b.workstations, "workstations", 0, 5000);
   const servers = int(b.servers, "servers", 0, 500);
 
-  if (!Array.isArray(b.items) || b.items.length < 1 || b.items.length > Object.keys(CATALOG).length) {
+  if (!Array.isArray(b.items) || b.items.length < 1 || b.items.length > Object.keys(catalog).length) {
     throw new BadRequest("items");
   }
   const ids: string[] = [];
   for (const id of b.items) {
-    if (typeof id !== "string" || !Object.hasOwn(CATALOG, id) || ids.includes(id)) throw new BadRequest("items");
+    if (typeof id !== "string" || !Object.hasOwn(catalog, id) || ids.includes(id)) throw new BadRequest("items");
     ids.push(id);
   }
 
-  return { token, lead: { name, company, email, phone, message, workstations, servers }, priced: priceQuote(ids, workstations, servers) };
+  return { token, lead: { name, company, email, phone, message, workstations, servers }, priced: priceQuote(catalog, ids, workstations, servers) };
 }

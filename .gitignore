@@ -6,3 +6,4 @@ supabase/.branches/
 .DS_Store
 deno.lock
 !dashboard/.env.production
+dist/
