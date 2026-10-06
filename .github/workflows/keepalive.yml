@@ -1,0 +1,33 @@
+# Keeps the free-plan Supabase project from pausing for inactivity by making a
+# tiny database write (public.keepalive) a few times a day. Uses only the
+# public publishable key; the function can do nothing but bump one timestamp.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping the database
+        env:
+          SUPABASE_URL: https://onpdkqzcgnoepwiqcgtv.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_lKWjP561VJoxmAebZAIidA_lPYiNck3
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -X POST \
+              "$SUPABASE_URL/rest/v1/rpc/keepalive" \
+              -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+              -H "Content-Type: application/json" -d '{}') || code=000
+            echo "Attempt $attempt: HTTP $code"
+            if [ "$code" = 200 ] || [ "$code" = 204 ]; then exit 0; fi
+            sleep 20
+          done
+          echo "Heartbeat failed. If the project is paused, restore it from the Supabase dashboard."
+          exit 1

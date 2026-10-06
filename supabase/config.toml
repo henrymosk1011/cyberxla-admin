@@ -1,0 +1,5 @@
+# Only the settings this project relies on. The quote form is public, so the
+# function does its own checks (origin, Turnstile, validation, rate limits)
+# instead of requiring a Supabase JWT.
+[functions.submit-quote]
+verify_jwt = false
