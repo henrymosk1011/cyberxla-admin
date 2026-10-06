@@ -6,10 +6,11 @@
 //    Prices sent by the browser are ignored.
 // 4. Stores it by calling intake.submit_quote() as the quote_intake role,
 //    which can do nothing else. No service-role key is used.
-// 5. Sends a plain-text alert email through Resend.
+// 5. Sends a plain-text alert email through Resend, if configured.
 //
 // Secrets (Supabase > Edge Functions > Secrets):
-//   TURNSTILE_SECRET_KEY, RESEND_API_KEY, ALERT_EMAIL, INTAKE_DB_URL, IP_HASH_SALT
+//   TURNSTILE_SECRET_KEY, INTAKE_DB_URL, IP_HASH_SALT
+//   RESEND_API_KEY, ALERT_EMAIL (optional: email alerts)
 
 import postgres from "npm:postgres@3.4.5";
 import { BadRequest, parseSubmission, type priceQuote } from "./lib.ts";
@@ -103,6 +104,8 @@ async function hashIp(ip: string): Promise<string> {
 const money = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 
 async function sendAlert(lead: ReturnType<typeof parseSubmission>["lead"], priced: ReturnType<typeof priceQuote>) {
+  // Email alerts are optional: without a Resend key, quotes still land in the dashboard.
+  if (!Deno.env.get("RESEND_API_KEY") || !Deno.env.get("ALERT_EMAIL")) return;
   // Plain text only, so nothing a visitor types can render as HTML.
   const lines = [
     "New quote from the website.",

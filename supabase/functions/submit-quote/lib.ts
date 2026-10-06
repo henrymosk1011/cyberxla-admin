@@ -69,7 +69,7 @@ export function priceQuote(ids: string[], ws: number, sv: number) {
   const units = ws + sv * SERVER_MULT, devices = ws + sv;
   let monthlyRaw = 0, once = 0;
   const items = ids.map((id) => {
-    const s = CATALOG[id];
+    const s = CATALOG[id]!;
     const monthly = s.unit === "dev" || s.unit === "mo";
     const cost = s.unit === "dev" ? s.price * units : s.unit === "devonce" ? s.price * devices : s.price;
     if (monthly) monthlyRaw += cost; else once += cost;
