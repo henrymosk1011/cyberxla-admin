@@ -6,7 +6,7 @@
   import { tick } from "svelte";
   import { catalog } from "../lib/store.svelte.ts";
   import { slugify, UNIT_OPTIONS, UNIT_LABEL, unitPrice } from "../lib/catalog.ts";
-  import type { ServiceCategory, ServiceRow } from "../lib/types.ts";
+  import { RATE_TIERS, type PackageRow, type ServiceCategory, type ServiceRow } from "../lib/types.ts";
 
   let q = $state("");
   let error = $state("");
@@ -101,6 +101,36 @@
     if (!(await confirm.ask({ title: `Delete ${s.name}?`, body: "It disappears from your website's quote builder right away. Quotes and clients that already include it keep their copy. To take it off the site temporarily, hide it instead.", action: "Delete", danger: true }))) return;
     await run(() => db.deleteService(s.id));
   }
+
+  // ---- Homepage packages ----
+  let packages = $state<PackageRow[]>([]);
+  let pkgSaved = $state("");
+  let pkgTimer: ReturnType<typeof setTimeout> | undefined;
+  const loadPackages = () => db.packages().then((p) => (packages = p)).catch((e) => (error = e instanceof Error ? e.message : "Couldn't load packages."));
+  loadPackages();
+  async function saveRate(p: PackageRow, i: number, input: HTMLInputElement) {
+    const v = Math.round(input.valueAsNumber * 100) / 100;
+    if (!Number.isFinite(v) || v < 0 || v > 10000) {
+      error = "Enter a package rate from 0 to 10,000.";
+      input.value = String(p.rates[i]);
+      return;
+    }
+    if (v === p.rates[i]) return;
+    error = "";
+    const rates = p.rates.map((x, k) => (k === i ? v : x));
+    try {
+      await db.savePackageRates(p.id, rates);
+      p.rates = rates;
+      pkgSaved = `${p.id}:${i}`;
+      clearTimeout(pkgTimer);
+      pkgTimer = setTimeout(() => (pkgSaved = ""), 1600);
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Couldn't save the rate.";
+      input.value = String(p.rates[i]);
+    }
+    await loadPackages();
+  }
+  const rateText = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 
   // ---- Inline price ----
   let savedId = $state("");
@@ -336,6 +366,35 @@
 
 <svelte:window onpointermove={onMove} onpointerup={endDrag} onpointercancel={endDrag} />
 
+{#if !q && packages.length}
+  <section class="card pkgs">
+    <div class="pkgs-head">
+      <h2>Homepage packages</h2>
+      <p class="muted">Price per device per month by volume. The first tier is the "from" price on the homepage cards; the calculator uses all four. Servers are billed at 2.5×.</p>
+    </div>
+    <div class="pkg-grid">
+      {#each packages as p (p.id)}
+        <div class="pkg" class:feat={p.id === "secure"}>
+          <p class="pkg-name">{p.name} <span class="muted">from ${rateText(p.rates[0] ?? 0)}</span></p>
+          {#each RATE_TIERS as t, i (t)}
+            <div class="tier">
+              <span class="muted">{t}</span>
+              <label class="amount" title="Click to change">
+                <span aria-hidden="true">$</span>
+                <input class="num" type="number" min="0" max="10000" step="0.01" value={p.rates[i]} aria-label="{p.name} rate for {t} devices"
+                  onchange={(e) => saveRate(p, i, e.currentTarget)}
+                  onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = String(p.rates[i]); e.currentTarget.blur(); } }} />
+              </label>
+              <span class="ok" class:show={pkgSaved === `${p.id}:${i}`}>{pkgSaved === `${p.id}:${i}` ? "✓" : ""}</span>
+            </div>
+          {/each}
+        </div>
+      {/each}
+    </div>
+    <p class="muted pkg-note">On Build Your Quote, the package buttons add Patching, EDR and 24/7 MDR at their own prices below, so keep those in step if you change a package.</p>
+  </section>
+{/if}
+
 {#if !q && groups.length}<p class="tip muted">Drag <span class="tipgrip" aria-hidden="true">⠿</span> to reorder services and categories, or move a service to another category. Click a price to change it.</p>{/if}
 
 <div class="cats" class:busy bind:this={cats} class:dragging={!!drag} class:catdrag={drag?.kind === "cat"}>
@@ -499,6 +558,17 @@
   .cat-title p { font-size: 13px; margin-top: 2px; }
   .count { font-size: 13px; font-weight: 500; margin-left: 4px; }
   .acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .pkgs { margin-bottom: 22px; }
+  .pkgs-head h2 { font-size: 18px; letter-spacing: -0.02em; }
+  .pkgs-head p { font-size: 13px; margin-top: 2px; max-width: 760px; }
+  .pkg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .pkg { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .pkg.feat { border-color: rgba(214, 255, 63, 0.45); }
+  .pkg-name { font-weight: 650; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
+  .pkg-name .muted { font-weight: 500; font-size: 13px; }
+  .tier { display: grid; grid-template-columns: minmax(0, 1fr) 104px 12px; gap: 8px; align-items: center; font-size: 13px; }
+  .pkg-note { font-size: 12px; margin-top: 10px; }
+  @media (max-width: 860px) { .pkg-grid { grid-template-columns: 1fr; } }
   .tip { font-size: 13px; margin: -8px 0 14px; }
   .tipgrip { color: var(--text-2); }
   .grip { flex: none; width: 26px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; transition: color 0.15s, background 0.15s; }
