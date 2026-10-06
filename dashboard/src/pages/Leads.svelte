@@ -153,7 +153,7 @@
   .filters .seg { flex-wrap: wrap; border-radius: 14px; }
   .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
   .sort { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .input.sm { height: 34px; padding: 0 10px; }
+  .input.sm { height: 34px; padding: 0 36px 0 12px; background-position: right 12px center; }
   .flush { padding: 8px 8px 0; }
   .stale { opacity: 0.6; }
   .scroll { overflow-x: auto; }
@@ -167,8 +167,8 @@
   .col.over { border-color: var(--lime); background: color-mix(in srgb, var(--lime) 5%, var(--surface)); }
   .col > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 4px 12px; font-size: 12px; }
   .cards { display: flex; flex-direction: column; gap: 8px; }
-  .lead { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; cursor: grab; }
-  .lead:hover { border-color: var(--line-2); }
+  .lead { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; cursor: grab; transition: transform 0.25s var(--ease), border-color 0.2s, box-shadow 0.25s var(--ease); animation: rise 0.4s var(--ease) both; }
+  .lead:hover { border-color: var(--line-2); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
   .lead.dragging { opacity: 0.4; }
   .lead a { text-decoration: none; }
   .lead strong { font-weight: 600; font-size: 14px; }
@@ -176,6 +176,6 @@
   .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
   .amt { font-weight: 600; font-size: 14px; }
   .amt small { color: var(--muted); font-weight: 500; }
-  .move { margin-top: 6px; background: var(--ink); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; padding: 4px 6px; color: var(--text-2); }
+  .move { margin-top: 6px; background-color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; padding: 5px 32px 5px 8px; background-position: right 10px center; color: var(--text-2); }
   .drop { font-size: 13px; text-align: center; padding: 24px 8px; border: 1px dashed var(--line-2); border-radius: 10px; }
 </style>

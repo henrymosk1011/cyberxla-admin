@@ -65,7 +65,8 @@
   line { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
   line.base { stroke: var(--axis); }
   .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-  .bar { fill: var(--lime); transition: opacity 0.15s; }
+  .bar { fill: var(--lime); transition: opacity 0.2s; transform-box: fill-box; transform-origin: 50% 100%; animation: grow 0.7s var(--ease) both; }
+  @keyframes grow { from { transform: scaleY(0); } }
   .bar.dim { opacity: 0.35; }
   .hit { fill: transparent; outline: none; cursor: default; }
   .tip {

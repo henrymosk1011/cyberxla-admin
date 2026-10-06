@@ -28,3 +28,13 @@ export const STATUS_LABEL: Record<string, string> = {
   new: "New", contacted: "Contacted", proposal: "Proposal", won: "Won", lost: "Lost",
   submitted: "Submitted", reviewing: "Reviewing", sent: "Sent", accepted: "Accepted", declined: "Declined",
 };
+
+/** Display a US number as (818) 714-1066. Anything else is shown as entered. */
+export function phone(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const ext = raw.match(/\s*(?:ext\.?|x)\s*(\d+)\s*$/i);
+  const d = (ext ? raw.slice(0, ext.index) : raw).replace(/\D/g, "");
+  const ten = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+  if (ten.length !== 10) return raw;
+  return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}${ext ? ` ext. ${ext[1]}` : ""}`;
+}

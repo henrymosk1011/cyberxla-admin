@@ -1,5 +1,6 @@
 <script lang="ts">
   import db from "$db";
+  import Brand from "../components/Brand.svelte";
   import type { AuthState, Enrollment } from "../lib/types.ts";
 
   let { auth, onauth }: { auth: AuthState; onauth: (s: AuthState) => void } = $props();
@@ -41,7 +42,7 @@
 
 <main class="wrap">
   <div class="panel">
-    <div class="brand"><span class="mark" aria-hidden="true">×</span> cyberXLA <span class="muted">Admin</span></div>
+    <div class="brand"><Brand admin size={22} /></div>
 
     {#if auth.step === "signed-out"}
       <h1>Sign in</h1>
@@ -102,8 +103,8 @@
 <style>
   .wrap { min-height: 100dvh; display: grid; place-items: center; align-content: center; gap: 20px; padding: 24px 16px; background: radial-gradient(1200px 600px at 50% -10%, rgba(214,255,63,0.07), transparent 60%), var(--plane); }
   .panel { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
-  .brand { font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
-  .mark { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--ink); color: var(--lime); font-size: 18px; font-weight: 800; border: 1px solid var(--line-2); }
+  .brand { display: flex; }
+  .panel { animation: rise 0.6s var(--ease) both; }
   h1 { font-size: 26px; letter-spacing: -0.03em; }
   .lead { color: var(--text-2); font-size: 14px; }
   form { display: flex; flex-direction: column; gap: 14px; }
