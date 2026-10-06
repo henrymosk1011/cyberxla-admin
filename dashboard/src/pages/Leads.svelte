@@ -88,17 +88,17 @@
           <tbody>
             {#each rows as l (l.id)}
               <tr class="link" onclick={() => open(l.id)}>
-                <td>
+                <td class="c-lead">
                   <a class="who" href="#/leads/{l.id}" onclick={(e) => e.stopPropagation()}>
                     <strong>{l.company || l.name}</strong>
                     <span class="muted">{l.company ? l.name + " · " : ""}{l.email}</span>
                   </a>
                 </td>
-                <td><StatusPill status={l.status} /></td>
-                <td class="r num">{money(l.value_monthly)}</td>
-                <td class="r num">{money(l.value_one_time)}</td>
-                <td class="r num hide-sm">{quoteCount.get(l.id) ?? 0}</td>
-                <td class="r muted hide-sm">{ago(l.updated_at)}</td>
+                <td class="c-status"><StatusPill status={l.status} /></td>
+                <td class="r num c-mo">{money(l.value_monthly)}<span class="u">/mo</span></td>
+                <td class="r num c-once">{money(l.value_one_time)}<span class="u"> one time</span></td>
+                <td class="r num hide-sm c-quotes">{quoteCount.get(l.id) ?? 0}</td>
+                <td class="r muted hide-sm c-ago">{ago(l.updated_at)}</td>
               </tr>
             {/each}
           </tbody>
@@ -161,11 +161,66 @@
   .who strong { font-weight: 600; }
   .who span { font-size: 13px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (max-width: 720px) { .hide-sm { display: none; } }
+  .u { display: none; }
+
+  /* Tablets and phones: stack the header, swipeable filter chips. */
+  @media (max-width: 860px) {
+    .top { flex-direction: column; align-items: stretch; }
+    .tools { flex-wrap: nowrap; }
+    .search { flex: 1 1 0; width: 0; min-width: 0; }
+    .filters { flex-direction: column; align-items: stretch; }
+    .filters .seg {
+      flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
+      border-radius: 999px; max-width: 100%;
+    }
+    .filters .seg::-webkit-scrollbar { display: none; }
+    .filters .seg button { flex: none; scroll-snap-align: start; }
+    .sort { justify-content: flex-end; }
+  }
+
+  /* Phones: each lead becomes a compact card. */
+  @media (max-width: 640px) {
+    .tools { flex-direction: column; align-items: stretch; }
+    .search { flex: none; width: 100%; }
+    .tools .seg { align-self: flex-start; }
+    .flush { padding: 4px; }
+    .table thead { display: none; }
+    .table, .table tbody { display: block; }
+    .table tbody tr.link {
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 12px;
+      padding: 14px 12px; border-bottom: 1px solid var(--line); border-radius: 10px;
+    }
+    .table tbody tr.link:last-child { border-bottom: 0; }
+    .table td { display: block; padding: 0; border: 0; }
+    .c-lead { grid-column: 1 / -1; }
+    .who span { max-width: none; }
+    .c-mo { font-weight: 600; }
+    .c-once { grid-column: 2; grid-row: 3; font-size: 12px; color: var(--muted); }
+    .table td.c-quotes { display: none; }
+    .table td.c-ago { display: block; grid-column: 1; grid-row: 3; text-align: left; font-size: 12px; }
+    .u { display: inline; margin-left: 3px; color: var(--muted); font-weight: 500; font-size: 0.85em; }
+  }
+
+  /* Board on smaller screens: swipe column by column, with a peek of the next. */
+  @media (max-width: 1100px) {
+    .board {
+      grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(260px, 46%);
+      scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none;
+      margin: 0 calc(-1 * clamp(16px, 3vw, 40px)); padding: 0 clamp(16px, 3vw, 40px) 12px;
+      scroll-padding: 0 clamp(16px, 3vw, 40px);
+    }
+    .board::-webkit-scrollbar { display: none; }
+    .col { scroll-snap-align: start; }
+  }
+  @media (max-width: 640px) {
+    .board { grid-auto-columns: 84%; }
+  }
 
   .board { display: grid; grid-template-columns: repeat(5, minmax(196px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
   .col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-height: 240px; transition: border-color 0.15s, background 0.15s; }
   .col.over { border-color: var(--lime); background: color-mix(in srgb, var(--lime) 5%, var(--surface)); }
   .col > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 4px 12px; font-size: 12px; }
+  .col > header > :last-child { white-space: nowrap; }
   .cards { display: flex; flex-direction: column; gap: 8px; }
   .lead { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; cursor: grab; transition: transform 0.25s var(--ease), border-color 0.2s, box-shadow 0.25s var(--ease); animation: rise 0.4s var(--ease) both; }
   .lead:hover { border-color: var(--line-2); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }

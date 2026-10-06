@@ -232,11 +232,11 @@
   .live.on i { background: var(--good); box-shadow: 0 0 0 3px rgba(12, 163, 12, 0.25); animation: pulse 2.4s ease-in-out infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(12, 163, 12, 0); } }
   .demo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--warning); }
-  .content { padding: 28px clamp(16px, 3vw, 40px) 64px; max-width: 1480px; width: 100%; }
+  .content { padding: 28px clamp(16px, 3vw, 40px) 64px; max-width: 1480px; width: 100%; min-width: 0; }
   .banner { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .topbar { display: none; }
   @media (max-width: 860px) {
-    .shell { grid-template-columns: 1fr; }
+    .shell { grid-template-columns: minmax(0, 1fr); }
     .topbar { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 20; padding: 10px 12px; background: var(--ink); border-bottom: 1px solid var(--line); }
     .rail { position: fixed; z-index: 30; inset: 0 auto 0 0; width: 260px; transform: translateX(-100%); transition: transform 0.35s var(--ease); }
     .rail.open { transform: none; box-shadow: 20px 0 60px rgba(0,0,0,0.6); }
