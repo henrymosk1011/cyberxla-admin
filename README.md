@@ -27,6 +27,7 @@ access to any table.
 | `supabase/migrations/0001_init.sql` | Tables, row-level security, audit log, intake function and role |
 | `supabase/migrations/0002_realtime.sql` | Live updates for leads and quotes |
 | `supabase/migrations/0003_archive_activity_keepalive.sql` | Archive/delete for leads and quotes, hideable activity entries, keep-alive heartbeat |
+| `supabase/migrations/0004_quote_edits.sql` | Lead value follows edits to a quote's services and device counts |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
 | `supabase/functions/submit-quote/index.ts` | The public endpoint |

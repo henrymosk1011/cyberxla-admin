@@ -2,6 +2,7 @@
 // database's row-level security decides what comes back: nothing at all unless
 // the user is on the admin allowlist AND finished MFA this session.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { priceQuote } from "./catalog.ts";
 import type { AuditEntry, AuthState, ChangeEvent, Db, Enrollment, Lead, LeadStatus, Note, Quote, QuoteStatus } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
@@ -164,6 +165,17 @@ const db: Db = {
   async archiveQuote(id, archived) {
     const { error } = await sb.from("quotes").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", id);
     fail(error);
+  },
+
+  async updateQuoteServices(id, serviceIds, workstations, servers) {
+    if (!serviceIds.length) throw new Error("A quote needs at least one service. Delete the quote instead.");
+    const priced = priceQuote(serviceIds, workstations, servers);
+    const { error, count } = await sb
+      .from("quotes")
+      .update({ workstations, servers, ...priced }, { count: "exact" })
+      .eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was saved. Try signing in again.");
   },
 
   async deleteQuote(id) {
