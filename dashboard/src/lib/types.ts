@@ -95,6 +95,8 @@ export interface Db {
   archiveLead(id: string, archived: boolean): Promise<void>;
   deleteLead(id: string): Promise<void>;
   archiveQuote(id: string, archived: boolean): Promise<void>;
+  /** Replace a quote's services and device counts; prices are recalculated from the catalog. */
+  updateQuoteServices(id: string, serviceIds: string[], workstations: number, servers: number): Promise<void>;
   deleteQuote(id: string): Promise<void>;
   hideActivity(auditId: number, hidden: boolean): Promise<void>;
   subscribe(cb: (e: ChangeEvent) => void): () => void;

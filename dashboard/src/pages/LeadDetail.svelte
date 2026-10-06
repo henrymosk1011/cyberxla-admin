@@ -1,6 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import QuoteEditor from "../components/QuoteEditor.svelte";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Quote, type QuoteStatus } from "../lib/types.ts";
 
@@ -17,6 +18,13 @@
   let showHidden = $state(false);
   // Per-quote line item filter, like the quote builder's.
   let itemFilter = $state<Record<string, "all" | "monthly" | "once">>({});
+  let editing = $state<Record<string, boolean>>({});
+
+  async function saveServices(q: Quote, ids: string[], ws: number, sv: number) {
+    await db.updateQuoteServices(q.id, ids, ws, sv);
+    editing[q.id] = false;
+    await load();
+  }
   let confirm: Confirm;
 
   const activeQuotes = $derived(quotes.filter((q) => !q.archived_at));
@@ -127,6 +135,18 @@
       if (a.action === "delete") return `${who}: quote deleted (${money(Number(o.monthly_total ?? 0))}/mo)`;
       if (archivedChange) return `${who}: quote ${n.archived_at ? "archived" : "restored"}`;
       if (a.action === "update" && n.status !== o.status) return `${who}: quote ${STATUS_LABEL[String(n.status)]?.toLowerCase() ?? n.status}`;
+      if (a.action === "update" && Array.isArray(n.items) && Array.isArray(o.items)) {
+        const names = (xs: unknown[]) => new Map(xs.map((x) => [String((x as { id: string }).id), String((x as { name: string }).name)]));
+        const before = names(o.items), after = names(n.items);
+        const add = [...after].filter(([id]) => !before.has(id)).map(([, nm]) => nm);
+        const rem = [...before].filter(([id]) => !after.has(id)).map(([, nm]) => nm);
+        const parts = [
+          add.length ? `added ${add.join(", ")}` : "",
+          rem.length ? `removed ${rem.join(", ")}` : "",
+          n.workstations !== o.workstations || n.servers !== o.servers ? `devices ${o.workstations}+${o.servers} → ${n.workstations}+${n.servers}` : "",
+        ].filter(Boolean);
+        if (parts.length) return `${who}: quote edited, ${parts.join("; ")} (now ${money(Number(n.monthly_total ?? 0))}/mo)`;
+      }
       return `${who}: quote updated`;
     }
     return a.action === "insert" ? `${who}: note added` : a.action === "delete" ? `${who}: note deleted` : `${who}: note edited`;
@@ -244,10 +264,14 @@
         <select class="input sel" aria-label="Quote status" value={q.status} onchange={(e) => setQuoteStatus(q, e.currentTarget.value as QuoteStatus)}>
           {#each QUOTE_STATUSES as s (s)}<option value={s}>{STATUS_LABEL[s]}</option>{/each}
         </select>
+        {#if !editing[q.id]}<button class="btn sm" onclick={() => (editing[q.id] = true)}>Edit</button>{/if}
         <button class="btn sm" onclick={() => toggleArchiveQuote(q)}>{q.archived_at ? "Restore" : "Archive"}</button>
         <button class="btn sm ghost del" onclick={() => deleteQuote(q)}>Delete</button>
       </div>
     </div>
+    {#if editing[q.id]}
+      <QuoteEditor quote={q} onsave={(ids, ws, sv) => saveServices(q, ids, ws, sv)} oncancel={() => (editing[q.id] = false)} />
+    {:else}
     <div class="seg ifilter" role="group" aria-label="Show services">
       <button aria-pressed={f === "all"} onclick={() => (itemFilter[q.id] = "all")}>All <span class="c">{q.items.length}</span></button>
       <button aria-pressed={f === "monthly"} disabled={!nMo} onclick={() => (itemFilter[q.id] = "monthly")}><span class="qdot mo" aria-hidden="true"></span>Monthly <span class="c">{nMo}</span></button>
@@ -269,6 +293,7 @@
       <div><span class="muted">Monthly</span><strong class="num">{money(q.monthly_total)}</strong>{#if q.monthly_minimum_applied}<span class="muted small">monthly minimum applied</span>{/if}</div>
       <div><span class="muted">One time</span><strong class="num">{money(q.one_time_total)}</strong></div>
     </div>
+    {/if}
     {#if q.message}<blockquote>{q.message}</blockquote>{/if}
   </section>
 {/snippet}

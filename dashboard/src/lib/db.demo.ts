@@ -133,6 +133,16 @@ const db: Db = {
     refreshValue(q.lead_id);
     changed("quotes", q);
   },
+  async updateQuoteServices(id, serviceIds, workstations, servers) {
+    const q = quotes.find((x) => x.id === id)!;
+    const priced = priceQuote(serviceIds, workstations, servers);
+    log("quotes", "update", id,
+      { lead_id: q.lead_id, status: q.status, items: q.items, workstations: q.workstations, servers: q.servers, monthly_total: q.monthly_total },
+      { lead_id: q.lead_id, status: q.status, items: priced.items, workstations, servers, monthly_total: priced.monthly_total });
+    Object.assign(q, { workstations, servers, ...priced, items: priced.items as Quote["items"] });
+    refreshValue(q.lead_id);
+    changed("quotes", q);
+  },
   async deleteQuote(id) {
     const i = quotes.findIndex((x) => x.id === id);
     if (i < 0) return;

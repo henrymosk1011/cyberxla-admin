@@ -65,6 +65,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: { sourcemap: false, target: "es2022", assetsInlineLimit: 0 },
-    server: { port: 5173, strictPort: true },
+    // The catalog lives with the quote function (../supabase/functions), one level up.
+    server: { port: 5173, strictPort: true, fs: { allow: [".."] } },
   };
 });
