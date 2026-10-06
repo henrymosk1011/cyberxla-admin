@@ -2,9 +2,9 @@
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import { catalog } from "../lib/store.svelte.ts";
-  import { lineAmount, unitPrice } from "../lib/catalog.ts";
+  import { unitPrice } from "../lib/catalog.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
-  import { CLIENT_STATUSES, type AuditEntry, type Client, type ClientService, type ClientStatus } from "../lib/types.ts";
+  import { CLIENT_STATUSES, type AuditEntry, type Client, type ClientService, type ClientStatus, type ServiceRow } from "../lib/types.ts";
 
   let { id, version }: { id: string; version: number } = $props();
 
@@ -21,7 +21,7 @@
   let notes = $state("");
   let picking = $state(false);
   let search = $state("");
-  let custom = $state({ name: "", billing: "monthly" as "monthly" | "once", amount: 0 });
+  let custom = $state({ name: "", billing: "monthly" as "monthly" | "once", unit: 0, qty: 1 });
 
   async function load() {
     try {
@@ -84,23 +84,40 @@
   const saveNotes = () => run(() => db.updateClient(id, { notes: nn(notes) }), "Notes saved");
   const nextSort = () => (lines.length ? Math.max(...lines.map((l) => l.sort)) + 10 : 0);
 
+  const perDevice = (s: ServiceRow) => s.unit === "dev" || s.unit === "devonce";
+  const devices = $derived(client ? client.workstations + client.servers : 0);
+  /** Starting price for a catalog service on this client: list price x their devices for per-device services. */
+  const suggest = (s: ServiceRow) => ({ unit: s.price, qty: perDevice(s) ? Math.max(1, devices) : 1 });
+  const cents = (n: number) => Math.round(n * 100) / 100;
+  const qtyOk = (n: number) => Number.isInteger(n) && n >= 1 && n <= 100000;
+
   async function addFromCatalog(sid: string) {
     const s = byId.get(sid)!;
+    const { unit, qty } = suggest(s);
     await run(() => db.addClientService({
       client_id: id, service_id: s.id, name: s.name, billing: s.unit === "dev" || s.unit === "mo" ? "monthly" : "once",
-      amount: lineAmount(s, client?.workstations ?? 0, client?.servers ?? 0), notes: null, sort: nextSort(),
+      unit_amount: unit, quantity: qty, amount: cents(unit * qty), notes: null, sort: nextSort(),
     }));
   }
   async function addCustom(e: SubmitEvent) {
     e.preventDefault();
     if (!custom.name.trim()) return;
-    await run(() => db.addClientService({ client_id: id, service_id: null, name: custom.name.trim(), billing: custom.billing, amount: Math.max(0, Number(custom.amount) || 0), notes: null, sort: nextSort() }));
-    custom = { name: "", billing: "monthly", amount: 0 };
+    const unit = Math.max(0, Number(custom.unit) || 0), qty = Math.round(Number(custom.qty) || 1);
+    if (!qtyOk(qty)) { error = "Quantity must be a whole number from 1 to 100,000."; return; }
+    await run(() => db.addClientService({ client_id: id, service_id: null, name: custom.name.trim(), billing: custom.billing, unit_amount: unit, quantity: qty, amount: cents(unit * qty), notes: null, sort: nextSort() }));
+    custom = { name: "", billing: "monthly", unit: 0, qty: 1 };
   }
-  async function updateLine(l: ClientService, patch: Partial<ClientService>) {
-    if (patch.amount !== undefined) {
-      if (!Number.isFinite(patch.amount) || patch.amount < 0) { error = "Enter an amount of 0 or more."; await load(); return; }
-      if (patch.amount === l.amount) return;
+  async function updateLine(l: ClientService, patch: Partial<ClientService>, input?: HTMLInputElement) {
+    if (patch.unit_amount !== undefined) {
+      if (!Number.isFinite(patch.unit_amount) || patch.unit_amount < 0 || patch.unit_amount > 10000000) {
+        error = "Enter a price from 0 to 10,000,000."; if (input) input.value = String(l.unit_amount); return;
+      }
+      patch.unit_amount = cents(patch.unit_amount);
+      if (patch.unit_amount === l.unit_amount) return;
+    }
+    if (patch.quantity !== undefined) {
+      if (!qtyOk(patch.quantity)) { error = "Quantity must be a whole number from 1 to 100,000."; if (input) input.value = String(l.quantity); return; }
+      if (patch.quantity === l.quantity) return;
     }
     if (patch.notes !== undefined && (patch.notes ?? "") === (l.notes ?? "")) return;
     await run(() => db.updateClientService(l.id, patch), "Saved");
@@ -122,7 +139,10 @@
 
   function describe(a: AuditEntry): string {
     const n = a.new_data ?? {}, o = a.old_data ?? {};
-    const amt = (d: Record<string, unknown>) => `${money(Number(d.amount ?? 0))}${d.billing === "monthly" ? "/mo" : " one time"}`;
+    const amt = (d: Record<string, unknown>) => {
+      const q = Number(d.quantity ?? 1), total = `${money(Number(d.amount ?? 0))}${d.billing === "monthly" ? "/mo" : " one time"}`;
+      return q > 1 ? `${money(Number(d.unit_amount ?? 0))} × ${q} = ${total}` : total;
+    };
     if (a.table_name === "clients") {
       if (a.action === "insert") return n.lead_id ? "Client created from lead" : "Client added";
       if (n.status !== o.status) return `Status ${STATUS_LABEL[String(o.status)]} → ${STATUS_LABEL[String(n.status)]}`;
@@ -173,7 +193,7 @@
   <div class="cols">
     <div class="main">
       <section class="card">
-        <div class="card-head"><div><h2>Services</h2><p class="sub">What they pay you for. Click an amount to change it.</p></div></div>
+        <div class="card-head"><div><h2>Services</h2><p class="sub">What they pay you for. Click a price or quantity to change it.</p></div></div>
         {#if lines.length}
           <ul class="lines">
             {#each lines as l (l.id)}
@@ -189,12 +209,21 @@
                   <option value="monthly">Monthly</option>
                   <option value="once">One time</option>
                 </select>
-                <label class="amount">
-                  <span aria-hidden="true">$</span>
-                  <input class="num" type="number" min="0" step="0.01" value={l.amount} aria-label="Amount for {l.name}"
-                    onchange={(e) => updateLine(l, { amount: e.currentTarget.valueAsNumber })}
-                    onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
-                </label>
+                <div class="calc">
+                  <label class="amount" title="Price per unit">
+                    <span aria-hidden="true">$</span>
+                    <input class="num" type="number" min="0" step="0.01" value={l.unit_amount} aria-label="Price per unit for {l.name}"
+                      onchange={(e) => updateLine(l, { unit_amount: e.currentTarget.valueAsNumber }, e.currentTarget)}
+                      onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                  </label>
+                  <span class="times" aria-hidden="true">×</span>
+                  <label class="amount qty" title="Quantity (devices, seats, hours…)">
+                    <input class="num" type="number" min="1" max="100000" step="1" value={l.quantity} aria-label="Quantity for {l.name}"
+                      onchange={(e) => updateLine(l, { quantity: e.currentTarget.valueAsNumber }, e.currentTarget)}
+                      onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                  </label>
+                  <span class="total num" aria-label="Line total">{money(l.amount)}</span>
+                </div>
                 <button class="x" aria-label="Remove {l.name}" title="Remove" onclick={() => removeLine(l)}>×</button>
               </li>
             {/each}
@@ -213,9 +242,10 @@
               <p class="eyebrow catname">{g.name}</p>
               <ul class="options">
                 {#each g.items as s (s.id)}
+                  {@const sg = suggest(s)}
                   <li><button type="button" onclick={() => addFromCatalog(s.id)}>
                     <span>{s.name}</span>
-                    <span class="muted num">{money(lineAmount(s, client.workstations, client.servers))}{s.unit === "dev" || s.unit === "mo" ? "/mo" : " one time"}</span>
+                    <span class="muted num">{sg.qty > 1 ? `${money(sg.unit)} × ${sg.qty} = ` : ""}{money(cents(sg.unit * sg.qty))}{s.unit === "dev" || s.unit === "mo" ? "/mo" : " one time"}</span>
                     <span class="plus" aria-hidden="true">+</span>
                   </button></li>
                 {/each}
@@ -228,12 +258,14 @@
               <div class="cr">
                 <input class="input" placeholder="Name (e.g. On-site visit)" maxlength="120" bind:value={custom.name} aria-label="Custom service name" />
                 <select class="input" bind:value={custom.billing} aria-label="Custom service billing"><option value="monthly">Monthly</option><option value="once">One time</option></select>
-                <input class="input num" type="number" min="0" step="0.01" bind:value={custom.amount} aria-label="Custom service amount" />
+                <label class="amount"><span aria-hidden="true">$</span><input class="num" type="number" min="0" step="0.01" bind:value={custom.unit} aria-label="Custom service price per unit" /></label>
+                <span class="times" aria-hidden="true">×</span>
+                <label class="amount qty"><input class="num" type="number" min="1" max="100000" step="1" bind:value={custom.qty} aria-label="Custom service quantity" /></label>
                 <button class="btn sm" disabled={!custom.name.trim()}>Add</button>
               </div>
             </form>
           </div>
-          <p class="muted hint">Suggested prices use this client's {client.workstations} workstations and {client.servers} servers. You can change any amount after adding.</p>
+          <p class="muted hint">Per-device services start at list price × this client's {devices} {devices === 1 ? "device" : "devices"}. You can change the price and quantity after adding.</p>
         {:else}
           <button class="btn sm addbtn" onclick={() => (picking = true)}>+ Add service</button>
         {/if}
@@ -315,13 +347,18 @@
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
   .main, .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .lines { list-style: none; }
-  .lines li { display: grid; grid-template-columns: 16px minmax(0, 1fr) 120px 130px 28px; gap: 10px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--line); animation: rise 0.3s var(--ease) both; }
+  .lines li { display: grid; grid-template-columns: 16px minmax(0, 1fr) 112px auto 28px; gap: 10px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--line); animation: rise 0.3s var(--ease) both; }
   .nm { display: flex; flex-direction: column; min-width: 0; }
   .name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 6px; }
   .note { border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 2px 0; outline: none; border-bottom: 1px dashed transparent; width: 100%; }
   .note:hover, .note:focus { border-bottom-color: var(--line-2); color: var(--text-2); }
   .billing { height: 34px; font-size: 13px; padding: 0 32px 0 10px; background-position: right 10px center; }
+  .calc { display: flex; align-items: center; gap: 6px; }
+  .calc .amount { width: 104px; }
+  .amount.qty { width: 62px; }
+  .times { color: var(--muted); font-size: 13px; }
+  .total { min-width: 84px; text-align: right; font-weight: 650; }
   .amount { display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--ink); transition: border-color 0.15s; }
   .amount:focus-within { border-color: var(--lime); }
   .amount span { color: var(--muted); }
@@ -344,7 +381,8 @@
   .plus { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); color: var(--text-2); transition: background 0.2s, color 0.2s, transform 0.3s var(--ease-spring); }
   .options button:hover .plus { background: var(--lime); color: var(--on-lime); border-color: var(--lime); transform: rotate(90deg); }
   .none { padding: 8px 4px; font-size: 13px; }
-  .cr { display: grid; grid-template-columns: minmax(0, 1fr) 120px 110px auto; gap: 8px; align-items: center; }
+  .cr { display: grid; grid-template-columns: minmax(0, 1fr) 112px 104px auto 62px auto; gap: 8px; align-items: center; }
+  .cr .amount { height: 36px; }
   .cr .input { height: 36px; }
   .cr select.input { padding: 0 32px 0 10px; background-position: right 10px center; }
   .hint { font-size: 12px; margin-top: 8px; }
@@ -372,9 +410,10 @@
   @media (max-width: 640px) {
     .lines li { grid-template-columns: 16px minmax(0, 1fr) 28px; }
     .billing { grid-column: 2; }
-    .amount { grid-column: 2; }
+    .calc { grid-column: 2; }
+    .calc .amount:first-child { flex: 1 1 0; width: auto; min-width: 0; }
     .lines li > .x { grid-column: 3; grid-row: 1; }
-    .cr { grid-template-columns: 1fr 1fr; }
-    .cr .input:first-child { grid-column: 1 / -1; }
+    .cr { grid-template-columns: minmax(0, 1fr) auto 62px; }
+    .cr .input:first-child, .cr select.input { grid-column: 1 / -1; }
   }
 </style>

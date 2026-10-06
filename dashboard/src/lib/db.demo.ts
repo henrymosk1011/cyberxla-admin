@@ -63,6 +63,7 @@ for (let i = 0; i < 46; i++) {
 // A few existing clients: some converted from won leads, one added by hand.
 const clients: Client[] = [];
 const clientServices: ClientService[] = [];
+const total = (unit: number, qty: number) => Math.round(unit * qty * 100) / 100;
 function clientFromLead(l: Lead): string {
   const q = quotes.filter((x) => x.lead_id === l.id && !x.archived_at).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
   const id = uuid();
@@ -70,15 +71,20 @@ function clientFromLead(l: Lead): string {
     id, created_at: l.updated_at, updated_at: l.updated_at, company: l.company, contact_name: l.name, email: l.email, phone: l.phone,
     address: null, status: "active", started_on: l.updated_at.slice(0, 10), workstations: q?.workstations ?? 0, servers: q?.servers ?? 0, notes: null, lead_id: l.id,
   });
-  q?.items.forEach((it, i) => clientServices.push({ id: uuid(), client_id: id, service_id: it.id, name: it.name, billing: it.kind === "monthly" ? "monthly" : "once", amount: it.cost, notes: null, sort: i * 10 }));
+  const devices = (q?.workstations ?? 0) + (q?.servers ?? 0);
+  q?.items.forEach((it, i) => {
+    const perDev = (it.unit === "dev" || it.unit === "devonce") && devices > 0 && total(it.unit_price, devices) === it.cost;
+    clientServices.push({ id: uuid(), client_id: id, service_id: it.id, name: it.name, billing: it.kind === "monthly" ? "monthly" : "once",
+      unit_amount: perDev ? it.unit_price : it.cost, quantity: perDev ? devices : 1, amount: it.cost, notes: null, sort: i * 10 });
+  });
   return id;
 }
 leads.filter((l) => l.status === "won").slice(0, 7).forEach(clientFromLead);
 {
   const id = uuid();
   clients.push({ id, created_at: new Date(now - 400 * 86400000).toISOString(), updated_at: new Date(now - 20 * 86400000).toISOString(), company: "Starlight Hospice", contact_name: "Dana Ortiz", email: "dana@starlighthospice.org", phone: "3235550142", address: "1200 Sunset Blvd, Los Angeles, CA", status: "active", started_on: "2025-08-01", workstations: 42, servers: 3, notes: "Renews every August. Prefers calls over email.", lead_id: null });
-  [["mdr", "24/7 MDR", 650], ["patching", "Patching", 480], ["hipaa", "HIPAA Security Support", 400], ["cloudbackup", "Microsoft 365 and Google Backup", 168]].forEach(([sid, nm, amt], i) =>
-    clientServices.push({ id: uuid(), client_id: id, service_id: sid as string, name: nm as string, billing: "monthly", amount: amt as number, notes: i === 0 ? "Discounted 10% (3-year term)" : null, sort: i * 10 }));
+  ([["mdr", "24/7 MDR", 650, 1], ["patching", "Patching", 10, 48], ["hipaa", "HIPAA Security Support", 400, 1], ["cloudbackup", "Microsoft 365 and Google Backup", 4, 42]] as const).forEach(([sid, nm, unit, qty], i) =>
+    clientServices.push({ id: uuid(), client_id: id, service_id: sid, name: nm, billing: "monthly", unit_amount: unit, quantity: qty, amount: total(unit, qty), notes: i === 0 ? "Discounted 10% (3-year term)" : null, sort: i * 10 }));
 }
 if (clients[1]) clients[1].status = "paused";
 if (clients[2]) clients[2].status = "former";
@@ -243,11 +249,14 @@ const db: Db = {
   },
   async addClientService(s) {
     const id = uuid();
+    s = { ...s, amount: total(s.unit_amount, s.quantity) };
     clientServices.push({ ...s, id });
     log("client_services", "insert", id, null, { ...s });
   },
   async updateClientService(id, patch) {
     const s = clientServices.find((x) => x.id === id)!;
+    patch = { ...patch };
+    patch.amount = total(patch.unit_amount ?? s.unit_amount, patch.quantity ?? s.quantity);
     log("client_services", "update", id, { ...s }, { ...s, ...patch });
     Object.assign(s, patch);
   },

@@ -2,6 +2,8 @@
   import db from "$db";
   import Modal from "../components/Modal.svelte";
   import Confirm from "../components/Confirm.svelte";
+  import { flip } from "svelte/animate";
+  import { tick } from "svelte";
   import { catalog } from "../lib/store.svelte.ts";
   import { slugify, UNIT_OPTIONS, UNIT_LABEL, unitPrice } from "../lib/catalog.ts";
   import type { ServiceCategory, ServiceRow } from "../lib/types.ts";
@@ -99,12 +101,182 @@
     if (!(await confirm.ask({ title: `Delete ${s.name}?`, body: "It disappears from your website's quote builder right away. Quotes and clients that already include it keep their copy. To take it off the site temporarily, hide it instead.", action: "Delete", danger: true }))) return;
     await run(() => db.deleteService(s.id));
   }
-  async function move(list: { id: string }[], i: number, dir: -1 | 1, table: "services" | "service_categories") {
-    const j = i + dir;
-    if (j < 0 || j >= list.length) return;
-    const ids = list.map((x) => x.id);
-    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
-    await run(() => db.reorder(table, ids));
+
+  // ---- Inline price ----
+  let savedId = $state("");
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+  async function savePrice(s: ServiceRow, input: HTMLInputElement) {
+    const v = Math.round(input.valueAsNumber * 100) / 100;
+    if (!Number.isFinite(v) || v < 0 || v > 1000000) {
+      error = "Enter a price from 0 to 1,000,000.";
+      input.value = String(s.price);
+      return;
+    }
+    if (v === s.price) return;
+    error = "";
+    try {
+      await db.saveService({ ...s, price: v }, false);
+      s.price = v;
+      savedId = s.id;
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => (savedId = ""), 1600);
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Couldn't save the price.";
+      input.value = String(s.price);
+    }
+    await reload().catch(() => {});
+  }
+
+  // ---- Drag and drop (pointer events: mouse, pen and touch) ----
+  type Drag = {
+    kind: "svc" | "cat";
+    id: string;
+    fromCat: string; // services: the category it started in
+    startOrder: string; // snapshot to tell whether anything moved
+    x: number; y: number; // pointer, viewport coords
+    ox: number; oy: number; // grab offset inside the ghost
+    w: number;
+    label: string; meta: string;
+  };
+  let drag = $state<Drag | null>(null);
+  let cats: HTMLDivElement;
+  let raf = 0;
+
+  const sortedCats = () => [...catalog.categories].sort((a, b) => a.sort - b.sort);
+  const svcsIn = (catId: string) => catalog.services.filter((x) => x.category_id === catId).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+  const orderKey = () => drag?.kind === "cat"
+    ? sortedCats().map((c) => c.id).join()
+    : sortedCats().map((c) => c.id + ":" + svcsIn(c.id).map((x) => x.id).join()).join("|");
+
+  /** Top of an element in page coordinates, ignoring transforms (so FLIP animations don't cause jitter). */
+  function layoutTop(el: HTMLElement): number {
+    let y = 0;
+    for (let n: HTMLElement | null = el; n; n = n.offsetParent as HTMLElement | null) y += n.offsetTop;
+    return y;
+  }
+
+  async function startDrag(e: PointerEvent, kind: "svc" | "cat", id: string) {
+    if (q || busy || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    const handle = e.currentTarget as HTMLElement;
+    const box = handle.closest<HTMLElement>(kind === "svc" ? "li" : "section")!.getBoundingClientRect();
+    handle.setPointerCapture(e.pointerId);
+    const s = kind === "svc" ? catalog.services.find((x) => x.id === id)! : undefined;
+    const c = kind === "cat" ? catalog.categories.find((x) => x.id === id)! : undefined;
+    drag = {
+      kind, id, fromCat: s?.category_id ?? "", startOrder: "",
+      x: e.clientX, y: e.clientY, ox: e.clientX - box.left, oy: Math.min(e.clientY - box.top, 40), w: kind === "svc" ? box.width : Math.min(box.width, 520),
+      label: s?.name ?? c!.name, meta: s ? unitPrice(s) : `${svcsIn(id).length} services`,
+    };
+    drag.startOrder = orderKey();
+    if (kind === "cat") {
+      // Cards collapse to their headers; keep the grabbed one under the pointer.
+      await tick();
+      const sec = cats.querySelector<HTMLElement>(`section[data-cat="${CSS.escape(id)}"]`);
+      if (sec) window.scrollTo({ top: layoutTop(sec) - e.clientY + 24, behavior: "instant" });
+    }
+    raf = requestAnimationFrame(autoScroll);
+  }
+
+  function onMove(e: PointerEvent) {
+    if (!drag) return;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    place();
+  }
+
+  function autoScroll() {
+    if (!drag) return;
+    const edge = 90, h = window.innerHeight;
+    const v = drag.y < edge ? -(edge - drag.y) / 4 : drag.y > h - edge ? (drag.y - (h - edge)) / 4 : 0;
+    if (v) { window.scrollBy(0, Math.round(v)); place(); }
+    raf = requestAnimationFrame(autoScroll);
+  }
+
+  /** Move the dragged item to wherever the pointer is, updating the local order live. */
+  function place() {
+    if (!drag || !cats) return;
+    const py = drag.y + window.scrollY;
+    const sections = [...cats.querySelectorAll<HTMLElement>("section[data-cat]")];
+    if (drag.kind === "cat") {
+      const others = sections.filter((el) => el.dataset.cat !== drag!.id);
+      const idx = others.filter((el) => layoutTop(el) + el.offsetHeight / 2 < py).length;
+      const ids = others.map((el) => el.dataset.cat!);
+      ids.splice(idx, 0, drag.id);
+      ids.forEach((cid, i) => { const c = catalog.categories.find((x) => x.id === cid); if (c && c.sort !== i * 10) c.sort = i * 10; });
+      return;
+    }
+    // Which category is the pointer over? The last one whose top is above it.
+    let target = sections[0];
+    for (const el of sections) if (layoutTop(el) <= py) target = el;
+    if (!target) return;
+    const catId = target.dataset.cat!;
+    const rows = [...target.querySelectorAll<HTMLElement>("li[data-id]")].filter((el) => el.dataset.id !== drag!.id);
+    const idx = rows.filter((el) => layoutTop(el) + el.offsetHeight / 2 < py).length;
+    const ids = rows.map((el) => el.dataset.id!);
+    ids.splice(idx, 0, drag.id);
+    const me = catalog.services.find((x) => x.id === drag!.id)!;
+    if (me.category_id !== catId) me.category_id = catId;
+    ids.forEach((sid, i) => { const x = catalog.services.find((v) => v.id === sid); if (x && x.sort !== i * 10) x.sort = i * 10; });
+  }
+
+  async function endDrag() {
+    if (!drag) return;
+    cancelAnimationFrame(raf);
+    const d = drag;
+    const moved = orderKey() !== d.startOrder;
+    drag = null;
+    if (!moved) return;
+    await persist(d.kind, d.id, d.fromCat);
+  }
+
+  async function persist(kind: "svc" | "cat", id: string, fromCat: string) {
+    if (kind === "cat") return run(() => db.reorder("service_categories", sortedCats().map((c) => c.id)));
+    const s = catalog.services.find((x) => x.id === id)!;
+    const to = s.category_id;
+    await run(async () => {
+      if (to !== fromCat) await db.saveService({ ...s }, false);
+      await db.reorder("services", svcsIn(to).map((x) => x.id));
+    });
+  }
+
+  /** Keyboard: arrow keys on a handle move the item one step (services cross into the next category at the ends). */
+  async function keyMove(e: KeyboardEvent, kind: "svc" | "cat", id: string) {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    if (q || busy) return;
+    await keyStep(e.key === "ArrowUp" ? -1 : 1, kind, id);
+    await tick();
+    // Moving into another category re-creates the row, so put focus back on its handle.
+    cats?.querySelector<HTMLElement>(`[data-handle="${CSS.escape(kind + ":" + id)}"]`)?.focus();
+  }
+  async function keyStep(dir: -1 | 1, kind: "svc" | "cat", id: string) {
+    const list = sortedCats();
+    if (kind === "cat") {
+      const i = list.findIndex((c) => c.id === id), j = i + dir;
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j]!, list[i]!];
+      list.forEach((c, k) => (c.sort = k * 10));
+      return persist("cat", id, "");
+    }
+    const s = catalog.services.find((x) => x.id === id)!;
+    const from = s.category_id;
+    const ids = svcsIn(from).map((x) => x.id);
+    const i = ids.indexOf(id), j = i + dir;
+    if (j >= 0 && j < ids.length) {
+      [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+    } else {
+      const ci = list.findIndex((c) => c.id === from) + dir;
+      const next = list[ci];
+      if (!next) return;
+      s.category_id = next.id;
+      const dest = svcsIn(next.id).map((x) => x.id).filter((x) => x !== id);
+      dir < 0 ? dest.push(id) : dest.unshift(id);
+      dest.forEach((sid, k) => (catalog.services.find((x) => x.id === sid)!.sort = k * 10));
+      return persist("svc", id, from);
+    }
+    ids.forEach((sid, k) => (catalog.services.find((x) => x.id === sid)!.sort = k * 10));
+    return persist("svc", id, from);
   }
 
   function newCategory() {
@@ -162,32 +334,34 @@
 
 {#if error}<p class="error banner" role="alert">{error} <button class="btn ghost sm" onclick={() => (error = "")}>Dismiss</button></p>{/if}
 
-<div class="cats" class:busy>
-  {#each groups as g, gi (g.cat.id)}
-    <section class="card cat">
+<svelte:window onpointermove={onMove} onpointerup={endDrag} onpointercancel={endDrag} />
+
+{#if !q && groups.length}<p class="tip muted">Drag <span class="tipgrip" aria-hidden="true">⠿</span> to reorder services and categories, or move a service to another category. Click a price to change it.</p>{/if}
+
+<div class="cats" class:busy bind:this={cats} class:dragging={!!drag} class:catdrag={drag?.kind === "cat"}>
+  {#each groups as g (g.cat.id)}
+    <section class="card cat" data-cat={g.cat.id} class:placeholder={drag?.kind === "cat" && drag.id === g.cat.id} animate:flip={{ duration: 220 }}>
       <div class="cat-head">
+        {#if !q}
+          <button class="grip" data-handle="cat:{g.cat.id}" aria-label="Reorder {g.cat.name}. Drag, or use the up and down arrow keys." title="Drag to reorder"
+            onpointerdown={(e) => startDrag(e, "cat", g.cat.id)} onkeydown={(e) => keyMove(e, "cat", g.cat.id)}>⠿</button>
+        {/if}
         <div class="cat-title">
           <h2>{g.cat.name} <span class="muted count">{g.all.length}</span></h2>
           {#if g.cat.blurb}<p class="muted">{g.cat.blurb}</p>{/if}
         </div>
         <div class="acts">
-          {#if !q}
-            <button class="icon" aria-label="Move {g.cat.name} up" disabled={gi === 0} onclick={() => move(groups.map((x) => x.cat), gi, -1, "service_categories")}>↑</button>
-            <button class="icon" aria-label="Move {g.cat.name} down" disabled={gi === groups.length - 1} onclick={() => move(groups.map((x) => x.cat), gi, 1, "service_categories")}>↓</button>
-          {/if}
           <button class="btn sm" onclick={() => editCategory(g.cat)}>Edit</button>
           <button class="btn sm ghost del" onclick={() => deleteCategory(g.cat, g.all.length)}>Delete</button>
         </div>
       </div>
 
-      <ul class="svcs">
-        {#each g.shown as s, i (s.id)}
-          <li class:hidden={!s.active}>
+      <ul class="svcs" class:searching={!!q}>
+        {#each g.shown as s (s.id)}
+          <li class:hidden={!s.active} data-id={s.id} class:placeholder={drag?.kind === "svc" && drag.id === s.id} animate:flip={{ duration: 200 }}>
             {#if !q}
-              <div class="order">
-                <button class="icon sm" aria-label="Move {s.name} up" disabled={i === 0} onclick={() => move(g.all, i, -1, "services")}>↑</button>
-                <button class="icon sm" aria-label="Move {s.name} down" disabled={i === g.shown.length - 1} onclick={() => move(g.all, i, 1, "services")}>↓</button>
-              </div>
+              <button class="grip" data-handle="svc:{s.id}" aria-label="Reorder {s.name}. Drag, or use the up and down arrow keys." title="Drag to reorder or move to another category"
+                onpointerdown={(e) => startDrag(e, "svc", s.id)} onkeydown={(e) => keyMove(e, "svc", s.id)}>⠿</button>
             {/if}
             <div class="info">
               <p class="name">
@@ -198,7 +372,17 @@
               </p>
               <p class="desc muted">{s.description}</p>
             </div>
-            <p class="price num">{unitPrice(s)}</p>
+            <div class="price">
+              {#if s.price_from}<span class="from muted">from</span>{/if}
+              <label class="amount" title="Click to change the price">
+                <span aria-hidden="true">$</span>
+                <input class="num" type="number" min="0" max="1000000" step="0.01" value={s.price} aria-label="Price for {s.name}"
+                  onchange={(e) => savePrice(s, e.currentTarget)}
+                  onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = String(s.price); e.currentTarget.blur(); } }} />
+              </label>
+              <span class="unit muted">{UNIT_LABEL[s.unit]}</span>
+              <span class="ok" class:show={savedId === s.id} aria-live="polite">{savedId === s.id ? "✓" : ""}</span>
+            </div>
             <div class="acts">
               <button class="btn sm" onclick={() => editService(s)}>Edit</button>
               <button class="btn sm ghost" disabled={s.locked && s.active} title={s.locked ? "Package services stay visible" : ""} onclick={() => toggleActive(s)}>{s.active ? "Hide" : "Show"}</button>
@@ -206,7 +390,7 @@
             </div>
           </li>
         {:else}
-          <li class="empty-row muted">No services in this category yet.</li>
+          <li class="empty-row muted">{drag?.kind === "svc" ? "Drop here" : "No services in this category yet."}</li>
         {/each}
       </ul>
       {#if !q}<button class="btn ghost sm add" onclick={() => newService(g.cat.id)}>+ Add a service to {g.cat.name}</button>{/if}
@@ -215,6 +399,15 @@
     <p class="empty">{q ? "No services match." : "No categories yet. Start with + Category."}</p>
   {/each}
 </div>
+
+{#if drag}
+  <div class="lifted" class:gcat={drag.kind === "cat"} aria-hidden="true"
+    style:left="{drag.x - drag.ox}px" style:top="{drag.y - drag.oy}px" style:width="{drag.w}px">
+    <span class="grip g">⠿</span>
+    <strong>{drag.label}</strong>
+    <span class="muted">{drag.meta}</span>
+  </div>
+{/if}
 
 <Modal open={svcOpen} title={svcNew ? "New service" : `Edit ${svc.name || "service"}`} onclose={() => (svcOpen = false)} wide>
   <form class="form" onsubmit={saveService}>
@@ -299,24 +492,50 @@
   .banner { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .cats { display: flex; flex-direction: column; gap: 16px; transition: opacity 0.2s; }
   .cats.busy { opacity: 0.7; }
-  .cat-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .cat-head { display: flex; align-items: flex-start; gap: 8px 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .cat-head .grip { margin-left: -6px; }
+  .cat-title { flex: 1 1 200px; min-width: 0; }
   .cat-title h2 { font-size: 18px; letter-spacing: -0.02em; }
   .cat-title p { font-size: 13px; margin-top: 2px; }
   .count { font-size: 13px; font-weight: 500; margin-left: 4px; }
   .acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .icon { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text-2); font-size: 13px; line-height: 1; transition: background 0.15s, color 0.15s; }
-  .icon.sm { width: 24px; height: 22px; font-size: 11px; border-radius: 6px; }
-  .icon:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
-  .icon:disabled { opacity: 0.3; cursor: default; }
+  .tip { font-size: 13px; margin: -8px 0 14px; }
+  .tipgrip { color: var(--text-2); }
+  .grip { flex: none; width: 26px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; transition: color 0.15s, background 0.15s; }
+  @media (pointer: coarse) { .grip { width: 36px; height: 40px; font-size: 18px; } }
+  .grip:hover, .grip:focus-visible { color: var(--lime); background: var(--surface-2); }
+  .dragging, .dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+  .catdrag .svcs, .catdrag .add, .catdrag .cat-title p { display: none; }
+  .catdrag .cat-head { margin-bottom: 0; }
+  .cat.placeholder, .svcs li.placeholder { outline: 1.5px dashed var(--line-2); outline-offset: -1.5px; background: rgba(214, 255, 63, 0.04); }
+  .cat.placeholder > *, .svcs li.placeholder > * { visibility: hidden; }
+  .svcs li.placeholder { border-radius: 10px; border-top-color: transparent; }
+  .lifted { position: fixed; z-index: 50; pointer-events: none; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--lime); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45), 0 0 0 4px rgba(214, 255, 63, 0.08); transform: rotate(-1deg) scale(1.02); animation: lift 0.18s var(--ease) both; }
+  .lifted strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .lifted .muted { font-size: 13px; white-space: nowrap; margin-left: auto; }
+  .lifted.gcat strong { font-size: 18px; letter-spacing: -0.02em; }
+  .lifted .g { color: var(--lime); cursor: grabbing; }
+  @keyframes lift { from { transform: scale(1); box-shadow: none; } }
   .del { color: var(--critical); }
   .btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .svcs { list-style: none; }
   .svcs li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 12px 4px; border-top: 1px solid var(--line); animation: rise 0.35s var(--ease) both; }
-  .svcs li.hidden .info, .svcs li.hidden .price { opacity: 0.5; }
-  .order { display: flex; flex-direction: column; gap: 2px; }
+  .svcs.searching li { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .dragging .svcs li { animation: none; }
+  .svcs li > .grip { margin-left: -4px; }
+  .svcs li.hidden .info, .svcs li.hidden .price .amount, .svcs li.hidden .unit { opacity: 0.5; }
   .name { font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
   .desc { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .price { font-weight: 600; white-space: nowrap; font-size: 14px; }
+  .price { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 13px; }
+  .amount { display: flex; align-items: center; gap: 3px; width: 104px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; background: var(--surface-2); cursor: text; transition: border-color 0.15s, background 0.15s; }
+  .amount:hover { border-color: var(--line-2); }
+  .amount:focus-within { border-color: var(--lime); background: var(--ink); }
+  .amount span { color: var(--muted); }
+  .amount input { width: 100%; min-width: 0; border: 0; background: transparent; outline: none; text-align: right; font-weight: 600; font-size: 14px; -moz-appearance: textfield; appearance: textfield; }
+  .amount input::-webkit-inner-spin-button, .amount input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .unit { min-width: 92px; }
+  .ok { width: 12px; color: var(--good-text); font-weight: 700; opacity: 0; transition: opacity 0.2s; }
+  .ok.show { opacity: 1; }
   .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; }
   .badge.inc { background: var(--lime); color: var(--on-lime); }
   .badge.off { background: var(--surface-3); color: var(--muted); }
@@ -345,7 +564,11 @@
 
   @media (max-width: 760px) {
     .svcs li { grid-template-columns: auto minmax(0, 1fr); }
+    .svcs.searching li { grid-template-columns: minmax(0, 1fr); }
+    .svcs li > .grip { grid-row: 1 / span 3; align-self: start; }
     .price { grid-column: 2; }
+    .svcs.searching .price, .svcs.searching li > .acts { grid-column: 1; }
+    .unit { min-width: 0; }
     .svcs li > .acts { grid-column: 2; }
     .desc { white-space: normal; }
     .search { flex: 1 1 100%; width: auto; }

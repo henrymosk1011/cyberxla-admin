@@ -172,6 +172,9 @@ export type ClientService = {
   service_id: string | null;
   name: string;
   billing: "monthly" | "once";
+  /** Price per unit; amount = unit_amount x quantity (kept in sync by the database). */
+  unit_amount: number;
+  quantity: number;
   amount: number;
   notes: string | null;
   sort: number;
