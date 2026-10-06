@@ -1,0 +1,9 @@
+{
+  "name": "cyberxla-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check-catalog": "node --experimental-strip-types scripts/check-catalog.mjs"
+  }
+}
