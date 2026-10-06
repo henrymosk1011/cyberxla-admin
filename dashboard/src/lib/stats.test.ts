@@ -8,11 +8,11 @@ const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86400000).toISOStrin
 
 const lead = (id: string, status: Lead["status"], created: number, updated = created, m = 300, o = 0): Lead => ({
   id, status, created_at: daysAgo(created), updated_at: daysAgo(updated), name: id, company: null, email: `${id}@x.co`,
-  phone: null, source: "quote_builder", value_monthly: m, value_one_time: o,
+  phone: null, source: "quote_builder", value_monthly: m, value_one_time: o, archived_at: null,
 });
 const quote = (leadId: string, created: number, m: number, ids: string[] = ["edr"]): Quote => ({
   id: leadId + created, lead_id: leadId, created_at: daysAgo(created), updated_at: daysAgo(created), status: "submitted",
-  workstations: 10, servers: 0, monthly_total: m, one_time_total: 0, monthly_minimum_applied: false, message: null,
+  workstations: 10, servers: 0, monthly_total: m, one_time_total: 0, monthly_minimum_applied: false, message: null, archived_at: null,
   items: ids.map((id) => ({ id, name: id.toUpperCase(), unit: "dev", unit_price: 1, from: false, kind: "monthly", cost: 1 })),
 });
 

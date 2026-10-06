@@ -34,7 +34,13 @@
     if (h === "/") return { page: "overview" as const };
     return { page: "notfound" as const };
   });
-  const newCount = $derived(leads.filter((l) => l.status === "new").length);
+  // Archived leads and quotes stay out of the pipeline, board, and stats.
+  const activeLeads = $derived(leads.filter((l) => !l.archived_at));
+  const activeQuotes = $derived.by(() => {
+    const ids = new Set(activeLeads.map((l) => l.id));
+    return quotes.filter((q) => !q.archived_at && ids.has(q.lead_id));
+  });
+  const newCount = $derived(activeLeads.filter((l) => l.status === "new").length);
 
   $effect(() => {
     const onHash = () => { hash = location.hash; navOpen = false; window.scrollTo(0, 0); };
@@ -154,9 +160,9 @@
       {#if !loaded}
         <p class="muted">Loading…</p>
       {:else if route.page === "overview"}
-        <Overview {leads} {quotes} {stale} />
+        <Overview leads={activeLeads} quotes={activeQuotes} {stale} />
       {:else if route.page === "leads" || route.page === "board"}
-        <Leads {leads} {quotes} {stale} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
+        <Leads {leads} quotes={activeQuotes} {stale} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
       {:else if route.page === "lead"}
         <LeadDetail id={route.id} {version} onstatus={setStatus} />
       {:else}

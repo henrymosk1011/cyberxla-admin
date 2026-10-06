@@ -17,6 +17,7 @@ export type Lead = {
   source: "quote_builder" | "contact" | "manual";
   value_monthly: number;
   value_one_time: number;
+  archived_at: string | null;
 };
 
 export type QuoteItem = {
@@ -42,6 +43,7 @@ export type Quote = {
   one_time_total: number;
   monthly_minimum_applied: boolean;
   message: string | null;
+  archived_at: string | null;
 };
 
 export type Note = { id: string; lead_id: string; created_at: string; body: string };
@@ -56,6 +58,7 @@ export type AuditEntry = {
   row_id: string | null;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
+  hidden?: boolean;
 };
 
 export type AuthState =
@@ -88,6 +91,11 @@ export interface Db {
   setLeadStatus(id: string, status: LeadStatus): Promise<void>;
   setQuoteStatus(id: string, status: QuoteStatus): Promise<void>;
   addNote(leadId: string, body: string): Promise<void>;
+  archiveLead(id: string, archived: boolean): Promise<void>;
+  deleteLead(id: string): Promise<void>;
+  archiveQuote(id: string, archived: boolean): Promise<void>;
+  deleteQuote(id: string): Promise<void>;
+  hideActivity(auditId: number, hidden: boolean): Promise<void>;
   subscribe(cb: (e: ChangeEvent) => void): () => void;
 }
 

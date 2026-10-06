@@ -123,7 +123,10 @@ const db: Db = {
       .order("at", { ascending: false })
       .limit(200);
     fail(error);
-    return (data ?? []) as AuditEntry[];
+    const { data: hidden, error: he } = await sb.from("activity_hidden").select("audit_id");
+    fail(he);
+    const hiddenIds = new Set((hidden ?? []).map((h) => Number(h.audit_id)));
+    return ((data ?? []) as AuditEntry[]).map((a) => ({ ...a, hidden: hiddenIds.has(Number(a.id)) }));
   },
 
   async setLeadStatus(id: string, status: LeadStatus) {
@@ -138,6 +141,35 @@ const db: Db = {
 
   async addNote(leadId, body) {
     const { error } = await sb.from("lead_notes").insert({ lead_id: leadId, body });
+    fail(error);
+  },
+
+  async archiveLead(id, archived) {
+    const { error } = await sb.from("leads").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", id);
+    fail(error);
+  },
+
+  async deleteLead(id) {
+    const { error, count } = await sb.from("leads").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async archiveQuote(id, archived) {
+    const { error } = await sb.from("quotes").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", id);
+    fail(error);
+  },
+
+  async deleteQuote(id) {
+    const { error, count } = await sb.from("quotes").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async hideActivity(auditId, hidden) {
+    const { error } = hidden
+      ? await sb.from("activity_hidden").insert({ audit_id: auditId })
+      : await sb.from("activity_hidden").delete().eq("audit_id", auditId);
     fail(error);
   },
 

@@ -35,12 +35,13 @@ for (let i = 0; i < 46; i++) {
   leads.push({
     id, created_at: created.toISOString(), updated_at: updated.toISOString(), name: `${first} ${last}`, company,
     email: `${first.toLowerCase()}@${company.toLowerCase().replace(/[^a-z]/g, "")}.com`, phone: `(${pick(["213", "310", "323", "818"])}) 555-0${String(100 + i).slice(-3)}`,
-    status, source: "quote_builder", value_monthly: priced.monthly_total, value_one_time: priced.one_time_total,
+    status, source: "quote_builder", value_monthly: priced.monthly_total, value_one_time: priced.one_time_total, archived_at: null,
   });
   quotes.push({
     id: uuid(), lead_id: id, created_at: created.toISOString(), updated_at: updated.toISOString(),
     status: status === "won" ? "accepted" : status === "lost" ? "declined" : status === "proposal" ? "sent" : status === "contacted" ? "reviewing" : "submitted",
     workstations: ws, servers: sv, ...priced, items: priced.items as Quote["items"],
+    archived_at: null,
     message: rand() < 0.5 ? pick(["We just had a phishing scare and want to lock things down.", "Our insurance renewal is asking about MFA and EDR.", "Need HIPAA help before our audit in the spring.", "Can you start next month?"]) : null,
   });
   audit.push({ id: audit.length + 1, at: created.toISOString(), actor: null, actor_role: "quote_intake", action: "insert", table_name: "leads", row_id: id, old_data: null, new_data: { status: "new" } });
@@ -49,6 +50,19 @@ for (let i = 0; i < 46; i++) {
     notes.push({ id: uuid(), lead_id: id, created_at: updated.toISOString(), body: pick(["Called, left voicemail.", "Good fit. Sending proposal Friday.", "Wants pricing for 5 more seats.", "Decision maker is the office manager."]) });
   }
 }
+
+const hiddenIds = new Set<number>();
+function log(table: AuditEntry["table_name"], action: AuditEntry["action"], rowId: string, oldData: Record<string, unknown> | null, newData: Record<string, unknown> | null) {
+  audit.push({ id: audit.length + 1, at: new Date().toISOString(), actor: "admin", actor_role: "authenticated", action, table_name: table, row_id: rowId, old_data: oldData, new_data: newData });
+}
+function refreshValue(leadId: string) {
+  const l = leads.find((x) => x.id === leadId);
+  if (!l) return;
+  const q = quotes.filter((x) => x.lead_id === leadId && !x.archived_at).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  l.value_monthly = q?.monthly_total ?? 0;
+  l.value_one_time = q?.one_time_total ?? 0;
+}
+const changed = (table: "leads" | "quotes", row: Record<string, unknown>) => listeners.forEach((cb) => cb({ table, type: "UPDATE", row }));
 
 const wait = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(structuredClone(v)), 120));
 let signedOut = () => {};
@@ -76,7 +90,10 @@ const db: Db = {
   lead: (id) => wait(leads.find((l) => l.id === id) ?? null),
   quotesFor: (id) => wait(quotes.filter((q) => q.lead_id === id)),
   notesFor: (id) => wait(notes.filter((n) => n.lead_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))),
-  activityFor: (id) => wait(audit.filter((a) => a.row_id === id).sort((a, b) => b.at.localeCompare(a.at))),
+  activityFor: (id) => wait(audit
+    .filter((a) => a.row_id === id || a.new_data?.lead_id === id || a.old_data?.lead_id === id)
+    .map((a) => ({ ...a, hidden: hiddenIds.has(a.id) }))
+    .sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
   async setLeadStatus(id, status) {
     const l = leads.find((l) => l.id === id)!;
     audit.push({ id: audit.length + 1, at: new Date().toISOString(), actor: "admin", actor_role: "authenticated", action: "update", table_name: "leads", row_id: id, old_data: { status: l.status }, new_data: { status } });
@@ -85,7 +102,41 @@ const db: Db = {
   },
   async setQuoteStatus(id, status: QuoteStatus) {
     const q = quotes.find((q) => q.id === id)!;
+    log("quotes", "update", q.id, { status: q.status, lead_id: q.lead_id }, { status, lead_id: q.lead_id });
     q.status = status;
+  },
+  async archiveLead(id, archived) {
+    const l = leads.find((x) => x.id === id)!;
+    const at = archived ? new Date().toISOString() : null;
+    log("leads", "update", id, { status: l.status, archived_at: l.archived_at }, { status: l.status, archived_at: at });
+    l.archived_at = at;
+    changed("leads", l);
+  },
+  async deleteLead(id) {
+    const i = leads.findIndex((x) => x.id === id);
+    if (i >= 0) leads.splice(i, 1);
+    for (let j = quotes.length - 1; j >= 0; j--) if (quotes[j]!.lead_id === id) quotes.splice(j, 1);
+    changed("leads", { id });
+  },
+  async archiveQuote(id, archived) {
+    const q = quotes.find((x) => x.id === id)!;
+    const at = archived ? new Date().toISOString() : null;
+    log("quotes", "update", id, { status: q.status, archived_at: q.archived_at, lead_id: q.lead_id }, { status: q.status, archived_at: at, lead_id: q.lead_id });
+    q.archived_at = at;
+    refreshValue(q.lead_id);
+    changed("quotes", q);
+  },
+  async deleteQuote(id) {
+    const i = quotes.findIndex((x) => x.id === id);
+    if (i < 0) return;
+    const q = quotes[i]!;
+    quotes.splice(i, 1);
+    log("quotes", "delete", id, { monthly_total: q.monthly_total, lead_id: q.lead_id }, null);
+    refreshValue(q.lead_id);
+    changed("quotes", { lead_id: q.lead_id });
+  },
+  async hideActivity(auditId, hidden) {
+    if (hidden) hiddenIds.add(auditId); else hiddenIds.delete(auditId);
   },
   async addNote(leadId, body) {
     notes.push({ id: uuid(), lead_id: leadId, created_at: new Date().toISOString(), body });

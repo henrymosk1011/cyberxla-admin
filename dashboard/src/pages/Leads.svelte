@@ -9,20 +9,24 @@
   } = $props();
 
   let q = $state("");
-  let filter = $state<LeadStatus | "all" | "open">("open");
+  let filter = $state<LeadStatus | "all" | "open" | "archived">("open");
   let sort = $state<"recent" | "value" | "name">("recent");
   let dragging = $state<string | null>(null);
   let over = $state<LeadStatus | null>(null);
 
   const quoteCount = $derived(quotes.reduce((m, x) => m.set(x.lead_id, (m.get(x.lead_id) ?? 0) + 1), new Map<string, number>()));
-  const searched = $derived.by(() => {
+  const archived = $derived(leads.filter((l) => l.archived_at));
+  const active = $derived(leads.filter((l) => !l.archived_at));
+  const searched = $derived(search(active));
+  const searchedArchived = $derived(search(archived));
+  function search(list: Lead[]) {
     const s = q.trim().toLowerCase();
-    if (!s) return leads;
-    return leads.filter((l) => [l.name, l.company ?? "", l.email, l.phone ?? ""].some((v) => v.toLowerCase().includes(s)));
-  });
+    if (!s) return list;
+    return list.filter((l) => [l.name, l.company ?? "", l.email, l.phone ?? ""].some((v) => v.toLowerCase().includes(s)));
+  }
   const counts = $derived(Object.fromEntries(LEAD_STATUSES.map((st) => [st, searched.filter((l) => l.status === st).length])) as Record<LeadStatus, number>);
   const rows = $derived.by(() => {
-    const r = searched.filter((l) => filter === "all" || (filter === "open" ? ["new", "contacted", "proposal"].includes(l.status) : l.status === filter));
+    const r = filter === "archived" ? searchedArchived : searched.filter((l) => filter === "all" || (filter === "open" ? ["new", "contacted", "proposal"].includes(l.status) : l.status === filter));
     return [...r].sort((a, b) =>
       sort === "value" ? b.value_monthly - a.value_monthly || b.value_one_time - a.value_one_time
       : sort === "name" ? (a.company || a.name).localeCompare(b.company || b.name)
@@ -63,6 +67,7 @@
         <button aria-pressed={filter === st} onclick={() => (filter = st)}>{STATUS_LABEL[st]} <span class="c">{counts[st]}</span></button>
       {/each}
       <button aria-pressed={filter === "all"} onclick={() => (filter = "all")}>All <span class="c">{searched.length}</span></button>
+      <button aria-pressed={filter === "archived"} onclick={() => (filter = "archived")}>Archived <span class="c">{searchedArchived.length}</span></button>
     </div>
     <label class="sort muted">Sort
       <select class="input sm" bind:value={sort}>
@@ -100,7 +105,7 @@
         </table>
       </div>
     {:else}
-      <p class="empty">{leads.length ? "No leads match." : "No leads yet. Quotes from the website will show up here."}</p>
+      <p class="empty">{filter === "archived" && !q ? "No archived leads." : leads.length ? "No leads match." : "No leads yet. Quotes from the website will show up here."}</p>
     {/if}
   </section>
 {:else}

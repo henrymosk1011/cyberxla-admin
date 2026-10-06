@@ -26,6 +26,8 @@ access to any table.
 |---|---|
 | `supabase/migrations/0001_init.sql` | Tables, row-level security, audit log, intake function and role |
 | `supabase/migrations/0002_realtime.sql` | Live updates for leads and quotes |
+| `supabase/migrations/0003_archive_activity_keepalive.sql` | Archive/delete for leads and quotes, hideable activity entries, keep-alive heartbeat |
+| `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
 | `supabase/functions/submit-quote/index.ts` | The public endpoint |
 | `supabase/functions/submit-quote/lib.ts` | Validation and pricing (`CATALOG` must match the website) |
@@ -34,9 +36,8 @@ access to any table.
 
 ## One-time setup
 
-1. **Run the migrations.** Supabase > SQL Editor > New query, paste
-   `supabase/migrations/0001_init.sql`, Run. Then the same for
-   `0002_realtime.sql`.
+1. **Run the migrations.** Supabase > SQL Editor > New query, paste each file
+   in `supabase/migrations/` in order (0001, 0002, 0003, ...) and Run.
 2. **Make yourself the admin.** In the SQL Editor:
    ```sql
    insert into public.admins (user_id)
@@ -117,3 +118,10 @@ Zero Trust > Access controls > Applications > Add > Self-hosted:
 - Authentication > URL Configuration: Site URL `https://admin.cyberx.la`.
 - Authentication > Sign In / Providers: "Allow new users to sign up" **off**.
 - MFA (TOTP) stays enabled (the default).
+
+## Activity log
+
+Every change to leads, quotes and notes is written to `audit_log` by a
+database trigger and can't be edited or deleted, even by the admin. "Remove
+from timeline" in the dashboard only hides an entry (`activity_hidden`); the
+original record stays, and "Show removed" brings it back.
