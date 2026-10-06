@@ -335,7 +335,7 @@ function normLead(r: Record<string, unknown>): Lead {
   return { ...(r as Lead), value_monthly: Number(r.value_monthly), value_one_time: Number(r.value_one_time) };
 }
 function normClientService(r: Record<string, unknown>): ClientService {
-  return { ...(r as ClientService), amount: Number(r.amount) };
+  return { ...(r as ClientService), amount: Number(r.amount), unit_amount: Number(r.unit_amount ?? r.amount), quantity: Number(r.quantity ?? 1) };
 }
 
 /** Turn database rule violations into plain sentences. */
