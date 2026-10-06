@@ -23,7 +23,8 @@
   li:hover .name { color: var(--text); }
   .name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .track { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .fill { height: 12px; min-width: 2px; background: var(--lime); border-radius: 0 4px 4px 0; transition: width 0.4s ease; flex: none; }
+  .fill { height: 12px; min-width: 2px; background: var(--lime); border-radius: 0 4px 4px 0; transition: width 0.6s var(--ease); flex: none; transform-origin: left; animation: grow-x 0.7s var(--ease) both; }
+  @keyframes grow-x { from { transform: scaleX(0); } }
   .fill.zero { background: var(--axis); }
   .val { color: var(--text); font-weight: 600; white-space: nowrap; flex: none; }
 </style>

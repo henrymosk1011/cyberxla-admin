@@ -1,7 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
-  import { dateTime, money, shortDate, STATUS_LABEL } from "../lib/format.ts";
+  import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Quote, type QuoteStatus } from "../lib/types.ts";
 
   let { id, version, onstatus }: { id: string; version: number; onstatus: (id: string, s: LeadStatus) => Promise<void> } = $props();
@@ -15,6 +15,8 @@
   let error = $state("");
   let showArchived = $state(false);
   let showHidden = $state(false);
+  // Per-quote line item filter, like the quote builder's.
+  let itemFilter = $state<Record<string, "all" | "monthly" | "once">>({});
   let confirm: Confirm;
 
   const activeQuotes = $derived(quotes.filter((q) => !q.archived_at));
@@ -58,6 +60,11 @@
   async function deleteQuote(q: Quote) {
     if (!(await confirm.ask({ title: "Delete this quote?", body: `The ${money(q.monthly_total)}/mo quote from ${dateTime(q.created_at)} will be permanently deleted. This can't be undone.`, action: "Delete permanently", danger: true }))) return;
     await run(() => db.deleteQuote(q.id), "Couldn't delete the quote.");
+  }
+  async function deleteNote(n: Note) {
+    const preview = n.body.length > 80 ? n.body.slice(0, 80) + "…" : n.body;
+    if (!(await confirm.ask({ title: "Delete this note?", body: `"${preview}" will be permanently deleted.`, action: "Delete", danger: true }))) return;
+    await run(() => db.deleteNote(n.id), "Couldn't delete the note.");
   }
   async function toggleHidden(a: AuditEntry) {
     await run(() => db.hideActivity(a.id, !a.hidden), "Couldn't update the activity log.");
@@ -122,7 +129,7 @@
       if (a.action === "update" && n.status !== o.status) return `${who}: quote ${STATUS_LABEL[String(n.status)]?.toLowerCase() ?? n.status}`;
       return `${who}: quote updated`;
     }
-    return a.action === "insert" ? `${who}: note added` : `${who}: note ${a.action}d`;
+    return a.action === "insert" ? `${who}: note added` : a.action === "delete" ? `${who}: note deleted` : `${who}: note edited`;
   }
   const tel = (p: string) => "tel:" + p.replace(/[^0-9+]/g, "");
 </script>
@@ -141,7 +148,7 @@
       <p class="contact">
         {#if lead.company}<span>{lead.name}</span>{/if}
         <a href="mailto:{lead.email}">{lead.email}</a>
-        {#if lead.phone}<a href={tel(lead.phone)}>{lead.phone}</a>{/if}
+        {#if lead.phone}<a href={tel(lead.phone)}>{phone(lead.phone)}</a>{/if}
       </p>
     </div>
     <div class="value">
@@ -192,7 +199,10 @@
         </form>
         <ul class="notes">
           {#each notes as n (n.id)}
-            <li><p>{n.body}</p><span class="muted small">{dateTime(n.created_at)}</span></li>
+            <li>
+              <div><p>{n.body}</p><span class="muted small">{dateTime(n.created_at)}</span></div>
+              <button class="x" title="Delete note" aria-label="Delete this note" onclick={() => deleteNote(n)}>×</button>
+            </li>
           {/each}
         </ul>
       </section>
@@ -221,6 +231,9 @@
 {/if}
 
 {#snippet quoteCard(q: Quote)}
+  {@const f = itemFilter[q.id] ?? "all"}
+  {@const nMo = q.items.filter((i) => i.kind === "monthly").length}
+  {@const nOnce = q.items.length - nMo}
   <section class="card quote" class:archived={!!q.archived_at}>
     <div class="card-head">
       <div>
@@ -235,13 +248,18 @@
         <button class="btn sm ghost del" onclick={() => deleteQuote(q)}>Delete</button>
       </div>
     </div>
+    <div class="seg ifilter" role="group" aria-label="Show services">
+      <button aria-pressed={f === "all"} onclick={() => (itemFilter[q.id] = "all")}>All <span class="c">{q.items.length}</span></button>
+      <button aria-pressed={f === "monthly"} disabled={!nMo} onclick={() => (itemFilter[q.id] = "monthly")}><span class="qdot mo" aria-hidden="true"></span>Monthly <span class="c">{nMo}</span></button>
+      <button aria-pressed={f === "once"} disabled={!nOnce} onclick={() => (itemFilter[q.id] = "once")}><span class="qdot once" aria-hidden="true"></span>One time <span class="c">{nOnce}</span></button>
+    </div>
     <table class="table">
       <thead><tr><th>Service</th><th>Type</th><th class="r">Price</th></tr></thead>
       <tbody>
-        {#each q.items as it (it.id)}
-          <tr>
+        {#each q.items.filter((i) => f === "all" || i.kind === f) as it (it.id)}
+          <tr class="irow">
             <td>{it.name}</td>
-            <td><span class="kind" class:mo={it.kind === "monthly"}>{it.kind === "monthly" ? "Monthly" : "One time"}</span></td>
+            <td><span class="kind" class:mo={it.kind === "monthly"}><span class="qdot" class:mo={it.kind === "monthly"} class:once={it.kind !== "monthly"} aria-hidden="true"></span>{it.kind === "monthly" ? "Monthly" : "One time"}</span></td>
             <td class="r num">{it.from ? "from " : ""}{money(it.cost)}</td>
           </tr>
         {/each}
@@ -252,7 +270,7 @@
       <div><span class="muted">One time</span><strong class="num">{money(q.one_time_total)}</strong></div>
     </div>
     {#if q.message}<blockquote>{q.message}</blockquote>{/if}
-        </section>
+  </section>
 {/snippet}
 
 <Confirm bind:this={confirm} />
@@ -277,7 +295,7 @@
   .st-won i { background: var(--st-won); } .st-lost i { background: var(--st-lost); }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
   .main, .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .sel { height: 34px; padding: 0 10px; font-size: 13px; }
+  .sel { height: 34px; padding: 0 36px 0 12px; font-size: 13px; background-position: right 12px center; }
   .kind { font-size: 12px; color: var(--muted); }
   .kind.mo { color: var(--text-2); }
   .totals { display: flex; gap: 32px; padding: 16px 12px 4px; border-top: 1px solid var(--line-2); margin-top: 4px; }
@@ -288,17 +306,27 @@
   form { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
   form textarea { width: 100%; }
   .notes { list-style: none; margin-top: 16px; display: flex; flex-direction: column; }
-  .notes li { padding: 12px 0; border-top: 1px solid var(--line); }
+  .notes li { display: flex; gap: 8px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); animation: rise 0.35s var(--ease) both; }
+  .notes li > div { flex: 1; min-width: 0; }
+  .notes .x, .timeline .x { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 6px; opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s; }
+  .notes li:hover .x, .notes .x:focus-visible { opacity: 1; }
+  .notes .x:hover { color: var(--critical); background: var(--surface-2); }
+  .ifilter { margin: -4px 0 12px; }
+  .ifilter .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .ifilter button:disabled { opacity: 0.4; cursor: default; }
+  .qdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; }
+  .qdot.mo { background: var(--lime); box-shadow: 0 0 6px rgba(214, 255, 63, 0.4); }
+  .qdot.once { border: 1.5px solid var(--muted); }
+  .irow { animation: rise 0.3s var(--ease) both; }
   .notes p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
   .timeline { list-style: none; display: flex; flex-direction: column; gap: 14px; }
   .timeline li { display: flex; gap: 12px; font-size: 13px; align-items: flex-start; }
   .timeline li > div { flex: 1; min-width: 0; }
-  .timeline .x { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 6px; opacity: 0; transition: opacity 0.15s; }
   .timeline li:hover .x, .timeline .x:focus-visible { opacity: 1; }
   .timeline .x:hover { color: var(--text); background: var(--surface-2); }
   .timeline li.hidden-entry { opacity: 0.5; }
   .timeline li.hidden-entry .x { opacity: 1; }
-  @media (hover: none) { .timeline .x { opacity: 1; } }
+  @media (hover: none) { .timeline .x, .notes .x { opacity: 1; } }
   .acts { display: flex; gap: 6px; margin-top: 10px; }
   .qacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
   .del { color: var(--critical); }

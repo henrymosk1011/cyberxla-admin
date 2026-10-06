@@ -91,6 +91,7 @@ export interface Db {
   setLeadStatus(id: string, status: LeadStatus): Promise<void>;
   setQuoteStatus(id: string, status: QuoteStatus): Promise<void>;
   addNote(leadId: string, body: string): Promise<void>;
+  deleteNote(id: string): Promise<void>;
   archiveLead(id: string, archived: boolean): Promise<void>;
   deleteLead(id: string): Promise<void>;
   archiveQuote(id: string, archived: boolean): Promise<void>;

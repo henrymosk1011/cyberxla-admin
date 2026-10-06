@@ -39,7 +39,7 @@
   </div>
 </header>
 
-<div class="grid" class:stale>
+<div class="grid rise" class:stale>
   <section class="card hero">
     <Kpi hero label="Open pipeline" value="{money(k.openMonthly)}/mo" hint="{num(k.openCount)} open {k.openCount === 1 ? 'lead' : 'leads'} · {money(k.openOneTime)} one time" />
   </section>

@@ -127,7 +127,7 @@ async function sendAlert(lead: ReturnType<typeof parseSubmission>["lead"], price
     method: "POST",
     headers: { "Authorization": `Bearer ${env("RESEND_API_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: "cyberXLA Quotes <quotes@notify.cyberx.la>",
+      from: "cyberxLA Quotes <quotes@notify.cyberx.la>",
       to: [env("ALERT_EMAIL")],
       // Fixed subject: no visitor-controlled text in headers.
       subject: `New quote: ${money(priced.monthly_total)}/mo + ${money(priced.one_time_total)} one time`,

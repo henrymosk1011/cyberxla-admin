@@ -105,6 +105,13 @@ const db: Db = {
     log("quotes", "update", q.id, { status: q.status, lead_id: q.lead_id }, { status, lead_id: q.lead_id });
     q.status = status;
   },
+  async deleteNote(id) {
+    const i = notes.findIndex((n) => n.id === id);
+    if (i < 0) return;
+    const n = notes[i]!;
+    notes.splice(i, 1);
+    log("lead_notes", "delete", id, { lead_id: n.lead_id, body: n.body }, null);
+  },
   async archiveLead(id, archived) {
     const l = leads.find((x) => x.id === id)!;
     const at = archived ? new Date().toISOString() : null;

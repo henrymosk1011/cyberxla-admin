@@ -61,7 +61,7 @@ const db: Db = {
     for (const f of factors?.all ?? []) {
       if (f.status !== "verified") await sb.auth.mfa.unenroll({ factorId: f.id });
     }
-    const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "Authenticator app", issuer: "cyberXLA Admin" });
+    const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "Authenticator app", issuer: "cyberxLA Admin" });
     fail(error);
     return { factorId: data!.id, qr: data!.totp.qr_code, secret: data!.totp.secret };
   },
@@ -142,6 +142,12 @@ const db: Db = {
   async addNote(leadId, body) {
     const { error } = await sb.from("lead_notes").insert({ lead_id: leadId, body });
     fail(error);
+  },
+
+  async deleteNote(id) {
+    const { error, count } = await sb.from("lead_notes").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
   },
 
   async archiveLead(id, archived) {

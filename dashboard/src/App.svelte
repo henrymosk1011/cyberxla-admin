@@ -5,6 +5,9 @@
   import Leads from "./pages/Leads.svelte";
   import LeadDetail from "./pages/LeadDetail.svelte";
   import Toast from "./components/Toast.svelte";
+  import Brand from "./components/Brand.svelte";
+  import { fly } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import { watchIdle } from "./lib/idle.ts";
   import { money } from "./lib/format.ts";
   import type { AuthState, Lead, LeadStatus, Quote, ToastMsg } from "./lib/types.ts";
@@ -88,7 +91,7 @@
   });
 
   $effect(() => {
-    document.title = unseen ? `(${unseen}) cyberXLA Admin` : "cyberXLA Admin";
+    document.title = unseen ? `(${unseen}) cyberxLA Admin` : "cyberxLA Admin";
   });
   $effect(() => {
     const clear = () => { if (document.visibilityState === "visible") setTimeout(() => (unseen = 0), 1500); };
@@ -117,10 +120,26 @@
   }
 
   const nav = [
-    { href: "#/", label: "Overview", match: ["overview"] },
-    { href: "#/leads", label: "Leads", match: ["leads", "lead"] },
-    { href: "#/board", label: "Board", match: ["board"] },
+    { href: "#/", label: "Overview", match: ["overview"], icon: "M4 13h6V4H4zM14 20h6v-9h-6zM14 4v4h6V4zM4 20h6v-3H4z" },
+    { href: "#/leads", label: "Leads", match: ["leads", "lead"], icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19v-1a4 4 0 0 0-3-3.87M15.5 4.13a3 3 0 0 1 0 5.74" },
+    { href: "#/board", label: "Board", match: ["board"], icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
   ];
+
+  // The highlight glides to whichever item is active.
+  let navEl = $state<HTMLElement | null>(null);
+  let pillY = $state(0);
+  let pillH = $state(0);
+  let pillShow = $state(false);
+  $effect(() => {
+    void route.page;
+    const a = navEl?.querySelector<HTMLElement>('a[aria-current="page"]');
+    pillShow = !!a;
+    if (a) {
+      pillY = a.offsetTop;
+      pillH = a.offsetHeight;
+    }
+  });
+  const pageKey = $derived(route.page + ("id" in route ? route.id : ""));
 </script>
 
 {#if auth === null}
@@ -130,11 +149,13 @@
 {:else}
   <div class="shell">
     <aside class="rail" class:open={navOpen}>
-      <div class="brand"><span class="mark" aria-hidden="true">×</span>cyberXLA <span class="muted">Admin</span></div>
-      <nav>
+      <a class="brand" href="#/" aria-label="cyberxLA Admin, overview"><Brand admin size={22} /></a>
+      <nav bind:this={navEl}>
+        <span class="pill" class:show={pillShow} aria-hidden="true" style:transform="translateY({pillY}px)" style:height="{pillH}px"></span>
         {#each nav as n (n.href)}
           <a href={n.href} aria-current={n.match.includes(route.page) ? "page" : undefined}>
-            {n.label}
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={n.icon} /></svg>
+            <span class="label">{n.label}</span>
             {#if n.label === "Leads" && newCount}<span class="badge num">{newCount}</span>{/if}
           </a>
         {/each}
@@ -149,7 +170,7 @@
 
     <div class="topbar">
       <button class="btn ghost sm" aria-expanded={navOpen} onclick={() => (navOpen = !navOpen)}>Menu</button>
-      <div class="brand"><span class="mark" aria-hidden="true">×</span>cyberXLA</div>
+      <a class="brand" href="#/"><Brand size={19} /></a>
       <span class="live" class:on={live}><i aria-hidden="true"></i></span>
     </div>
 
@@ -159,7 +180,10 @@
       {/if}
       {#if !loaded}
         <p class="muted">Loading…</p>
-      {:else if route.page === "overview"}
+      {:else}
+      {#key pageKey}
+      <div class="page" in:fly={{ y: 12, duration: 380, easing: cubicOut }}>
+      {#if route.page === "overview"}
         <Overview leads={activeLeads} quotes={activeQuotes} {stale} />
       {:else if route.page === "leads" || route.page === "board"}
         <Leads {leads} quotes={activeQuotes} {stale} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
@@ -167,6 +191,9 @@
         <LeadDetail id={route.id} {version} onstatus={setStatus} />
       {:else}
         <p class="empty">Page not found. <a href="#/">Go to overview</a></p>
+      {/if}
+      </div>
+      {/key}
       {/if}
     </main>
   </div>
@@ -177,13 +204,26 @@
   .boot { min-height: 100dvh; }
   .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100dvh; }
   .rail { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: 28px; padding: 22px 16px; border-right: 1px solid var(--line); background: var(--ink); }
-  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: -0.02em; padding: 0 8px; }
-  .mark { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--plane); color: var(--lime); font-size: 18px; font-weight: 800; border: 1px solid var(--line-2); }
-  nav { display: flex; flex-direction: column; gap: 2px; }
-  nav a { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-radius: 10px; text-decoration: none; font-weight: 500; color: var(--text-2); }
-  nav a:hover { background: var(--surface); color: var(--text); }
-  nav a[aria-current="page"] { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--lime); }
-  .badge { font-size: 11px; font-weight: 700; background: var(--lime); color: var(--on-lime); border-radius: 999px; padding: 1px 7px; }
+  .brand { display: inline-flex; padding: 4px 10px; text-decoration: none; border-radius: 8px; }
+  nav { position: relative; display: flex; flex-direction: column; gap: 4px; }
+  .pill {
+    position: absolute; left: 0; right: 0; top: 0; z-index: 0; border-radius: 12px; pointer-events: none; opacity: 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), var(--surface-2);
+    border: 1px solid var(--line-2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 0 4px rgba(214, 255, 63, 0.03);
+    transition: transform 0.5s var(--ease-spring), height 0.3s var(--ease), opacity 0.3s var(--ease);
+  }
+  .pill.show { opacity: 1; }
+  nav a { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; text-decoration: none; font-weight: 500; color: var(--text-2); transition: color 0.25s var(--ease), background 0.25s var(--ease); }
+  nav a svg { flex: none; color: var(--muted); transition: color 0.3s var(--ease), transform 0.4s var(--ease-spring); }
+  nav a:hover:not([aria-current="page"]) { color: var(--text); background: rgba(255, 255, 255, 0.03); }
+  nav a:hover svg { transform: translateX(2px) scale(1.06); color: var(--text-2); }
+  nav a[aria-current="page"] { color: var(--text); font-weight: 600; }
+  nav a[aria-current="page"] svg { color: var(--lime); filter: drop-shadow(0 0 6px rgba(214, 255, 63, 0.45)); }
+  .label { flex: 1; }
+  .badge { font-size: 11px; font-weight: 700; background: var(--lime); color: var(--on-lime); border-radius: 999px; padding: 1px 7px; box-shadow: 0 0 12px rgba(214, 255, 63, 0.35); animation: pop 0.5s var(--ease-spring); }
+  @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
+  .page { min-width: 0; }
   .me { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 0 8px; font-size: 13px; }
   .email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .live { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--muted); }
@@ -198,7 +238,7 @@
   @media (max-width: 860px) {
     .shell { grid-template-columns: 1fr; }
     .topbar { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 20; padding: 10px 12px; background: var(--ink); border-bottom: 1px solid var(--line); }
-    .rail { position: fixed; z-index: 30; inset: 0 auto 0 0; width: 260px; transform: translateX(-100%); transition: transform 0.2s ease; }
+    .rail { position: fixed; z-index: 30; inset: 0 auto 0 0; width: 260px; transform: translateX(-100%); transition: transform 0.35s var(--ease); }
     .rail.open { transform: none; box-shadow: 20px 0 60px rgba(0,0,0,0.6); }
   }
   @media (prefers-reduced-motion: reduce) { .live.on i { animation: none; } }
