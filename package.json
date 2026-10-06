@@ -4,6 +4,6 @@
   "type": "module",
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "check-catalog": "node --experimental-strip-types scripts/check-catalog.mjs"
+    "bundle-function": "node scripts/bundle-function.mjs"
   }
 }

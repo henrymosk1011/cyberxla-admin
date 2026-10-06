@@ -3,7 +3,8 @@
 // the user is on the admin allowlist AND finished MFA this session.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Db, Enrollment, Lead, LeadStatus, Note, Quote, QuoteStatus } from "./types.ts";
+import { catalog } from "./store.svelte.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Enrollment, Lead, LeadStatus, Note, Quote, QuoteStatus, ServiceRow } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -169,7 +170,7 @@ const db: Db = {
 
   async updateQuoteServices(id, serviceIds, workstations, servers) {
     if (!serviceIds.length) throw new Error("A quote needs at least one service. Delete the quote instead.");
-    const priced = priceQuote(serviceIds, workstations, servers);
+    const priced = priceQuote(catalog.services, serviceIds, workstations, servers);
     const { error, count } = await sb
       .from("quotes")
       .update({ workstations, servers, ...priced }, { count: "exact" })
@@ -191,6 +192,132 @@ const db: Db = {
     fail(error);
   },
 
+  async categories() {
+    const { data, error } = await sb.from("service_categories").select("id, name, blurb, sort").order("sort").order("name");
+    fail(error);
+    return data ?? [];
+  },
+
+  async services() {
+    const { data, error } = await sb.from("services")
+      .select("id, category_id, name, description, price, unit, price_from, in_packages, active, locked, sort")
+      .order("sort").order("name");
+    fail(error);
+    return (data ?? []).map((r) => ({ ...(r as ServiceRow), price: Number(r.price) }));
+  },
+
+  async saveCategory(c, isNew) {
+    const row = { name: c.name.trim(), blurb: c.blurb.trim(), sort: c.sort };
+    const { error } = isNew
+      ? await sb.from("service_categories").insert({ id: c.id, ...row })
+      : await sb.from("service_categories").update(row).eq("id", c.id);
+    fail(friendly(error));
+  },
+
+  async deleteCategory(id) {
+    const { error } = await sb.from("service_categories").delete().eq("id", id);
+    fail(friendly(error));
+  },
+
+  async saveService(s, isNew) {
+    const row = {
+      category_id: s.category_id, name: s.name.trim(), description: s.description.trim(), price: s.price,
+      unit: s.unit, price_from: s.price_from, in_packages: s.in_packages, active: s.active, sort: s.sort,
+    };
+    const { error } = isNew
+      ? await sb.from("services").insert({ id: s.id, ...row })
+      : await sb.from("services").update(row).eq("id", s.id);
+    fail(friendly(error));
+  },
+
+  async deleteService(id) {
+    const { error, count } = await sb.from("services").delete({ count: "exact" }).eq("id", id);
+    fail(friendly(error));
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async reorder(table, ids) {
+    // A handful of rows; one small update each.
+    for (const [i, id] of ids.entries()) {
+      const { error } = await sb.from(table).update({ sort: i * 10 }).eq("id", id);
+      fail(friendly(error));
+    }
+  },
+
+  async clients() {
+    const { data, error } = await sb.from("clients").select("*").order("updated_at", { ascending: false }).limit(5000);
+    fail(error);
+    return (data ?? []) as Client[];
+  },
+
+  async client(id) {
+    if (!UUID.test(id)) return null;
+    const { data, error } = await sb.from("clients").select("*").eq("id", id).maybeSingle();
+    fail(error);
+    return (data as Client) ?? null;
+  },
+
+  async allClientServices() {
+    const { data, error } = await sb.from("client_services").select("*").limit(20000);
+    fail(error);
+    return (data ?? []).map(normClientService);
+  },
+
+  async clientServices(clientId) {
+    const { data, error } = await sb.from("client_services").select("*").eq("client_id", clientId).order("sort").order("created_at");
+    fail(error);
+    return (data ?? []).map(normClientService);
+  },
+
+  async createClient(c) {
+    const { data, error } = await sb.from("clients").insert(c).select("id").single();
+    fail(friendly(error));
+    return (data as { id: string }).id;
+  },
+
+  async updateClient(id, patch) {
+    const { error } = await sb.from("clients").update(patch).eq("id", id);
+    fail(friendly(error));
+  },
+
+  async deleteClient(id) {
+    const { error, count } = await sb.from("clients").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async addClientService(s) {
+    const { error } = await sb.from("client_services").insert(s);
+    fail(friendly(error));
+  },
+
+  async updateClientService(id, patch) {
+    const { error } = await sb.from("client_services").update(patch).eq("id", id);
+    fail(friendly(error));
+  },
+
+  async deleteClientService(id) {
+    const { error } = await sb.from("client_services").delete().eq("id", id);
+    fail(error);
+  },
+
+  async clientActivity(clientId) {
+    if (!UUID.test(clientId)) return [];
+    const { data, error } = await sb.from("audit_log").select("*")
+      .or(`row_id.eq.${clientId},new_data->>client_id.eq.${clientId},old_data->>client_id.eq.${clientId}`)
+      .order("at", { ascending: false }).limit(200);
+    fail(error);
+    const { data: hidden } = await sb.from("activity_hidden").select("audit_id");
+    const hiddenIds = new Set((hidden ?? []).map((h) => Number(h.audit_id)));
+    return ((data ?? []) as AuditEntry[]).map((a) => ({ ...a, hidden: hiddenIds.has(Number(a.id)) }));
+  },
+
+  async convertLead(leadId) {
+    const { data, error } = await sb.rpc("convert_lead_to_client", { p_lead: leadId });
+    fail(error);
+    return data as string;
+  },
+
   subscribe(cb) {
     const ch = sb
       .channel("crm")
@@ -207,6 +334,19 @@ const db: Db = {
 function normLead(r: Record<string, unknown>): Lead {
   return { ...(r as Lead), value_monthly: Number(r.value_monthly), value_one_time: Number(r.value_one_time) };
 }
+function normClientService(r: Record<string, unknown>): ClientService {
+  return { ...(r as ClientService), amount: Number(r.amount) };
+}
+
+/** Turn database rule violations into plain sentences. */
+function friendly(e: { message: string; code?: string } | null) {
+  if (!e) return null;
+  if (e.code === "23505") return { message: "That name is already taken. Try a slightly different one." };
+  if (e.code === "23503") return { message: "This category still has services. Move or delete them first." };
+  if (e.code === "23514") return { message: "Something in the form isn't valid (check required fields and lengths)." };
+  return e;
+}
+
 function normQuote(r: Record<string, unknown>): Quote {
   return { ...(r as Quote), monthly_total: Number(r.monthly_total), one_time_total: Number(r.one_time_total) };
 }

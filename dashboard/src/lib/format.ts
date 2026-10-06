@@ -26,6 +26,7 @@ export function ago(iso: string, now = Date.now()) {
 
 export const STATUS_LABEL: Record<string, string> = {
   new: "New", contacted: "Contacted", proposal: "Proposal", won: "Won", lost: "Lost",
+  active: "Active", paused: "Paused", former: "Former",
   submitted: "Submitted", reviewing: "Reviewing", sent: "Sent", accepted: "Accepted", declined: "Declined",
 };
 

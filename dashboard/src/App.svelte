@@ -4,13 +4,17 @@
   import Overview from "./pages/Overview.svelte";
   import Leads from "./pages/Leads.svelte";
   import LeadDetail from "./pages/LeadDetail.svelte";
+  import Clients from "./pages/Clients.svelte";
+  import ClientDetail from "./pages/ClientDetail.svelte";
+  import Services from "./pages/Services.svelte";
+  import { catalog } from "./lib/store.svelte.ts";
   import Toast from "./components/Toast.svelte";
   import Brand from "./components/Brand.svelte";
   import { fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { watchIdle } from "./lib/idle.ts";
   import { money } from "./lib/format.ts";
-  import type { AuthState, Lead, LeadStatus, Quote, ToastMsg } from "./lib/types.ts";
+  import type { AuthState, Client, ClientService, Lead, LeadStatus, Quote, ToastMsg } from "./lib/types.ts";
 
   const IDLE_MS = 30 * 60 * 1000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,6 +22,8 @@
   let auth = $state<AuthState | null>(null);
   let leads = $state<Lead[]>([]);
   let quotes = $state<Quote[]>([]);
+  let clients = $state<Client[]>([]);
+  let clientLines = $state<ClientService[]>([]);
   let loaded = $state(false);
   let stale = $state(false);
   let loadError = $state("");
@@ -34,6 +40,10 @@
     if (m) return UUID.test(m[1]!) ? { page: "lead" as const, id: m[1]! } : { page: "notfound" as const };
     if (h === "/leads") return { page: "leads" as const };
     if (h === "/board") return { page: "board" as const };
+    if (h === "/clients") return { page: "clients" as const };
+    if (h === "/services") return { page: "services" as const };
+    const c = h.match(/^\/clients\/([^/]+)$/);
+    if (c) return UUID.test(c[1]!) ? { page: "client" as const, id: c[1]! } : { page: "notfound" as const };
     if (h === "/") return { page: "overview" as const };
     return { page: "notfound" as const };
   });
@@ -46,7 +56,11 @@
   const newCount = $derived(activeLeads.filter((l) => l.status === "new").length);
 
   $effect(() => {
-    const onHash = () => { hash = location.hash; navOpen = false; window.scrollTo(0, 0); };
+    const onHash = () => {
+      hash = location.hash; navOpen = false; window.scrollTo(0, 0);
+      // Lists are cheap to reload; keeps clients and totals current after edits on detail pages.
+      if (auth?.step === "ready" && loaded) refresh();
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   });
@@ -60,7 +74,9 @@
   async function refresh() {
     stale = true;
     try {
-      [leads, quotes] = await Promise.all([db.leads(), db.quotes()]);
+      [leads, quotes, clients, clientLines, catalog.categories, catalog.services] = await Promise.all([
+        db.leads(), db.quotes(), db.clients(), db.allClientServices(), db.categories(), db.services(),
+      ]);
       loaded = true;
       loadError = "";
       version++;
@@ -123,6 +139,8 @@
     { href: "#/", label: "Overview", match: ["overview"], icon: "M4 13h6V4H4zM14 20h6v-9h-6zM14 4v4h6V4zM4 20h6v-3H4z" },
     { href: "#/leads", label: "Leads", match: ["leads", "lead"], icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19v-1a4 4 0 0 0-3-3.87M15.5 4.13a3 3 0 0 1 0 5.74" },
     { href: "#/board", label: "Board", match: ["board"], icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
+    { href: "#/clients", label: "Clients", match: ["clients", "client"], icon: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01" },
+    { href: "#/services", label: "Services", match: ["services"], icon: "M12 2 3 7l9 5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5" },
   ];
 
   // The highlight glides to whichever item is active.
@@ -184,11 +202,17 @@
       {#key pageKey}
       <div class="page" in:fly={{ y: 12, duration: 380, easing: cubicOut }}>
       {#if route.page === "overview"}
-        <Overview leads={activeLeads} quotes={activeQuotes} {stale} />
+        <Overview leads={activeLeads} quotes={activeQuotes} {clients} {clientLines} {stale} />
       {:else if route.page === "leads" || route.page === "board"}
         <Leads {leads} quotes={activeQuotes} {stale} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
       {:else if route.page === "lead"}
-        <LeadDetail id={route.id} {version} onstatus={setStatus} />
+        <LeadDetail id={route.id} {version} onstatus={setStatus} clientFor={clients.find((c) => c.lead_id === route.id)?.id ?? null} onconverted={refresh} />
+      {:else if route.page === "clients"}
+        <Clients {clients} services={clientLines} {stale} />
+      {:else if route.page === "client"}
+        <ClientDetail id={route.id} {version} />
+      {:else if route.page === "services"}
+        <Services />
       {:else}
         <p class="empty">Page not found. <a href="#/">Go to overview</a></p>
       {/if}

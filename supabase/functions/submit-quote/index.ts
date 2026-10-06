@@ -2,7 +2,8 @@
 //
 // 1. Accepts POST only, from cyberx.la only, with a small body cap.
 // 2. Verifies the Cloudflare Turnstile token server-side.
-// 3. Validates every field and re-prices the quote from CATALOG in lib.ts.
+// 3. Validates every field and re-prices the quote from the live service
+//    catalog in the database (public.service_catalog()).
 //    Prices sent by the browser are ignored.
 // 4. Stores it by calling intake.submit_quote() as the quote_intake role,
 //    which can do nothing else. No service-role key is used.
@@ -13,7 +14,7 @@
 //   RESEND_API_KEY, ALERT_EMAIL (optional: email alerts)
 
 import postgres from "npm:postgres@3.4.5";
-import { BadRequest, parseSubmission, type priceQuote } from "./lib.ts";
+import { BadRequest, catalogFromRpc, parseSubmission, type Catalog, type priceQuote } from "./lib.ts";
 
 const ALLOWED_ORIGINS = new Set(["https://cyberx.la", "https://www.cyberx.la"]);
 const TURNSTILE_HOSTNAMES = new Set(["cyberx.la", "www.cyberx.la"]);
@@ -33,6 +34,17 @@ function db() {
   // Transaction-mode pooler: no prepared statements.
   sql ??= postgres(env("INTAKE_DB_URL"), { prepare: false, max: 1, idle_timeout: 20, connect_timeout: 5, ssl: "require" });
   return sql;
+}
+
+// The catalog changes rarely; cache it briefly per function instance.
+let catalogCache: { at: number; catalog: Catalog } | null = null;
+async function getCatalog(): Promise<Catalog> {
+  if (catalogCache && Date.now() - catalogCache.at < 60_000) return catalogCache.catalog;
+  const rows = await db()`select public.service_catalog() as c`;
+  const catalog = catalogFromRpc(rows[0]?.c);
+  if (!Object.keys(catalog).length) throw new Error("empty catalog");
+  catalogCache = { at: Date.now(), catalog };
+  return catalog;
 }
 
 function cors(origin: string | null): Record<string, string> {
@@ -151,9 +163,17 @@ Deno.serve(async (req) => {
 
   const ip = (req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0] ?? "").trim();
 
+  let catalog: Catalog;
+  try {
+    catalog = await getCatalog();
+  } catch (e) {
+    console.error("catalog error", e instanceof Error ? e.message : "unknown");
+    return reply(503, { error: "try again" }, headers);
+  }
+
   let parsed;
   try {
-    parsed = parseSubmission(await readBody(req));
+    parsed = parseSubmission(await readBody(req), catalog);
   } catch (e) {
     if (e instanceof BadRequest) return reply(400, { error: "invalid", field: e.message }, headers);
     throw e;

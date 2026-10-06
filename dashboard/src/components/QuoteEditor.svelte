@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { CATALOG, CATEGORIES, priceQuote, unitPrice } from "../lib/catalog.ts";
+  import { priceQuote, unitPrice } from "../lib/catalog.ts";
+  import { catalog } from "../lib/store.svelte.ts";
   import { money } from "../lib/format.ts";
   import type { Quote } from "../lib/types.ts";
 
@@ -12,7 +13,9 @@
 
   // The draft is a snapshot of the quote as it was when editing started.
   const start = untrack(() => ({ ids: quote.items.map((i) => i.id), ws: quote.workstations, sv: quote.servers }));
-  let ids = $state<string[]>(start.ids.filter((id) => CATALOG[id]));
+  const byId = $derived(new Map(catalog.services.map((s) => [s.id, s])));
+  // Services that no longer exist in the catalog can't be re-priced, so they drop out.
+  let ids = $state<string[]>(untrack(() => start.ids.filter((id) => catalog.services.some((s) => s.id === id))));
   let ws = $state(start.ws);
   let sv = $state(start.sv);
   let picking = $state(false);
@@ -20,7 +23,7 @@
   let saving = $state(false);
   let error = $state("");
 
-  const priced = $derived(priceQuote(ids, ws, sv));
+  const priced = $derived(priceQuote(catalog.services, ids, ws, sv));
   const original = start.ids;
   const added = $derived(ids.filter((id) => !original.includes(id)));
   const removed = $derived(original.filter((id) => !ids.includes(id)));
@@ -29,9 +32,11 @@
 
   const available = $derived.by(() => {
     const s = search.trim().toLowerCase();
-    return CATEGORIES.map((c) => ({
+    return catalog.categories.map((c) => ({
       name: c.name,
-      ids: c.ids.filter((id) => !ids.includes(id) && (!s || CATALOG[id]!.name.toLowerCase().includes(s) || c.name.toLowerCase().includes(s))),
+      ids: catalog.services
+        .filter((x) => x.category_id === c.id && x.active && !ids.includes(x.id) && (!s || x.name.toLowerCase().includes(s) || c.name.toLowerCase().includes(s)))
+        .map((x) => x.id),
     })).filter((c) => c.ids.length);
   });
 
@@ -78,14 +83,14 @@
     {#each priced.items as it (it.id)}
       <li class:new={added.includes(it.id)}>
         <span class="qdot" class:mo={it.kind === "monthly"} class:once={it.kind !== "monthly"} aria-hidden="true"></span>
-        <span class="name"><span class="nm">{it.name}{#if added.includes(it.id)}<span class="tag">New</span>{/if}</span><small>{unitPrice(it.id)}</small></span>
+        <span class="name"><span class="nm">{it.name}{#if added.includes(it.id)}<span class="tag">New</span>{/if}</span><small>{unitPrice(byId.get(it.id))}</small></span>
         <span class="price num">{it.from ? "from " : ""}{money(it.cost)}<small>{it.kind === "monthly" ? "/mo" : "one time"}</small></span>
         <button type="button" class="x" aria-label="Remove {it.name}" title="Remove" onclick={() => remove(it.id)} disabled={ids.length === 1}>×</button>
       </li>
     {/each}
   </ul>
   {#if removed.length}
-    <p class="removed muted">Removing: {removed.map((id) => CATALOG[id]?.name ?? id).join(", ")}</p>
+    <p class="removed muted">Removing: {removed.map((id) => byId.get(id)?.name ?? quote.items.find((i) => i.id === id)?.name ?? id).join(", ")}</p>
   {/if}
 
   {#if picking}
@@ -100,8 +105,8 @@
           {#each cat.ids as id (id)}
             <li>
               <button type="button" onclick={() => add(id)}>
-                <span>{CATALOG[id]!.name}</span>
-                <span class="muted num">{unitPrice(id)}</span>
+                <span>{byId.get(id)?.name}</span>
+                <span class="muted num">{unitPrice(byId.get(id))}</span>
                 <span class="plus" aria-hidden="true">+</span>
               </button>
             </li>

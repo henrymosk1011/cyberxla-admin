@@ -1,7 +1,16 @@
 // Sample data for `npm run demo`. Never included in a production build
 // (vite.config.ts only aliases $db to this file in demo mode).
-import { CATALOG, priceQuote } from "../../../supabase/functions/submit-quote/lib.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Db, Lead, LeadStatus, Note, Quote, QuoteStatus } from "./types.ts";
+import catalogSeed from "../../../tests/fixtures/catalog.json";
+import { priceQuote } from "./catalog.ts";
+import { catalog as liveCatalog } from "./store.svelte.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Lead, LeadStatus, Note, Quote, QuoteStatus, ServiceCategory, ServiceRow } from "./types.ts";
+
+const categories: ServiceCategory[] = catalogSeed.map((c, i) => ({ id: c.id, name: c.name, blurb: c.blurb, sort: i * 10 }));
+const services: ServiceRow[] = catalogSeed.flatMap((c) => c.services.map((s, j) => ({
+  id: s.id, category_id: c.id, name: s.name, description: s.description, price: s.price, unit: s.unit as ServiceRow["unit"],
+  price_from: s.from, in_packages: s.in_packages, active: true, locked: ["patching", "edr", "mdr"].includes(s.id), sort: j * 10,
+})));
+const CATALOG = Object.fromEntries(services.map((s) => [s.id, s]));
 
 let seed = 7;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -25,7 +34,7 @@ for (let i = 0; i < 46; i++) {
   const ids = [...new Set([...pick(BUNDLES), ...(rand() < 0.4 ? [pick(Object.keys(CATALOG))] : [])])];
   const ws = pick([5, 8, 10, 12, 15, 20, 25, 35, 50]);
   const sv = pick([0, 0, 1, 1, 2, 3]);
-  const priced = priceQuote(ids, ws, sv);
+  const priced = priceQuote(services, ids, ws, sv);
   const status: LeadStatus = ageDays < 6 ? pick(["new", "new", "contacted"] as const)
     : ageDays < 30 ? pick(["new", "contacted", "contacted", "proposal", "proposal", "won"] as const)
     : pick(["contacted", "proposal", "won", "won", "won", "lost", "lost"] as const);
@@ -50,6 +59,29 @@ for (let i = 0; i < 46; i++) {
     notes.push({ id: uuid(), lead_id: id, created_at: updated.toISOString(), body: pick(["Called, left voicemail.", "Good fit. Sending proposal Friday.", "Wants pricing for 5 more seats.", "Decision maker is the office manager."]) });
   }
 }
+
+// A few existing clients: some converted from won leads, one added by hand.
+const clients: Client[] = [];
+const clientServices: ClientService[] = [];
+function clientFromLead(l: Lead): string {
+  const q = quotes.filter((x) => x.lead_id === l.id && !x.archived_at).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const id = uuid();
+  clients.push({
+    id, created_at: l.updated_at, updated_at: l.updated_at, company: l.company, contact_name: l.name, email: l.email, phone: l.phone,
+    address: null, status: "active", started_on: l.updated_at.slice(0, 10), workstations: q?.workstations ?? 0, servers: q?.servers ?? 0, notes: null, lead_id: l.id,
+  });
+  q?.items.forEach((it, i) => clientServices.push({ id: uuid(), client_id: id, service_id: it.id, name: it.name, billing: it.kind === "monthly" ? "monthly" : "once", amount: it.cost, notes: null, sort: i * 10 }));
+  return id;
+}
+leads.filter((l) => l.status === "won").slice(0, 7).forEach(clientFromLead);
+{
+  const id = uuid();
+  clients.push({ id, created_at: new Date(now - 400 * 86400000).toISOString(), updated_at: new Date(now - 20 * 86400000).toISOString(), company: "Starlight Hospice", contact_name: "Dana Ortiz", email: "dana@starlighthospice.org", phone: "3235550142", address: "1200 Sunset Blvd, Los Angeles, CA", status: "active", started_on: "2025-08-01", workstations: 42, servers: 3, notes: "Renews every August. Prefers calls over email.", lead_id: null });
+  [["mdr", "24/7 MDR", 650], ["patching", "Patching", 480], ["hipaa", "HIPAA Security Support", 400], ["cloudbackup", "Microsoft 365 and Google Backup", 168]].forEach(([sid, nm, amt], i) =>
+    clientServices.push({ id: uuid(), client_id: id, service_id: sid as string, name: nm as string, billing: "monthly", amount: amt as number, notes: i === 0 ? "Discounted 10% (3-year term)" : null, sort: i * 10 }));
+}
+if (clients[1]) clients[1].status = "paused";
+if (clients[2]) clients[2].status = "former";
 
 const hiddenIds = new Set<number>();
 function log(table: AuditEntry["table_name"], action: AuditEntry["action"], rowId: string, oldData: Record<string, unknown> | null, newData: Record<string, unknown> | null) {
@@ -135,7 +167,7 @@ const db: Db = {
   },
   async updateQuoteServices(id, serviceIds, workstations, servers) {
     const q = quotes.find((x) => x.id === id)!;
-    const priced = priceQuote(serviceIds, workstations, servers);
+    const priced = priceQuote(liveCatalog.services, serviceIds, workstations, servers);
     log("quotes", "update", id,
       { lead_id: q.lead_id, status: q.status, items: q.items, workstations: q.workstations, servers: q.servers, monthly_total: q.monthly_total },
       { lead_id: q.lead_id, status: q.status, items: priced.items, workstations, servers, monthly_total: priced.monthly_total });
@@ -158,6 +190,87 @@ const db: Db = {
   async addNote(leadId, body) {
     notes.push({ id: uuid(), lead_id: leadId, created_at: new Date().toISOString(), body });
   },
+  categories: () => wait([...categories].sort((a, b) => a.sort - b.sort)),
+  services: () => wait([...services].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))),
+  async saveCategory(c, isNew) {
+    if (isNew) {
+      if (categories.some((x) => x.id === c.id)) throw new Error("That name is already taken. Try a slightly different one.");
+      categories.push({ ...c });
+    } else Object.assign(categories.find((x) => x.id === c.id)!, c);
+  },
+  async deleteCategory(id) {
+    if (services.some((s) => s.category_id === id)) throw new Error("This category still has services. Move or delete them first.");
+    categories.splice(categories.findIndex((x) => x.id === id), 1);
+  },
+  async saveService(s, isNew) {
+    const cur = services.find((x) => x.id === s.id);
+    if (isNew) {
+      if (cur) throw new Error("That name is already taken. Try a slightly different one.");
+      services.push({ ...s, locked: false });
+      return;
+    }
+    if (cur!.locked && !s.active) throw new Error(`${cur!.name} is used by the website packages and can't be hidden`);
+    Object.assign(cur!, { ...s, locked: cur!.locked });
+  },
+  async deleteService(id) {
+    const s = services.find((x) => x.id === id)!;
+    if (s.locked) throw new Error(`${s.name} is used by the website packages and can't be deleted`);
+    services.splice(services.indexOf(s), 1);
+  },
+  async reorder(table, ids) {
+    const list: { id: string; sort: number }[] = table === "services" ? services : categories;
+    ids.forEach((id, i) => { const r = list.find((x) => x.id === id); if (r) r.sort = i * 10; });
+  },
+
+  clients: () => wait([...clients].sort((a, b) => b.updated_at.localeCompare(a.updated_at))),
+  client: (id) => wait(clients.find((c) => c.id === id) ?? null),
+  allClientServices: () => wait(clientServices),
+  clientServices: (id) => wait(clientServices.filter((s) => s.client_id === id).sort((a, b) => a.sort - b.sort)),
+  async createClient(c) {
+    const id = uuid(), at = new Date().toISOString();
+    clients.push({ ...c, id, created_at: at, updated_at: at });
+    log("clients", "insert", id, null, { ...c });
+    return id;
+  },
+  async updateClient(id, patch) {
+    const c = clients.find((x) => x.id === id)!;
+    log("clients", "update", id, { ...c }, { ...c, ...patch });
+    Object.assign(c, patch, { updated_at: new Date().toISOString() });
+  },
+  async deleteClient(id) {
+    clients.splice(clients.findIndex((x) => x.id === id), 1);
+    for (let i = clientServices.length - 1; i >= 0; i--) if (clientServices[i]!.client_id === id) clientServices.splice(i, 1);
+  },
+  async addClientService(s) {
+    const id = uuid();
+    clientServices.push({ ...s, id });
+    log("client_services", "insert", id, null, { ...s });
+  },
+  async updateClientService(id, patch) {
+    const s = clientServices.find((x) => x.id === id)!;
+    log("client_services", "update", id, { ...s }, { ...s, ...patch });
+    Object.assign(s, patch);
+  },
+  async deleteClientService(id) {
+    const i = clientServices.findIndex((x) => x.id === id);
+    const s = clientServices[i]!;
+    clientServices.splice(i, 1);
+    log("client_services", "delete", id, { ...s }, null);
+  },
+  clientActivity: (id) => wait(audit
+    .filter((a) => a.row_id === id || a.new_data?.client_id === id || a.old_data?.client_id === id)
+    .map((a) => ({ ...a, hidden: hiddenIds.has(a.id) }))
+    .sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
+  async convertLead(leadId) {
+    const existing = clients.find((c) => c.lead_id === leadId);
+    if (existing) return existing.id;
+    const l = leads.find((x) => x.id === leadId)!;
+    const id = clientFromLead(l);
+    log("clients", "insert", id, null, { company: l.company });
+    if (l.status !== "won") await db.setLeadStatus(leadId, "won");
+    return id;
+  },
+
   subscribe(cb) {
     listeners.add(cb);
     return () => listeners.delete(cb);

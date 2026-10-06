@@ -5,7 +5,31 @@
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Quote, type QuoteStatus } from "../lib/types.ts";
 
-  let { id, version, onstatus }: { id: string; version: number; onstatus: (id: string, s: LeadStatus) => Promise<void> } = $props();
+  let { id, version, onstatus, clientFor = null, onconverted }: {
+    id: string; version: number; onstatus: (id: string, s: LeadStatus) => Promise<void>;
+    clientFor?: string | null; onconverted?: () => void;
+  } = $props();
+  let converting = $state(false);
+
+  async function convert() {
+    if (!lead) return;
+    if (!(await confirm.ask({
+      title: `Convert ${lead.company || lead.name} to a client?`,
+      body: "Creates a client with their contact details and the services and prices from their newest quote (you can change anything after). The lead is marked Won.",
+      action: "Convert to client",
+    }))) return;
+    converting = true;
+    error = "";
+    try {
+      const cid = await db.convertLead(id);
+      onconverted?.();
+      location.hash = `#/clients/${cid}`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Couldn't convert this lead.";
+    } finally {
+      converting = false;
+    }
+  }
 
   let lead = $state<Lead | null | undefined>(undefined);
   let quotes = $state<Quote[]>([]);
@@ -175,6 +199,11 @@
       <span class="big num">{money(lead.value_monthly)}<small>/mo</small></span>
       <span class="muted num">{money(lead.value_one_time)} one time</span>
       <div class="acts">
+        {#if clientFor}
+          <a class="btn sm primary" href="#/clients/{clientFor}">View client →</a>
+        {:else}
+          <button class="btn sm" class:primary={lead.status === "won"} disabled={converting} onclick={convert}>{converting ? "Converting…" : "Convert to client"}</button>
+        {/if}
         <button class="btn sm" onclick={toggleArchiveLead}>{lead.archived_at ? "Restore lead" : "Archive lead"}</button>
         <button class="btn sm ghost del" onclick={deleteLead}>Delete lead</button>
       </div>
@@ -352,7 +381,7 @@
   .timeline li.hidden-entry { opacity: 0.5; }
   .timeline li.hidden-entry .x { opacity: 1; }
   @media (hover: none) { .timeline .x, .notes .x { opacity: 1; } }
-  .acts { display: flex; gap: 6px; margin-top: 10px; }
+  .acts { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .qacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
   .del { color: var(--critical); }
   .del:hover { color: #ff9a9a; }

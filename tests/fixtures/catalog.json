@@ -1,0 +1,314 @@
+[
+ {
+  "id": "protect",
+  "name": "Protect devices",
+  "blurb": "Keep every laptop, desktop, and server hardened and up to date.",
+  "services": [
+   {
+    "id": "patching",
+    "name": "Patching",
+    "description": "OS and third party app updates, tested and scheduled after hours.",
+    "price": 10.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": true
+   },
+   {
+    "id": "edr",
+    "name": "EDR",
+    "description": "Endpoint detection and response on every device, catching what antivirus misses.",
+    "price": 8.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": true
+   },
+   {
+    "id": "ransomware",
+    "name": "Ransomware Protection",
+    "description": "Behavior based blocking, automatic device isolation, and rollback.",
+    "price": 5.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "encryption",
+    "name": "Disk Encryption",
+    "description": "BitLocker and FileVault enforced and tracked, so a lost laptop isn’t a breach.",
+    "price": 3.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "hardening",
+    "name": "Device Hardening",
+    "description": "Secure baseline settings, local admin rights removed, risky features turned off.",
+    "price": 35.0,
+    "unit": "devonce",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "firewall",
+    "name": "Firewall and Wi-Fi Security",
+    "description": "Firewall rules, guest network separation, and firmware kept current.",
+    "price": 150.0,
+    "unit": "mo",
+    "from": false,
+    "in_packages": false
+   }
+  ]
+ },
+ {
+  "id": "monitor",
+  "name": "Monitor and respond",
+  "blurb": "Eyes on your business around the clock, and a plan for when something happens.",
+  "services": [
+   {
+    "id": "mdr",
+    "name": "24/7 MDR",
+    "description": "A security operations center watching alerts day and night and containing threats.",
+    "price": 14.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": true
+   },
+   {
+    "id": "domain",
+    "name": "Domain Monitoring",
+    "description": "Alerts on lookalike phishing domains, unexpected DNS changes, and expiring renewals.",
+    "price": 49.0,
+    "unit": "mo",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "darkweb",
+    "name": "Dark Web Monitoring",
+    "description": "Alerts when company emails and passwords show up in breach dumps.",
+    "price": 75.0,
+    "unit": "mo",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "cloudmon",
+    "name": "Microsoft 365 and Google Monitoring",
+    "description": "Suspicious sign ins, risky forwarding rules, and account takeovers flagged fast.",
+    "price": 5.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "irretainer",
+    "name": "Incident Response Retainer",
+    "description": "Guaranteed hands on help to contain an attack, clean up, and document what happened.",
+    "price": 400.0,
+    "unit": "mo",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "irplan",
+    "name": "Incident Response Plan",
+    "description": "A written, practiced plan so your team knows who to call and what to do first.",
+    "price": 2500.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   }
+  ]
+ },
+ {
+  "id": "email",
+  "name": "Email and identity",
+  "blurb": "Most attacks start with an inbox or a stolen password.",
+  "services": [
+   {
+    "id": "filtering",
+    "name": "Email Filtering",
+    "description": "Phishing, malware, and impersonation emails stopped before they reach the inbox.",
+    "price": 4.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "training",
+    "name": "Phishing Training",
+    "description": "Short training and realistic simulated phishing tests for the whole team.",
+    "price": 3.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "dmarc",
+    "name": "SPF, DKIM, and DMARC",
+    "description": "Stop criminals from sending email as your domain, and improve deliverability.",
+    "price": 750.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "mfa",
+    "name": "MFA Rollout",
+    "description": "Multi factor sign in on email, remote access, and every critical app.",
+    "price": 50.0,
+    "unit": "devonce",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "passwords",
+    "name": "Password Manager",
+    "description": "A business password manager deployed and adopted. No more sticky notes.",
+    "price": 6.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "access",
+    "name": "Access Reviews",
+    "description": "Quarterly checks that former employees and vendors no longer have access.",
+    "price": 99.0,
+    "unit": "mo",
+    "from": false,
+    "in_packages": false
+   }
+  ]
+ },
+ {
+  "id": "test",
+  "name": "Test and assess",
+  "blurb": "Find the gaps before someone else does.",
+  "services": [
+   {
+    "id": "pentest",
+    "name": "Penetration Testing",
+    "description": "Real, authorized attempts to break in, with a plain English report and fix list.",
+    "price": 5000.0,
+    "unit": "once",
+    "from": true,
+    "in_packages": false
+   },
+   {
+    "id": "vuln",
+    "name": "Vulnerability Management",
+    "description": "Recurring internal and external scans, prioritized so you fix what matters first.",
+    "price": 4.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "risk",
+    "name": "Security Risk Assessment",
+    "description": "A full review of your people, processes, and technology, with a roadmap.",
+    "price": 3500.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "surface",
+    "name": "External Attack Surface Review",
+    "description": "Everything you expose to the internet, from forgotten servers to open ports.",
+    "price": 1800.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   }
+  ]
+ },
+ {
+  "id": "recover",
+  "name": "Backup and recovery",
+  "blurb": "When something goes wrong, get back to work fast.",
+  "services": [
+   {
+    "id": "cloudbackup",
+    "name": "Microsoft 365 and Google Backup",
+    "description": "Email, files, and calendars backed up daily, separate from Microsoft and Google.",
+    "price": 4.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "devbackup",
+    "name": "Device and Server Backup",
+    "description": "Image based backups for critical machines, with copies kept offsite.",
+    "price": 10.0,
+    "unit": "dev",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "restore",
+    "name": "Restore Testing",
+    "description": "Backups that are actually tested, so you know they’ll work when you need them.",
+    "price": 150.0,
+    "unit": "mo",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "drplan",
+    "name": "Disaster Recovery Planning",
+    "description": "A clear plan for how long you can be down and how you get back up.",
+    "price": 3000.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   }
+  ]
+ },
+ {
+  "id": "compliance",
+  "name": "Insurance and compliance",
+  "blurb": "Prove you’re secure to insurers, clients, and regulators.",
+  "services": [
+   {
+    "id": "insurance",
+    "name": "Cyber Insurance Readiness",
+    "description": "The controls insurers require, plus help with the questionnaire and renewals. We don’t sell insurance.",
+    "price": 2500.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "hipaa",
+    "name": "HIPAA Security Support",
+    "description": "Risk analysis and safeguards for health care practices, home health, and hospice.",
+    "price": 400.0,
+    "unit": "mo",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "policies",
+    "name": "Security Policies",
+    "description": "Plain English policies for acceptable use, passwords, remote work, and incidents.",
+    "price": 2000.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   },
+   {
+    "id": "questionnaire",
+    "name": "Client Security Questionnaires",
+    "description": "Help answering the security questionnaires your larger clients send you.",
+    "price": 500.0,
+    "unit": "once",
+    "from": false,
+    "in_packages": false
+   }
+  ]
+ }
+]
