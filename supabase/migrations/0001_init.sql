@@ -181,6 +181,8 @@ create table intake.throttle (
 );
 create index throttle_idx on intake.throttle (ip_hash, submitted_at desc);
 create index throttle_at_idx on intake.throttle (submitted_at);
+-- Defense in depth: the intake schema is already unreachable from the API.
+alter table intake.throttle enable row level security;
 
 create function intake.submit_quote(p jsonb, p_ip_hash text)
 returns uuid
