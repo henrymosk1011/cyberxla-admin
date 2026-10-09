@@ -116,6 +116,12 @@ const db: Db = {
     return (data ?? []) as Note[];
   },
 
+  async allNotes() {
+    const { data, error } = await sb.from("lead_notes").select("id, lead_id, created_at, body").order("created_at").limit(20000);
+    fail(error);
+    return (data ?? []) as Note[];
+  },
+
   async activityFor(leadId) {
     if (!UUID.test(leadId)) return [];
     const { data, error } = await sb

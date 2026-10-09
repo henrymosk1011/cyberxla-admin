@@ -1,10 +1,11 @@
 <script lang="ts">
   import StatusPill from "../components/StatusPill.svelte";
+  import ExportDialog from "../components/ExportDialog.svelte";
   import { ago, money, STATUS_LABEL } from "../lib/format.ts";
-  import { LEAD_STATUSES, type Lead, type LeadStatus, type Quote } from "../lib/types.ts";
+  import { LEAD_STATUSES, type Client, type Lead, type LeadStatus, type Quote } from "../lib/types.ts";
 
-  let { leads, quotes, view, onstatus, stale }: {
-    leads: Lead[]; quotes: Quote[]; view: "list" | "board"; stale: boolean;
+  let { leads, quotes, clients, view, onstatus, stale }: {
+    leads: Lead[]; quotes: Quote[]; clients: Client[]; view: "list" | "board"; stale: boolean;
     onstatus: (id: string, s: LeadStatus) => void;
   } = $props();
 
@@ -13,6 +14,7 @@
   let sort = $state<"recent" | "value" | "name">("recent");
   let dragging = $state<string | null>(null);
   let over = $state<LeadStatus | null>(null);
+  let exporting = $state(false);
 
   const quoteCount = $derived(quotes.reduce((m, x) => m.set(x.lead_id, (m.get(x.lead_id) ?? 0) + 1), new Map<string, number>()));
   const archived = $derived(leads.filter((l) => l.archived_at));
@@ -56,6 +58,10 @@
       <button aria-pressed={view === "list"} onclick={() => (location.hash = "#/leads")}>List</button>
       <button aria-pressed={view === "board"} onclick={() => (location.hash = "#/board")}>Board</button>
     </div>
+    <button class="btn export" onclick={() => (exporting = true)} disabled={!leads.length} title="Download leads as Excel or CSV">
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Export
+    </button>
   </div>
 </header>
 
@@ -144,10 +150,13 @@
   </div>
 {/if}
 
+<ExportDialog open={exporting} onclose={() => (exporting = false)} {leads} shown={view === "board" ? searched : rows} {quotes} {clients} />
+
 <style>
   .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
   .tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .export { display: inline-flex; align-items: center; gap: 7px; height: 38px; }
   .search { width: min(340px, 100%); height: 38px; }
   .filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
   .filters .seg { flex-wrap: wrap; border-radius: 14px; }

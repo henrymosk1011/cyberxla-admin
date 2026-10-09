@@ -132,6 +132,7 @@ const db: Db = {
   quotes: () => wait([...quotes].sort((a, b) => b.created_at.localeCompare(a.created_at))),
   lead: (id) => wait(leads.find((l) => l.id === id) ?? null),
   quotesFor: (id) => wait(quotes.filter((q) => q.lead_id === id)),
+  allNotes: () => wait([...notes].sort((a, b) => a.created_at.localeCompare(b.created_at))),
   notesFor: (id) => wait(notes.filter((n) => n.lead_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))),
   activityFor: (id) => wait(audit
     .filter((a) => a.row_id === id || a.new_data?.lead_id === id || a.old_data?.lead_id === id)
