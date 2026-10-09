@@ -87,6 +87,8 @@ export interface Db {
   lead(id: string): Promise<Lead | null>;
   quotesFor(leadId: string): Promise<Quote[]>;
   notesFor(leadId: string): Promise<Note[]>;
+  /** Every note on every lead, oldest first (for exports). */
+  allNotes(): Promise<Note[]>;
   activityFor(leadId: string): Promise<AuditEntry[]>;
   setLeadStatus(id: string, status: LeadStatus): Promise<void>;
   setQuoteStatus(id: string, status: QuoteStatus): Promise<void>;

@@ -204,7 +204,7 @@
       {#if route.page === "overview"}
         <Overview leads={activeLeads} quotes={activeQuotes} {clients} {clientLines} {stale} />
       {:else if route.page === "leads" || route.page === "board"}
-        <Leads {leads} quotes={activeQuotes} {stale} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
+        <Leads {leads} quotes={activeQuotes} {clients} {stale} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
       {:else if route.page === "lead"}
         <LeadDetail id={route.id} {version} onstatus={setStatus} clientFor={clients.find((c) => c.lead_id === route.id)?.id ?? null} onconverted={refresh} />
       {:else if route.page === "clients"}
