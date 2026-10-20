@@ -3,7 +3,7 @@
 import catalogSeed from "../../../tests/fixtures/catalog.json";
 import { priceQuote } from "./catalog.ts";
 import { catalog as liveCatalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Lead, LeadStatus, Note, PackageRow, Quote, QuoteStatus, ServiceCategory, ServiceRow } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, ProjectStatus, Quote, QuoteStatus, ServiceCategory, ServiceRow, VaultConfig } from "./types.ts";
 
 const categories: ServiceCategory[] = catalogSeed.map((c, i) => ({ id: c.id, name: c.name, blurb: c.blurb, sort: i * 10 }));
 const services: ServiceRow[] = catalogSeed.flatMap((c) => c.services.map((s, j) => ({
@@ -94,7 +94,54 @@ leads.filter((l) => l.status === "won").slice(0, 7).forEach(clientFromLead);
 if (clients[1]) clients[1].status = "paused";
 if (clients[2]) clients[2].status = "former";
 
+// Projects on a few clients and open leads. The credential vault starts empty:
+// set a passphrase in the demo and the encryption runs for real in the browser.
+const projects: Project[] = [];
+const projectServices: ProjectService[] = [];
+let credentials: Credential[] = [];
+let vaultConfig: VaultConfig | null = null;
+type SeedLine = readonly [serviceId: string | null, name: string, billing: "monthly" | "once", unit: number, qty: number];
+function seedProject(owner: { lead_id?: string; client_id?: string }, name: string, status: ProjectStatus, dueInDays: number | null, notes: string | null, lines: SeedLine[]) {
+  const id = uuid(), at = new Date(now - (5 + Math.floor(rand() * 40)) * 86400000).toISOString();
+  projects.push({ id, created_at: at, updated_at: at, lead_id: owner.lead_id ?? null, client_id: owner.client_id ?? null, name, status,
+    due_on: dueInDays === null ? null : new Date(now + dueInDays * 86400000).toISOString().slice(0, 10), notes });
+  lines.forEach(([sid, nm, billing, unit, qty], i) =>
+    projectServices.push({ id: uuid(), project_id: id, service_id: sid, name: nm, billing, unit_amount: unit, quantity: qty, amount: total(unit, qty), notes: null, sort: i * 10 }));
+}
+const starlight = clients.find((c) => c.company === "Starlight Hospice")!;
+seedProject({ client_id: starlight.id }, "Office Wi-Fi refresh", "proposed", 21, "Two floors, ~60 users. Guest network has to be fully separated from clinical.\nSite walk with Dana on the 14th.", [
+  [null, "On-site network survey", "once", 1200, 1], ["hardening", "Device Hardening", "once", 35, 45], ["firewall", "Firewall and Wi-Fi Security", "monthly", 150, 1],
+]);
+seedProject({ client_id: starlight.id }, "Annual HIPAA risk analysis", "in_progress", 9, "Last year's report is in the shared drive.", [
+  ["risk", "Security Risk Assessment", "once", 3500, 1], ["policies", "Security Policies", "once", 2000, 1],
+]);
+seedProject({ client_id: starlight.id }, "MFA rollout", "done", -30, null, [["mfa", "MFA Rollout", "once", 50, 42]]);
+if (clients[0]) seedProject({ client_id: clients[0].id }, "Microsoft 365 migration", "potential", null, "Currently on GoDaddy email. Wants it done before tax season.", [
+  [null, "Mailbox migration", "once", 85, 18], ["cloudbackup", "Microsoft 365 and Google Backup", "monthly", 4, 18],
+]);
+const openLeads = leads.filter((l) => ["new", "contacted", "proposal"].includes(l.status));
+if (openLeads[0]) seedProject({ lead_id: openLeads[0].id }, "Email security cleanup", "potential", null, "Spoofed invoices went out from their domain last month.", [
+  ["dmarc", "SPF, DKIM, and DMARC", "once", 750, 1], ["filtering", "Email Filtering", "monthly", 4, 12],
+]);
+if (openLeads[1]) seedProject({ lead_id: openLeads[1].id }, "Pentest before insurance renewal", "proposed", 35, null, [["pentest", "Penetration Testing", "once", 5000, 1]]);
+
 const hiddenIds = new Set<number>();
+// Like the database's audit trigger: credentials are logged without their ciphertext.
+const redact = ({ secret: _, ...rest }: Pick<Credential, "secret"> & Record<string, unknown>) => rest;
+function dropProject(id: string) {
+  const i = projects.findIndex((x) => x.id === id);
+  if (i < 0) return;
+  log("projects", "delete", id, { ...projects[i]! }, null);
+  projects.splice(i, 1);
+  for (let j = projectServices.length - 1; j >= 0; j--) if (projectServices[j]!.project_id === id) projectServices.splice(j, 1);
+  credentials = credentials.filter((c) => c.project_id !== id);
+}
+function moveProjects(leadId: string, clientId: string) {
+  for (const p of projects.filter((x) => x.lead_id === leadId)) {
+    log("projects", "update", p.id, { ...p }, { ...p, lead_id: null, client_id: clientId });
+    Object.assign(p, { lead_id: null, client_id: clientId });
+  }
+}
 function log(table: AuditEntry["table_name"], action: AuditEntry["action"], rowId: string, oldData: Record<string, unknown> | null, newData: Record<string, unknown> | null) {
   audit.push({ id: audit.length + 1, at: new Date().toISOString(), actor: "admin", actor_role: "authenticated", action, table_name: table, row_id: rowId, old_data: oldData, new_data: newData });
 }
@@ -167,6 +214,7 @@ const db: Db = {
     const i = leads.findIndex((x) => x.id === id);
     if (i >= 0) leads.splice(i, 1);
     for (let j = quotes.length - 1; j >= 0; j--) if (quotes[j]!.lead_id === id) quotes.splice(j, 1);
+    projects.filter((p) => p.lead_id === id).forEach((p) => dropProject(p.id));
     changed("leads", { id });
   },
   async archiveQuote(id, archived) {
@@ -256,6 +304,7 @@ const db: Db = {
   async deleteClient(id) {
     clients.splice(clients.findIndex((x) => x.id === id), 1);
     for (let i = clientServices.length - 1; i >= 0; i--) if (clientServices[i]!.client_id === id) clientServices.splice(i, 1);
+    projects.filter((p) => p.client_id === id).forEach((p) => dropProject(p.id));
   },
   async addClientService(s) {
     const id = uuid();
@@ -282,12 +331,90 @@ const db: Db = {
     .sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
   async convertLead(leadId) {
     const existing = clients.find((c) => c.lead_id === leadId);
-    if (existing) return existing.id;
+    if (existing) {
+      moveProjects(leadId, existing.id);
+      return existing.id;
+    }
     const l = leads.find((x) => x.id === leadId)!;
     const id = clientFromLead(l);
-    log("clients", "insert", id, null, { company: l.company });
+    log("clients", "insert", id, null, { company: l.company, lead_id: leadId });
+    moveProjects(leadId, id);
     if (l.status !== "won") await db.setLeadStatus(leadId, "won");
     return id;
+  },
+
+  projects: () => wait([...projects].sort((a, b) => b.updated_at.localeCompare(a.updated_at))),
+  project: (id) => wait(projects.find((p) => p.id === id) ?? null),
+  allProjectServices: () => wait(projectServices),
+  projectServices: (id) => wait(projectServices.filter((s) => s.project_id === id).sort((a, b) => a.sort - b.sort)),
+  async createProject(p) {
+    const id = uuid(), at = new Date().toISOString();
+    projects.push({ ...p, id, created_at: at, updated_at: at });
+    log("projects", "insert", id, null, { ...p });
+    return id;
+  },
+  async updateProject(id, patch) {
+    const p = projects.find((x) => x.id === id)!;
+    log("projects", "update", id, { ...p }, { ...p, ...patch });
+    Object.assign(p, patch, { updated_at: new Date().toISOString() });
+  },
+  async deleteProject(id) {
+    dropProject(id);
+  },
+  async addProjectService(s) {
+    const id = uuid();
+    s = { ...s, amount: total(s.unit_amount, s.quantity) };
+    projectServices.push({ ...s, id });
+    log("project_services", "insert", id, null, { ...s });
+  },
+  async updateProjectService(id, patch) {
+    const s = projectServices.find((x) => x.id === id)!;
+    patch = { ...patch };
+    patch.amount = total(patch.unit_amount ?? s.unit_amount, patch.quantity ?? s.quantity);
+    log("project_services", "update", id, { ...s }, { ...s, ...patch });
+    Object.assign(s, patch);
+  },
+  async deleteProjectService(id) {
+    const i = projectServices.findIndex((x) => x.id === id);
+    const s = projectServices[i]!;
+    projectServices.splice(i, 1);
+    log("project_services", "delete", id, { ...s }, null);
+  },
+  projectActivity: (id) => wait(audit
+    .filter((a) => a.row_id === id || a.new_data?.project_id === id || a.old_data?.project_id === id)
+    .map((a) => ({ ...a, hidden: hiddenIds.has(a.id) }))
+    .sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
+
+  vault: () => wait(vaultConfig),
+  async createVault(v) {
+    if (vaultConfig) throw new Error("A vault was just set up in another tab. Reload this page and unlock it with that passphrase.");
+    vaultConfig = { ...v };
+  },
+  async updateVault(v) {
+    vaultConfig = { ...v };
+  },
+  async resetVault() {
+    credentials.forEach((c) => log("project_credentials", "delete", c.id, redact(c), null));
+    credentials = [];
+    vaultConfig = null;
+  },
+  credentials: (projectId) => wait(credentials.filter((c) => c.project_id === projectId).sort((a, b) => a.sort - b.sort)),
+  credentialCount: () => wait(credentials.length),
+  async saveCredential(c, isNew) {
+    const at = new Date().toISOString();
+    if (isNew) {
+      credentials.push({ ...c, created_at: at, updated_at: at });
+      log("project_credentials", "insert", c.id, null, redact(c));
+      return;
+    }
+    const cur = credentials.find((x) => x.id === c.id)!;
+    log("project_credentials", "update", c.id, redact(cur), redact(c));
+    Object.assign(cur, { label: c.label, secret: c.secret, sort: c.sort, updated_at: at });
+  },
+  async deleteCredential(id) {
+    const c = credentials.find((x) => x.id === id)!;
+    credentials = credentials.filter((x) => x.id !== id);
+    log("project_credentials", "delete", id, redact(c), null);
   },
 
   subscribe(cb) {

@@ -1,13 +1,16 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import ProjectsCard from "../components/ProjectsCard.svelte";
   import QuoteEditor from "../components/QuoteEditor.svelte";
+  import { describeProject } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
-  import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Quote, type QuoteStatus } from "../lib/types.ts";
+  import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Project, type ProjectService, type Quote, type QuoteStatus } from "../lib/types.ts";
 
-  let { id, version, onstatus, clientFor = null, onconverted }: {
+  let { id, version, onstatus, clientFor = null, onconverted, projects, projectLines }: {
     id: string; version: number; onstatus: (id: string, s: LeadStatus) => Promise<void>;
     clientFor?: string | null; onconverted?: () => void;
+    projects: Project[]; projectLines: ProjectService[];
   } = $props();
   let converting = $state(false);
 
@@ -15,7 +18,7 @@
     if (!lead) return;
     if (!(await confirm.ask({
       title: `Convert ${lead.company || lead.name} to a client?`,
-      body: "Creates a client with their contact details and the services and prices from their newest quote (you can change anything after). The lead is marked Won.",
+      body: `Creates a client with their contact details and the services and prices from their newest quote (you can change anything after).${projects.length ? " Their projects move to the client." : ""} The lead is marked Won.`,
       action: "Convert to client",
     }))) return;
     converting = true;
@@ -75,7 +78,8 @@
   async function deleteLead() {
     if (!lead) return;
     const name = lead.company || lead.name;
-    if (!(await confirm.ask({ title: `Delete ${name}?`, body: "This permanently deletes the lead, all of its quotes, and its notes. This can't be undone. (Archive instead if you might need it later.)", action: "Delete permanently", danger: true }))) return;
+    const also = projects.length ? `, its notes, and its ${projects.length === 1 ? "project" : `${projects.length} projects`} (with any saved credentials)` : ", and its notes";
+    if (!(await confirm.ask({ title: `Delete ${name}?`, body: `This permanently deletes the lead, all of its quotes${also}. This can't be undone. (Archive instead if you might need it later.)`, action: "Delete permanently", danger: true }))) return;
     error = "";
     try {
       await db.deleteLead(id);
@@ -173,6 +177,8 @@
       }
       return `${who}: quote updated`;
     }
+    if (a.table_name === "projects") return describeProject(a);
+    if (a.table_name === "clients") return a.action === "insert" ? `${who}: converted to a client` : a.action === "delete" ? `${who}: client deleted` : `${who}: client details updated`;
     return a.action === "insert" ? `${who}: note added` : a.action === "delete" ? `${who}: note deleted` : `${who}: note edited`;
   }
   const tel = (p: string) => "tel:" + p.replace(/[^0-9+]/g, "");
@@ -236,6 +242,14 @@
         {#if showArchived}
           {#each archivedQuotes as q (q.id)}{@render quoteCard(q)}{/each}
         {/if}
+      {/if}
+      {#if clientFor && !projects.length}
+        <section class="card">
+          <div class="card-head"><h2>Projects</h2></div>
+          <p class="muted moved">This lead is a client now, so its projects are on the <a href="#/clients/{clientFor}">client's page</a>.</p>
+        </section>
+      {:else}
+        <ProjectsCard {projects} lines={projectLines} owner={{ lead_id: id, client_id: null }} noun="lead" />
       {/if}
     </div>
 
@@ -389,6 +403,8 @@
   .quote.archived { opacity: 0.7; border-style: dashed; }
   .tag { margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--warning); vertical-align: 2px; }
   .toggle { align-self: flex-start; }
+  .moved { font-size: 14px; }
+  .moved a { color: var(--lime); }
   .timeline .dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--axis); flex: none; }
   .timeline li:first-child .dot { background: var(--lime); }
   @media (max-width: 980px) { .cols { grid-template-columns: 1fr; } .value { align-items: flex-start; } }

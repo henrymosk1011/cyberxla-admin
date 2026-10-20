@@ -4,7 +4,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
 import { catalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Quote, QuoteStatus, ServiceRow } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, Quote, QuoteStatus, ServiceLine, ServiceRow, VaultConfig } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -278,13 +278,13 @@ const db: Db = {
   async allClientServices() {
     const { data, error } = await sb.from("client_services").select("*").limit(20000);
     fail(error);
-    return (data ?? []).map(normClientService);
+    return (data ?? []).map(normLine<ClientService>);
   },
 
   async clientServices(clientId) {
     const { data, error } = await sb.from("client_services").select("*").eq("client_id", clientId).order("sort").order("created_at");
     fail(error);
-    return (data ?? []).map(normClientService);
+    return (data ?? []).map(normLine<ClientService>);
   },
 
   async createClient(c) {
@@ -319,21 +319,121 @@ const db: Db = {
     fail(error);
   },
 
-  async clientActivity(clientId) {
-    if (!UUID.test(clientId)) return [];
-    const { data, error } = await sb.from("audit_log").select("*")
-      .or(`row_id.eq.${clientId},new_data->>client_id.eq.${clientId},old_data->>client_id.eq.${clientId}`)
-      .order("at", { ascending: false }).limit(200);
-    fail(error);
-    const { data: hidden } = await sb.from("activity_hidden").select("audit_id");
-    const hiddenIds = new Set((hidden ?? []).map((h) => Number(h.audit_id)));
-    return ((data ?? []) as AuditEntry[]).map((a) => ({ ...a, hidden: hiddenIds.has(Number(a.id)) }));
-  },
+  clientActivity: (clientId) => activityOf("client_id", clientId),
 
   async convertLead(leadId) {
     const { data, error } = await sb.rpc("convert_lead_to_client", { p_lead: leadId });
     fail(error);
     return data as string;
+  },
+
+  async projects() {
+    const { data, error } = await sb.from("projects").select("*").order("updated_at", { ascending: false }).limit(5000);
+    fail(error);
+    return (data ?? []) as Project[];
+  },
+
+  async project(id) {
+    if (!UUID.test(id)) return null;
+    const { data, error } = await sb.from("projects").select("*").eq("id", id).maybeSingle();
+    fail(error);
+    return (data as Project) ?? null;
+  },
+
+  async allProjectServices() {
+    const { data, error } = await sb.from("project_services").select("*").limit(20000);
+    fail(error);
+    return (data ?? []).map(normLine<ProjectService>);
+  },
+
+  async projectServices(projectId) {
+    const { data, error } = await sb.from("project_services").select("*").eq("project_id", projectId).order("sort").order("created_at");
+    fail(error);
+    return (data ?? []).map(normLine<ProjectService>);
+  },
+
+  async createProject(p) {
+    const { data, error } = await sb.from("projects").insert(p).select("id").single();
+    fail(ownerGone(error));
+    return (data as { id: string }).id;
+  },
+
+  async updateProject(id, patch) {
+    const { error } = await sb.from("projects").update(patch).eq("id", id);
+    fail(ownerGone(error));
+  },
+
+  async deleteProject(id) {
+    const { error, count } = await sb.from("projects").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async addProjectService(s) {
+    const { error } = await sb.from("project_services").insert(s);
+    fail(friendly(error));
+  },
+
+  async updateProjectService(id, patch) {
+    const { error } = await sb.from("project_services").update(patch).eq("id", id);
+    fail(friendly(error));
+  },
+
+  async deleteProjectService(id) {
+    const { error } = await sb.from("project_services").delete().eq("id", id);
+    fail(error);
+  },
+
+  projectActivity: (projectId) => activityOf("project_id", projectId),
+
+  async vault() {
+    const { data, error } = await sb.from("credential_vault").select("salt, iterations, wrapped_key").maybeSingle();
+    fail(error);
+    return (data as VaultConfig) ?? null;
+  },
+
+  async createVault(v) {
+    const { error } = await sb.from("credential_vault").insert({ id: 1, ...v });
+    if (error?.code === "23505") throw new Error("A vault was just set up in another tab. Reload this page and unlock it with that passphrase.");
+    fail(error);
+  },
+
+  async updateVault(v) {
+    const { error, count } = await sb.from("credential_vault").update(v, { count: "exact" }).eq("id", 1);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was saved. Try signing in again.");
+  },
+
+  async resetVault() {
+    const { error } = await sb.rpc("reset_credential_vault");
+    fail(error);
+  },
+
+  async credentials(projectId) {
+    const { data, error } = await sb.from("project_credentials").select("id, project_id, label, secret, sort, created_at, updated_at")
+      .eq("project_id", projectId).order("sort").order("created_at");
+    fail(error);
+    return (data ?? []) as Credential[];
+  },
+
+  async credentialCount() {
+    const { count, error } = await sb.from("project_credentials").select("id", { count: "exact", head: true });
+    fail(error);
+    return count ?? 0;
+  },
+
+  async saveCredential(c, isNew) {
+    const { error, count } = isNew
+      ? await sb.from("project_credentials").insert(c, { count: "exact" })
+      : await sb.from("project_credentials").update({ label: c.label, secret: c.secret, sort: c.sort }, { count: "exact" }).eq("id", c.id);
+    fail(friendly(error));
+    if (count === 0) throw new Error("Nothing was saved. Try signing in again.");
+  },
+
+  async deleteCredential(id) {
+    const { error, count } = await sb.from("project_credentials").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
   },
 
   subscribe(cb) {
@@ -352,8 +452,20 @@ const db: Db = {
 function normLead(r: Record<string, unknown>): Lead {
   return { ...(r as Lead), value_monthly: Number(r.value_monthly), value_one_time: Number(r.value_one_time) };
 }
-function normClientService(r: Record<string, unknown>): ClientService {
-  return { ...(r as ClientService), amount: Number(r.amount), unit_amount: Number(r.unit_amount ?? r.amount), quantity: Number(r.quantity ?? 1) };
+function normLine<T extends ServiceLine>(r: Record<string, unknown>): T {
+  return { ...(r as T), amount: Number(r.amount), unit_amount: Number(r.unit_amount ?? r.amount), quantity: Number(r.quantity ?? 1) };
+}
+
+/** Audit entries for a row and its children (e.g. a client and its client_services), newest first. */
+async function activityOf(parentKey: "client_id" | "project_id", id: string): Promise<AuditEntry[]> {
+  if (!UUID.test(id)) return [];
+  const { data, error } = await sb.from("audit_log").select("*")
+    .or(`row_id.eq.${id},new_data->>${parentKey}.eq.${id},old_data->>${parentKey}.eq.${id}`)
+    .order("at", { ascending: false }).limit(200);
+  fail(error);
+  const { data: hidden } = await sb.from("activity_hidden").select("audit_id");
+  const hiddenIds = new Set((hidden ?? []).map((h) => Number(h.audit_id)));
+  return ((data ?? []) as AuditEntry[]).map((a) => ({ ...a, hidden: hiddenIds.has(Number(a.id)) }));
 }
 
 /** Turn database rule violations into plain sentences. */
@@ -364,6 +476,9 @@ function friendly(e: { message: string; code?: string } | null) {
   if (e.code === "23514") return { message: "Something in the form isn't valid (check required fields and lengths)." };
   return e;
 }
+
+const ownerGone = (e: { message: string; code?: string } | null) =>
+  e?.code === "23503" ? { message: "That lead or client was deleted. Reload and pick another." } : friendly(e);
 
 function normQuote(r: Record<string, unknown>): Quote {
   return { ...(r as Quote), monthly_total: Number(r.monthly_total), one_time_total: Number(r.one_time_total) };
