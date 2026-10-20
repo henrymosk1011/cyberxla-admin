@@ -54,7 +54,8 @@ export type AuditEntry = {
   actor: string | null;
   actor_role: string;
   action: "insert" | "update" | "delete";
-  table_name: "leads" | "quotes" | "lead_notes" | "clients" | "client_services" | "services" | "service_categories";
+  table_name: "leads" | "quotes" | "lead_notes" | "clients" | "client_services" | "services" | "service_categories"
+    | "projects" | "project_services" | "project_credentials";
   row_id: string | null;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
@@ -127,6 +128,29 @@ export interface Db {
   /** Create (or find) the client for a lead from its newest active quote; returns the client id. */
   convertLead(leadId: string): Promise<string>;
 
+  projects(): Promise<Project[]>;
+  project(id: string): Promise<Project | null>;
+  allProjectServices(): Promise<ProjectService[]>;
+  projectServices(projectId: string): Promise<ProjectService[]>;
+  createProject(p: ProjectInput): Promise<string>;
+  updateProject(id: string, patch: Partial<ProjectInput>): Promise<void>;
+  deleteProject(id: string): Promise<void>;
+  addProjectService(s: Omit<ProjectService, "id">): Promise<void>;
+  updateProjectService(id: string, patch: Partial<Omit<ProjectService, "id" | "project_id">>): Promise<void>;
+  deleteProjectService(id: string): Promise<void>;
+  projectActivity(projectId: string): Promise<AuditEntry[]>;
+
+  /** The credential vault's wrapped key, or null before a passphrase is set. */
+  vault(): Promise<VaultConfig | null>;
+  createVault(v: VaultConfig): Promise<void>;
+  updateVault(v: VaultConfig): Promise<void>;
+  /** Forgotten passphrase: delete every saved credential and the vault. */
+  resetVault(): Promise<void>;
+  credentials(projectId: string): Promise<Credential[]>;
+  credentialCount(): Promise<number>;
+  saveCredential(c: CredentialInput, isNew: boolean): Promise<void>;
+  deleteCredential(id: string): Promise<void>;
+
   subscribe(cb: (e: ChangeEvent) => void): () => void;
 }
 
@@ -175,9 +199,9 @@ export type Client = {
 
 export type ClientInput = Omit<Client, "id" | "created_at" | "updated_at">;
 
-export type ClientService = {
+/** A priced service on a client or project. */
+export type ServiceLine = {
   id: string;
-  client_id: string;
   service_id: string | null;
   name: string;
   billing: "monthly" | "once";
@@ -188,5 +212,41 @@ export type ClientService = {
   notes: string | null;
   sort: number;
 };
+export type ClientService = ServiceLine & { client_id: string };
+
+export const PROJECT_STATUSES = ["potential", "proposed", "in_progress", "on_hold", "done", "cancelled"] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export const OPEN_PROJECT_STATUSES: readonly ProjectStatus[] = ["potential", "proposed", "in_progress", "on_hold"];
+
+export type Project = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  /** Exactly one of these is set. A lead's projects move to its client on conversion. */
+  lead_id: string | null;
+  client_id: string | null;
+  name: string;
+  status: ProjectStatus;
+  due_on: string | null;
+  notes: string | null;
+};
+
+export type ProjectInput = Omit<Project, "id" | "created_at" | "updated_at">;
+export type ProjectService = ServiceLine & { project_id: string };
+
+/** The data key, wrapped under the vault passphrase (see lib/crypto.ts). */
+export type VaultConfig = { salt: string; iterations: number; wrapped_key: string };
+
+/** A saved login. Only the label is readable; secret is ciphertext made in the browser. */
+export type Credential = {
+  id: string;
+  project_id: string;
+  label: string;
+  secret: string;
+  sort: number;
+  created_at: string;
+  updated_at: string;
+};
+export type CredentialInput = Pick<Credential, "id" | "project_id" | "label" | "secret" | "sort">;
 
 export type ToastMsg = { id: number; title: string; body: string; href?: string };

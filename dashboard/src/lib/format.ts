@@ -28,6 +28,7 @@ export const STATUS_LABEL: Record<string, string> = {
   new: "New", contacted: "Contacted", proposal: "Proposal", won: "Won", lost: "Lost",
   active: "Active", paused: "Paused", former: "Former",
   submitted: "Submitted", reviewing: "Reviewing", sent: "Sent", accepted: "Accepted", declined: "Declined",
+  potential: "Potential", proposed: "Proposed", in_progress: "In progress", on_hold: "On hold", done: "Done", cancelled: "Cancelled",
 };
 
 /** Display a US number as (818) 714-1066. Anything else is shown as entered. */

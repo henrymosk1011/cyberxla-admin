@@ -29,6 +29,7 @@ access to any table.
 | `supabase/migrations/0003_archive_activity_keepalive.sql` | Archive/delete for leads and quotes, hideable activity entries, keep-alive heartbeat |
 | `supabase/migrations/0004_quote_edits.sql` | Lead value follows edits to a quote's services and device counts |
 | `supabase/migrations/0005_catalog_and_clients.sql` | Services catalog (managed in the dashboard, read live by the website and the quote function) and clients |
+| `supabase/migrations/0009_projects.sql` | Projects for leads and clients, with services, notes, and browser-encrypted credentials |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
 | `supabase/functions/submit-quote/index.ts` | The public endpoint |
@@ -128,9 +129,46 @@ Zero Trust > Access controls > Applications > Add > Self-hosted:
 - Authentication > Sign In / Providers: "Allow new users to sign up" **off**.
 - MFA (TOTP) stays enabled (the default).
 
+## Projects
+
+The **Projects** page, and a Projects card on every lead and client, tracks
+work for a lead or client: the services it would cover (from the catalog or
+custom, price x quantity like client services), notes, a target date, a status
+(Potential, Proposed, In progress, On hold, Done, Cancelled), and saved
+credentials. A lead or client can have any number of projects. Converting a
+lead moves its projects to the new client.
+
+### Credentials are encrypted in the browser
+
+- The first time you save a credential you set a **vault passphrase** (12+
+  characters). It never leaves the browser and isn't stored anywhere.
+- The passphrase derives a key (PBKDF2-SHA256, 600,000 iterations) that wraps
+  a random AES-256 data key. Each credential's username, password, URL and
+  notes are encrypted with that key (AES-GCM, bound to the credential and its
+  project, padded so lengths don't show) before they're sent. The database
+  holds only ciphertext, the salt, and the wrapped key; only the label is
+  readable.
+- The activity log records that a credential was added, changed or removed,
+  never its contents.
+- Unlocking lasts for the tab. It locks on Lock, sign-out, reload, or 10
+  minutes without activity. Copied passwords are cleared from the clipboard
+  after 30 seconds.
+- Changing the passphrase re-wraps the data key; saved credentials don't
+  change.
+- **A forgotten passphrase can't be recovered**, by you, Supabase, or anyone
+  with database access. "Forgot the passphrase?" deletes every saved
+  credential so you can start over. Keep the passphrase in your password
+  manager.
+- This protects credentials from a leaked database, backup, or Supabase
+  account. It can't protect them from someone who controls the dashboard's
+  code or your browser while the vault is unlocked; the strict
+  Content-Security-Policy is the defense there.
+- Project notes are not encrypted (like lead and client notes). Keep secrets
+  in Credentials.
+
 ## Activity log
 
-Every change to leads, quotes and notes is written to `audit_log` by a
+Every change to leads, quotes, notes, clients and projects is written to `audit_log` by a
 database trigger and can't be edited or deleted, even by the admin. "Remove
 from timeline" in the dashboard only hides an entry (`activity_hidden`); the
 original record stays, and "Show removed" brings it back.
