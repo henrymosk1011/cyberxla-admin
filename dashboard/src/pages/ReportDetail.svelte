@@ -1,6 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import DidItems from "../components/DidItems.svelte";
   import PageLightbox from "../components/PageLightbox.svelte";
   import ReportPill from "../components/ReportPill.svelte";
   import { describeReport } from "../lib/activity.ts";
@@ -154,7 +155,7 @@
       if (patch.content) {
         try {
           const res = await db.reportAction(id, "render");
-          if (res.started) notice = "Saved. The preview updates in about a minute.";
+          if (res.started) notice = "Saved. The PDF is rebuilding with your changes; the preview updates in about a minute.";
         } catch (e) {
           error = `Saved, but the preview didn't start updating: ${e instanceof Error ? e.message : "try again"}.`;
         }
@@ -266,7 +267,7 @@
 {:else}
   <header class="head">
     <div class="title">
-      <p class="eyebrow">{periodLabel(report)} · {report.period_key}</p>
+      <p class="eyebrow">{periodLabel(report)} · {report.period_key} · generated {dateTime(report.created_at)}</p>
       <h1>{report.client_name}</h1>
       <div class="state">
         <ReportPill label={st.label} tone={st.tone} test={report.is_test} />
@@ -357,13 +358,7 @@
         <section class="card">
           <div class="card-head"><h2>What we did</h2><button type="button" class="btn sm" onclick={() => draft!.did.items.push({ title: "", text: "" })}>Add item</button></div>
           <div class="field"><label for="d-title">Section title</label><input id="d-title" class="input" bind:value={draft.did.title} /></div>
-          {#each draft.did.items as it, i (i)}
-            <div class="item">
-              <div class="field"><label for="d-{i}-t">Item {i + 1}</label><input id="d-{i}-t" class="input" bind:value={it.title} /></div>
-              <div class="field"><label for="d-{i}-x">Item {i + 1} detail</label><input id="d-{i}-x" class="input" bind:value={it.text} /></div>
-              <button type="button" class="btn sm ghost" onclick={() => draft!.did.items.splice(i, 1)}>Remove<span class="sr-only"> item {i + 1}</span></button>
-            </div>
-          {/each}
+          <DidItems bind:items={draft.did.items} />
         </section>
 
         <section class="card">
@@ -479,7 +474,7 @@
         <div class="card-head">
           <h2>Preview</h2>
           <span class="sub" role="status">
-            {#if report.render_error && rendering}Preview failed{:else if rendering}Updating, about a minute{:else if pages.length}Matches the last save{/if}
+            {#if report.render_error && rendering}Preview failed{:else if rendering}Rebuilding the PDF with your changes, about a minute{:else if pages.length}Up to date{report.rendered_at ? `, built ${dateTime(report.rendered_at)}` : ""}{/if}
           </span>
         </div>
         {#if report.render_error && rendering}
@@ -511,10 +506,10 @@
 
   {#if dirty && !locked}
     <div class="savebar" role="region" aria-label="Unsaved changes">
-      <span>Unsaved changes{contentDirty ? " (the preview updates after you save)" : ""}</span>
+      <span>Unsaved changes{contentDirty ? ". Saving rebuilds the PDF (about a minute)." : ""}</span>
       <div>
         <button class="btn ghost" disabled={busy} onclick={discard}>Discard</button>
-        <button class="btn primary" disabled={busy} onclick={save}>{busy ? "Saving…" : "Save"}</button>
+        <button class="btn primary" disabled={busy} onclick={save}>{busy ? "Saving…" : contentDirty ? "Save and rebuild PDF" : "Save"}</button>
       </div>
     </div>
   {/if}

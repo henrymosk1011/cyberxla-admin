@@ -143,6 +143,7 @@
               <td class="who">
                 <a href="#/reports/{r.id}"><strong>{r.client_name}</strong></a>
                 <span class="muted">{periodLabel(r)}</span>
+                <span class="gen">Generated {dateTime(r.created_at)}</span>
               </td>
               <td class="st">
                 <ReportPill label={st.label} tone={st.tone} test={r.is_test} />
@@ -202,6 +203,7 @@
   .who a { text-decoration: none; }
   .who a:hover strong { text-decoration: underline; }
   .who .muted { font-size: 13px; }
+  .gen { font-size: 12px; color: var(--muted); }
   .st { min-width: 0; }
   .stnote { display: block; margin-top: 4px; font-size: 13px; color: var(--text-2); max-width: 360px; }
   .note { font-size: 13px; color: var(--text-2); max-width: 320px; }
