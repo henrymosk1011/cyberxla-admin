@@ -135,7 +135,7 @@ if (openLeads[1]) seedProject({ lead_id: openLeads[1].id }, "Pentest before insu
 // Patch reports. Content and page images are made up (from the reports repo's
 // invented test snapshot); a demo client gets them, plus two converted clients
 // with sample addresses on the reserved .example domain.
-const reportSettings: ReportSettings = { mode: "preview", auto_send_default: true, generate_time: "12:00:00", send_time: "08:00:00", sunday_review_email: true, updated_at: new Date(now - 9 * 86400000).toISOString() };
+const reportSettings: ReportSettings = { mode: "preview", auto_send_default: true, generate_time: "12:00:00", send_time: "08:00:00", sunday_review_email: true, template: {}, updated_at: new Date(now - 9 * 86400000).toISOString() };
 const reports: Report[] = [];
 const reportPages = new Map<string, ReportPage[]>();
 const reportListeners = new Set<() => void>();

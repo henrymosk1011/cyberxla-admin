@@ -109,6 +109,13 @@
       <div class="row"><button class="btn primary" disabled={!dirty || busy}>{busy ? "Saving…" : "Save settings"}</button></div>
     </form>
 
+    <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>Report template</h2></div>
+      <p class="hint">The wording and order every new report starts from: What we did, titles, labels and the email. Reports already made don't change.</p>
+      <div class="row"><a class="btn" href="#/reports/template">Edit the template</a></div>
+    </section>
+
     <section class="card">
       <div class="card-head"><h2>Clients getting reports</h2><span class="sub">Set on each client's page</span></div>
       {#if on.length}
@@ -125,6 +132,7 @@
       {/if}
       {#if off}<p class="hint">{off} other {off === 1 ? "client doesn't" : "clients don't"} get reports.</p>{/if}
     </section>
+    </div>
   </div>
 {/if}
 
@@ -148,6 +156,7 @@
   .field { min-width: 0; }
   .input { width: 100%; min-width: 0; }
   .row { display: flex; justify-content: flex-end; }
+  .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .clients { list-style: none; display: flex; flex-direction: column; gap: 12px; }
   .clients li { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
   .clients a { text-decoration: none; }

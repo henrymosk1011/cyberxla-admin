@@ -525,7 +525,7 @@ const db: Db = {
   },
 
   async reportSettings() {
-    const { data, error } = await sb.from("report_settings").select("mode, auto_send_default, generate_time, send_time, sunday_review_email, updated_at").eq("id", 1).single();
+    const { data, error } = await sb.from("report_settings").select("mode, auto_send_default, generate_time, send_time, sunday_review_email, template, updated_at").eq("id", 1).single();
     fail(error);
     return data as ReportSettings;
   },

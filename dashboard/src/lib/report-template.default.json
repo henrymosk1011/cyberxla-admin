@@ -1,0 +1,117 @@
+{
+  "template": {
+    "v": 1,
+    "did_items": [
+      {
+        "title": "Created a fresh restore point",
+        "text": "A safety net in case an update misbehaves."
+      },
+      {
+        "title": "Cleared temp files and the recycle bin",
+        "text": "Frees disk space and removes clutter."
+      },
+      {
+        "title": "Installed Windows and app updates",
+        "text": "Security fixes, approved and pushed automatically."
+      },
+      {
+        "title": "Restarted computers to finish installs",
+        "text": "Updates only fully apply after a restart."
+      },
+      {
+        "title": "Ran an antivirus scan with Avast",
+        "text": "Checked every computer for viruses and other threats."
+      },
+      {
+        "title": "Ran a malware scan with Malwarebytes",
+        "text": "A second scan that catches what antivirus can miss."
+      },
+      {
+        "title": "Checked startup apps",
+        "text": "Made sure no unneeded software starts with the computer."
+      },
+      {
+        "title": "Reviewed installed software",
+        "text": "Looked for anything unfamiliar or unwanted."
+      },
+      {
+        "title": "Confirmed the default printer",
+        "text": "Made sure each computer prints to the right printer."
+      }
+    ],
+    "pill_clear": "All clear",
+    "pill_attention": "{attention} needs attention",
+    "computers_title": "Your computers",
+    "updates_empty_ok": "Already up to date. Nothing new to install.",
+    "updates_empty_failed": "Patch run did not finish. We are looking into it.",
+    "security_title": "Open security risks",
+    "security_text": "We scan every computer for known vulnerabilities. A typical computer of yours currently shows **{critical} critical** and **{high} high** severity findings. Most are the same issues repeated on each machine.",
+    "apps_intro": "The most serious ones come from:",
+    "security_note": "We track every one of these and apply fixes as vendors release them. If anything needs action from your team, we will reach out directly.",
+    "next_label": "Next patch window",
+    "next_when": "{next_day} at 9:00 PM",
+    "next_note": "Please leave computers powered on and plugged in Friday night. They restart on their own once updates finish.",
+    "weekly": {
+      "label": "Weekly patch report",
+      "subtitle": "Patch window: {window_date}   |   Report date: {report_date}",
+      "headline": "{patched} of {computers} computers patched successfully.",
+      "kpi_labels": [
+        "Computers managed",
+        "Patched this week",
+        "Updates installed",
+        "Need attention"
+      ],
+      "did_title": "What we did this week",
+      "columns": [
+        "Computer",
+        "Last patch run",
+        "Updates queued",
+        "Critical risks",
+        "Status"
+      ],
+      "updates_title": "Updates installed this week",
+      "subject": "Weekly patch report: {client}, {window_short}",
+      "body": "Hello {client} team,\n\nAttached is your weekly patch report for the patch window on {window_date}.\n\n**{summary}**\n\nNext patch window: **{next_day} at 9:00 PM**. Please leave computers powered on that night.\n\nQuestions? Just reply to this email.\n\nHenry Moskovian\ncyberxLA"
+    },
+    "monthly": {
+      "label": "Monthly patch report",
+      "subtitle": "{month}   |   {runs} weekly patch windows   |   Report date: {report_date}",
+      "headline": "{rate}% of scheduled patch runs completed successfully.",
+      "kpi_labels": [
+        "Computers managed",
+        "Patched every week",
+        "Updates installed",
+        "Need attention"
+      ],
+      "weeks_title": "Patch success by week",
+      "did_title": "What we did every Friday night",
+      "columns": [
+        "Computer",
+        "Runs passed",
+        "Updates queued",
+        "Critical risks",
+        "Status"
+      ],
+      "updates_title": "Updates installed this month",
+      "subject": "Monthly patch report: {client}, {month}",
+      "body": "Hello {client} team,\n\nAttached is your monthly patch report for {month}.\n\n**{summary}**\n\nNext patch window: **{next_day} at 9:00 PM**. Please leave computers powered on that night.\n\nQuestions? Just reply to this email.\n\nHenry Moskovian\ncyberxLA"
+    }
+  },
+  "placeholders": {
+    "client": "Client name",
+    "computers": "Number of computers",
+    "patched": "Computers patched (weekly)",
+    "rate": "Percent of patch runs that succeeded (monthly)",
+    "runs": "Number of patch windows (monthly)",
+    "installs": "Updates installed",
+    "attention": "Computers that need attention",
+    "window_date": "Patch window date, like Friday, Nov 6, 2026 (weekly)",
+    "window_short": "Patch window date, like Nov 6 (weekly)",
+    "month": "Month covered, like October 2026",
+    "report_date": "Report date, like Nov 8, 2026",
+    "next_day": "Next patch window day, like Friday, Nov 13, 2026",
+    "critical": "Critical findings on a typical computer",
+    "high": "High findings on a typical computer",
+    "summary": "The results sentence: patched, updates installed, and who needs attention (email)"
+  }
+}

@@ -94,6 +94,7 @@
         {settings.mode === "live" ? "Live: reports go to clients" : "Preview: reports go to you only"}
       </a>
     {/if}
+    <a class="btn" href="#/reports/template">Template</a>
     <a class="btn" href="#/reports/settings">Settings</a>
   </div>
 </header>
