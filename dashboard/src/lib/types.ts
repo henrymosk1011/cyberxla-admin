@@ -294,7 +294,43 @@ export type ReportSettings = {
   generate_time: string;
   send_time: string;
   sunday_review_email: boolean;
+  /** The report template as saved; blank parts mean the defaults (see lib/template.ts). */
+  template: Partial<ReportTemplate>;
   updated_at: string;
+};
+
+/** Wording for one period. Text may use **bold** and {placeholders}. */
+export type ReportTemplatePeriod = {
+  label: string;
+  subtitle: string;
+  headline: string;
+  kpi_labels: string[];
+  weeks_title?: string;
+  did_title: string;
+  columns: string[];
+  updates_title: string;
+  subject: string;
+  body: string;
+};
+
+/** The wording and order every new report starts from (lib/template.js in the reports repo). */
+export type ReportTemplate = {
+  v: 1;
+  did_items: { title: string; text: string }[];
+  pill_clear: string;
+  pill_attention: string;
+  computers_title: string;
+  updates_empty_ok: string;
+  updates_empty_failed: string;
+  security_title: string;
+  security_text: string;
+  apps_intro: string;
+  security_note: string;
+  next_label: string;
+  next_when: string;
+  next_note: string;
+  weekly: ReportTemplatePeriod;
+  monthly: ReportTemplatePeriod;
 };
 
 export const TONES = ["good", "warn", "bad", "info", "lime"] as const;

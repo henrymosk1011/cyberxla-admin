@@ -5,6 +5,7 @@
   import PageLightbox from "../components/PageLightbox.svelte";
   import ReportPill from "../components/ReportPill.svelte";
   import { describeReport } from "../lib/activity.ts";
+  import { resolveTemplate } from "../lib/template.ts";
   import { dateTime } from "../lib/format.ts";
   import { blankComputer, contentProblem, dashFields, isLeftOff, parseEmails, periodLabel, recalcKpis, reportActions, reportState, sendNowText, withName } from "../lib/reports.ts";
   import { TONES, type AuditEntry, type Client, type Report, type ReportContent, type ReportPage, type ReportPatch, type ReportSettings, type Tone } from "../lib/types.ts";
@@ -275,6 +276,27 @@
     }
   }
 
+  /** Make this report's What we did list the template's, for every report generated from now on. */
+  async function useListForFuture() {
+    if (!draft || !settings) return;
+    const list = ($state.snapshot(draft.did.items) as ReportContent["did"]["items"]).filter((i) => i.title.trim());
+    if (!list.length) return (error = "Add at least one item first.");
+    const ok = await confirm.ask({
+      title: "Use this list for future reports?",
+      body: `Every report generated from now on, for every client, starts with these ${list.length} items in this order. Reports already made don't change. You can change it again in the report template.`,
+      action: "Use for future reports",
+    });
+    if (!ok) return;
+    error = "";
+    try {
+      await db.saveReportSettings({ template: { ...resolveTemplate(settings.template), did_items: list } });
+      settings = await db.reportSettings();
+      notice = "Saved to the report template. New reports will use this list.";
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Couldn't update the template.";
+    }
+  }
+
   const move = <T,>(list: T[], i: number, by: number) => {
     const j = i + by;
     if (j < 0 || j >= list.length) return;
@@ -381,7 +403,13 @@
         {/if}
 
         <section class="card">
-          <div class="card-head"><h2>What we did</h2><button type="button" class="btn sm" onclick={() => draft!.did.items.push({ title: "", text: "" })}>Add item</button></div>
+          <div class="card-head">
+            <h2>What we did</h2>
+            <div class="headbtns">
+              <button type="button" class="btn sm ghost" onclick={useListForFuture}>Use this list for future reports</button>
+              <button type="button" class="btn sm" onclick={() => draft!.did.items.push({ title: "", text: "" })}>Add item</button>
+            </div>
+          </div>
           <div class="field"><label for="d-title">Section title</label><input id="d-title" class="input" bind:value={draft.did.title} /></div>
           <DidItems bind:items={draft.did.items} />
         </section>
@@ -618,6 +646,7 @@
   .savebar { position: sticky; bottom: 12px; z-index: 10; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--lime); border-radius: 14px; background: var(--surface-2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); font-size: 14px; font-weight: 600; }
   .savebar div { display: flex; gap: 8px; }
   .savebar.clean { border-color: var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); font-weight: 500; color: var(--text-2); }
+  .headbtns { display: flex; flex-wrap: wrap; gap: 8px; }
   .leaveoff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   @media (max-width: 1100px) {
     .cols { grid-template-columns: 1fr; }
