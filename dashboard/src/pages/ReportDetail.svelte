@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import DidItems from "../components/DidItems.svelte";
@@ -161,6 +162,14 @@
       Object.assign(patch, { recipients: to.emails, cc: cc.emails, subject: mail.subject.trim(), email_body: mail.body.trim() });
     }
     if (contentDirty) {
+      if (draft.extra) {
+        // Empty rows are dropped; the section needs a title and at least one titled item.
+        draft.extra.items = draft.extra.items.filter((i) => i.title.trim() || i.text.trim());
+        if (!draft.extra.title.trim()) return (error = "The extra section needs a title.");
+        if (!draft.extra.items.length) return (error = "Add at least one item to the extra section, or remove the section.");
+        const untitled = draft.extra.items.findIndex((i) => !i.title.trim());
+        if (untitled >= 0) return (error = `Extra section item ${untitled + 1} needs a title.`);
+      }
       const problem = contentProblem(draft);
       if (problem) return (error = `The report can't be saved: ${problem}`);
       patch.content = $state.snapshot(draft) as ReportContent;
@@ -323,6 +332,20 @@
     }
   }
 
+  /** Add the optional one-off section and put the cursor in its first item. */
+  async function addExtra() {
+    if (!draft) return;
+    draft.extra = { title: draft.period === "weekly" ? "Extra work this week" : "Extra work this month", items: [{ title: "", text: "" }] };
+    await tick();
+    document.getElementById("x-0-t")?.focus();
+  }
+  async function removeExtra() {
+    if (!draft) return;
+    draft.extra = undefined;
+    await tick();
+    document.getElementById("x-add")?.focus();
+  }
+
   const move = <T,>(list: T[], i: number, by: number) => {
     const j = i + by;
     if (j < 0 || j >= list.length) return;
@@ -438,6 +461,25 @@
           </div>
           <div class="field"><label for="d-title">Section title</label><input id="d-title" class="input" bind:value={draft.did.title} /></div>
           <DidItems bind:items={draft.did.items} />
+        </section>
+
+        <section class="card">
+          {#if draft.extra}
+            <div class="card-head">
+              <h2>Extra section</h2>
+              <div class="headbtns">
+                <button type="button" class="btn sm ghost" onclick={removeExtra}>Remove section</button>
+                <button type="button" class="btn sm" onclick={() => draft!.extra!.items.push({ title: "", text: "" })}>Add item</button>
+              </div>
+            </div>
+            <p class="hint">Only on this report. Prints at the top of page 2 as section 03; the sections after it move down one.</p>
+            <div class="field"><label for="x-title">Section title</label><input id="x-title" class="input" bind:value={draft.extra.title} /></div>
+            <DidItems bind:items={draft.extra.items} idPrefix="x" />
+          {:else}
+            <div class="card-head"><h2>Extra section</h2></div>
+            <p class="hint">For one-off work on this report only, like a router replaced or a new computer set up. It prints at the top of page 2.</p>
+            <div><button type="button" id="x-add" class="btn sm" onclick={addExtra}>Add an extra section</button></div>
+          {/if}
         </section>
 
         <section class="card">

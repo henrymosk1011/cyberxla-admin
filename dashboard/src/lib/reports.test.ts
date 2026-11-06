@@ -104,6 +104,10 @@ test("content checks match the renderer's", () => {
   assert.match(contentProblem({ ...weekly, pill: { text: "x", tone: "red" } })!, /pill\.tone/);
   assert.match(contentProblem([])!, /object/);
   assert.match(contentProblem({ ...weekly, v: 2 })!, /v must be 1/);
+  assert.equal(contentProblem({ ...weekly, extra: { title: "Extra work", items: [{ title: "Router", text: "Replaced." }] } }), null);
+  assert.equal(contentProblem({ ...weekly, extra: null }), null);
+  assert.match(contentProblem({ ...weekly, extra: { title: "Extra work" } })!, /extra needs a title and items/);
+  assert.match(contentProblem({ ...weekly, extra: { title: "x", items: [{ title: "Router" }] } })!, /extra\.items\[0\]/);
 });
 
 test("dash check", () => {

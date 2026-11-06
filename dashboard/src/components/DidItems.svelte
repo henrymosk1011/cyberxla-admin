@@ -6,7 +6,8 @@
   import { flip } from "svelte/animate";
 
   type Item = { title: string; text: string };
-  let { items = $bindable() }: { items: Item[] } = $props();
+  // idPrefix keeps field ids unique when two lists are on one page.
+  let { items = $bindable(), idPrefix = "d" }: { items: Item[]; idPrefix?: string } = $props();
 
   // Stable keys, so rows (and keyboard focus) move with their item.
   const keys = new WeakMap<object, number>();
@@ -100,8 +101,8 @@
       <button type="button" class="grip" data-handle={keyOf(it)} title="Drag to reorder"
         aria-label="Move item {i + 1}, {name(it)}. Drag, or use the up and down arrow keys."
         onpointerdown={(e) => startDrag(e, it)} onkeydown={(e) => keyMove(e, it)}>⠿</button>
-      <div class="field"><label for="d-{i}-t">Item {i + 1}</label><input id="d-{i}-t" class="input" bind:value={it.title} /></div>
-      <div class="field"><label for="d-{i}-x">Item {i + 1} detail</label><input id="d-{i}-x" class="input" bind:value={it.text} /></div>
+      <div class="field"><label for="{idPrefix}-{i}-t">Item {i + 1}</label><input id="{idPrefix}-{i}-t" class="input" bind:value={it.title} /></div>
+      <div class="field"><label for="{idPrefix}-{i}-x">Item {i + 1} detail</label><input id="{idPrefix}-{i}-x" class="input" bind:value={it.text} /></div>
       <button type="button" class="btn sm ghost rm" onclick={() => items.splice(i, 1)}>Remove<span class="sr-only"> item {i + 1}</span></button>
     </li>
   {/each}
