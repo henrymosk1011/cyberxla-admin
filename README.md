@@ -30,12 +30,14 @@ access to any table.
 | `supabase/migrations/0004_quote_edits.sql` | Lead value follows edits to a quote's services and device counts |
 | `supabase/migrations/0005_catalog_and_clients.sql` | Services catalog (managed in the dashboard, read live by the website and the quote function) and clients |
 | `supabase/migrations/0009_projects.sql` | Projects for leads and clients, with services, notes, and browser-encrypted credentials |
+| `supabase/migrations/0010_reports.sql` | Patch reports: drafts, PDFs, settings, the `report_writer` role and its functions |
+| `supabase/functions/report-action/` | The dashboard's Send now and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
 | `supabase/functions/submit-quote/index.ts` | The public endpoint |
 | `supabase/functions/submit-quote/lib.ts` | Validation and pricing (catalog passed in from the database) |
 | `tests/` | Unit tests: `npm test` |
-| `scripts/bundle-function.mjs` | `npm run bundle-function` writes `dist/submit-quote.ts`, one file to paste into the Supabase editor |
+| `scripts/bundle-function.mjs` | `npm run bundle-function` writes `dist/submit-quote.ts` (`npm run bundle-report-action` writes `dist/report-action.ts`), one file to paste into the Supabase editor |
 
 ## One-time setup
 
@@ -166,9 +168,88 @@ lead moves its projects to the new client.
 - Project notes are not encrypted (like lead and client notes). Keep secrets
   in Credentials.
 
+## Patch reports
+
+Weekly and monthly Action1 patch reports for clients are built in the private
+reports repo (GitHub Actions) and reviewed here, under **Reports**.
+
+```
+Sunday, generate time    GitHub Actions makes a draft per client (as report_writer)
+Sunday afternoon         you review and edit here; each save rebuilds the PDF
+Monday, send time        every report still scheduled goes out; held ones don't
+```
+
+- **Every word is editable**: the email (recipients, subject, body) and every
+  line of the PDF, plus raw JSON for anything else. Reset to generated undoes
+  it all. The preview is images of the real PDF and refreshes about a minute
+  after a save.
+- **Hold, Resume, Send now**, one at a time or Hold all and Resume all for the
+  week. Send now shows exactly who it goes to first.
+- **Preview mode** (the starting mode) sends every report to you, tagged with
+  who it's for. Switch to **Live** in Reports, Settings.
+- Who gets a client's reports is set on the client's page (Patch reports card).
+- Test reports (from a manual run) never block the real Sunday report, never
+  send on a schedule, and always go to you only.
+
+How it's kept safe:
+
+- GitHub Actions logs in as `report_writer`, which can only call the functions
+  in the `reporting` schema (the API never exposes it), like `quote_intake`.
+  Recipients always come from the client record, never from the caller.
+- A report is claimed (scheduled to sending) in one database step before it is
+  sent, so the Monday run and Send now can't send it twice. A report that is
+  sending or sent can't be edited, and sent reports can't be deleted. The
+  database enforces these rules, not just the dashboard.
+- The activity log records every change to reports and settings, without the
+  large generated columns.
+- The `report-action` function checks your session with `is_admin()` (allowlist
+  plus MFA) and starts the GitHub workflow with a token that can only run
+  Actions on the reports repo.
+
+### Setup
+
+1. **Run the migration.** Paste `supabase/migrations/0010_reports.sql` into the
+   SQL Editor and Run.
+2. **Set the writer's password.** Generate a long random password (letters and
+   numbers only), then:
+   ```sql
+   alter role report_writer password 'PASTE-PASSWORD-HERE';
+   ```
+3. **Give the reports repo its database access.** In the reports repo,
+   Settings, Secrets and variables, Actions:
+   - Secret `REPORTS_DB_URL`: the Transaction pooler URI (Supabase > Connect),
+     with `postgres.<ref>` replaced by `report_writer.<ref>` and the password
+     from step 2.
+   - Variable `REPORTS_DB_CA`: Supabase > Database > Settings > SSL
+     Configuration > Download certificate, then paste the whole file. The
+     connection is always verified against it.
+4. **Make a GitHub token for the dashboard's buttons.** github.com, Settings,
+   Developer settings, Fine-grained tokens, Generate: repository access **only
+   the reports repo**, permission **Actions: Read and write**, nothing else, an
+   expiry of a year at most (put the renewal in your calendar).
+5. **Deploy `report-action`.** `npm run bundle-report-action`, then
+   Supabase > Edge Functions > Deploy a new function > Via editor, name it
+   `report-action`, paste `dist/report-action.ts`, deploy, and turn **off**
+   "Verify JWT" in its settings (the function checks the session itself, with
+   `is_admin()`). Secrets:
+   | Name | Value |
+   |---|---|
+   | `GH_ACTIONS_TOKEN` | The token from step 4 |
+   | `REPORTS_REPO` | The reports repo as `owner/name` |
+   | `PUBLISHABLE_KEY` | Only if the function says it's missing: the dashboard's `VITE_SUPABASE_PUBLISHABLE_KEY` |
+6. **Turn reports on per client.** Open each client, fill in the Patch reports
+   card (Action1 group exactly as in Action1, recipients, cc), check "Send
+   weekly and monthly reports", and Save.
+7. **Test in preview.** In the reports repo, Actions, Generate reports, Run
+   workflow (Test reports checked). Drafts appear under Reports, Test reports,
+   in a few minutes. Edit one, Save, watch the preview refresh, then Send now:
+   it arrives in your inbox. Hold another and check it stays put.
+8. **Go live** before the Monday you want clients to get them: Reports,
+   Settings, Live.
+
 ## Activity log
 
-Every change to leads, quotes, notes, clients and projects is written to `audit_log` by a
+Every change to leads, quotes, notes, clients, projects and patch reports is written to `audit_log` by a
 database trigger and can't be edited or deleted, even by the admin. "Remove
 from timeline" in the dashboard only hides an entry (`activity_hidden`); the
 original record stays, and "Show removed" brings it back.

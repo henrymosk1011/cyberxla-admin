@@ -1,6 +1,7 @@
 // Timeline wording shared by the lead, client and project pages.
 import { money, STATUS_LABEL } from "./format.ts";
-import type { AuditEntry } from "./types.ts";
+import { REPORT_STATUS_LABEL } from "./reports.ts";
+import type { AuditEntry, ReportStatus } from "./types.ts";
 
 /** A client_services or project_services change: "Added Patching ($10 × 12 = $120/mo)". */
 export function describeLine(a: AuditEntry): string {
@@ -34,4 +35,25 @@ export function describeCredential(a: AuditEntry): string {
   if (a.action === "insert") return `Credential added: ${n.label}`;
   if (a.action === "delete") return `Credential removed: ${o.label}`;
   return n.label !== o.label ? `Credential renamed: ${o.label} → ${n.label}` : `Credential updated: ${n.label}`;
+}
+
+/**
+ * A patch report change: created, held, sent, edited. Null for bookkeeping the
+ * timeline doesn't need (renders, send attempts in progress).
+ */
+export function describeReport(a: AuditEntry): string | null {
+  const n = a.new_data ?? {}, o = a.old_data ?? {};
+  const pick = (k: string) => (k in n ? n[k] : o[k]);
+  const what = `${pick("period") === "monthly" ? "Monthly" : "Weekly"} report ${pick("period_key") ?? ""}${pick("is_test") ? " (test)" : ""}`;
+  const label = (s: unknown) => REPORT_STATUS_LABEL[s as ReportStatus] ?? String(s);
+  if (a.action === "insert") return `${what} created${n.status === "held" ? ", on hold" : ""}`;
+  if (a.action === "delete") return `${what} deleted`;
+  if (n.status !== o.status) {
+    if (n.status === "sending") return null;
+    return `${what}: ${label(o.status)} → ${label(n.status)}`;
+  }
+  if ("content" in n) return `${what}: report edited`;
+  const same = (k: string) => JSON.stringify(n[k]) === JSON.stringify(o[k]);
+  if (!same("subject") || !same("email_body") || !same("recipients") || !same("cc")) return `${what}: email edited`;
+  return null;
 }

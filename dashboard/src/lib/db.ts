@@ -1,10 +1,10 @@
 // Supabase implementation of Db. Every query runs as the signed-in user, so the
 // database's row-level security decides what comes back: nothing at all unless
 // the user is on the admin allowlist AND finished MFA this session.
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, FunctionsHttpError, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
 import { catalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, Quote, QuoteStatus, ServiceLine, ServiceRow, VaultConfig } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, Quote, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, VaultConfig } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -300,6 +300,8 @@ const db: Db = {
 
   async deleteClient(id) {
     const { error, count } = await sb.from("clients").delete({ count: "exact" }).eq("id", id);
+    // Only reports block this (everything else goes with the client).
+    if (error?.code === "23503") throw new Error("This client has patch reports, which are kept for the record. Set their status to Former instead.");
     fail(error);
     if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
   },
@@ -446,7 +448,116 @@ const db: Db = {
       .subscribe();
     return () => void sb.removeChannel(ch);
   },
+
+  async reports() {
+    // About four months back is plenty for the list; older ones stay in the database.
+    const since = new Date(Date.now() - 120 * 86400000).toISOString();
+    const { data, error } = await sb.from("reports").select(REPORT_LIST).gte("send_at", since).order("send_at", { ascending: false }).limit(500);
+    fail(error);
+    return (data ?? []).map(normReport);
+  },
+
+  async report(id) {
+    if (!UUID.test(id)) return null;
+    const { data, error } = await sb.from("reports").select(`${REPORT_LIST}, email_body, content, original`).eq("id", id).maybeSingle();
+    fail(error);
+    return data ? (normReport(data) as Report) : null;
+  },
+
+  async reportFiles(id) {
+    const { data, error } = await sb.from("report_files").select("kind, page, version, size, created_at").eq("report_id", id).order("kind").order("page");
+    fail(error);
+    return (data ?? []) as ReportFile[];
+  },
+
+  async reportPages(id) {
+    const { data, error } = await sb.rpc("report_pages", { p_report: id });
+    fail(error);
+    return ((data ?? []) as { page: number; version: number; png: string }[]).map((p) => ({ page: p.page, version: p.version, src: `data:image/png;base64,${p.png}` }));
+  },
+
+  async reportPdf(id, kind) {
+    const { data, error } = await sb.rpc("report_file", { p_report: id, p_kind: kind });
+    fail(error);
+    return (data as string | null) ?? null;
+  },
+
+  async reportActivity(id) {
+    if (!UUID.test(id)) return [];
+    const { data, error } = await sb.from("audit_log").select("*").eq("table_name", "reports").eq("row_id", id).order("at", { ascending: false }).limit(100);
+    fail(error);
+    return (data ?? []) as AuditEntry[];
+  },
+
+  async updateReport(id, patch) {
+    const { error, count } = await sb.from("reports").update(patch, { count: "exact" }).eq("id", id);
+    fail(reportError(error));
+    if (count === 0) throw new Error("Nothing was saved. Reload the report and try again.");
+  },
+
+  async moveReports(ids, from, to) {
+    if (!ids.length) return 0;
+    const { error, count } = await sb.from("reports").update({ status: to }, { count: "exact" }).in("id", ids).eq("status", from);
+    fail(reportError(error));
+    return count ?? 0;
+  },
+
+  async deleteReport(id) {
+    const { error, count } = await sb.from("reports").delete({ count: "exact" }).eq("id", id);
+    fail(reportError(error));
+    if (count === 0) throw new Error("Nothing was deleted. Reload and try again.");
+  },
+
+  async reportAction(id, action) {
+    const { data, error } = await sb.functions.invoke("report-action", { body: { action, report_id: id } });
+    if (error) {
+      let message = "Couldn't reach the report service. Try again.";
+      if (error instanceof FunctionsHttpError) {
+        try {
+          message = String((await error.context.json()).error ?? message);
+        } catch {
+          // keep the generic message
+        }
+      }
+      throw new Error(message);
+    }
+    return { started: (data as { started: "render" | "send" | null }).started };
+  },
+
+  async reportSettings() {
+    const { data, error } = await sb.from("report_settings").select("mode, auto_send_default, generate_time, send_time, sunday_review_email, updated_at").eq("id", 1).single();
+    fail(error);
+    return data as ReportSettings;
+  },
+
+  async saveReportSettings(patch) {
+    const { error, count } = await sb.from("report_settings").update(patch, { count: "exact" }).eq("id", 1);
+    fail(friendly(error));
+    if (count === 0) throw new Error("Nothing was saved. Try signing in again.");
+  },
+
+  subscribeReports(cb) {
+    // Rows can be large, so this is only a signal: the page refetches what it shows.
+    const ch = sb.channel("reports").on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => cb()).subscribe();
+    return () => void sb.removeChannel(ch);
+  },
 };
+
+const REPORT_LIST = "id, created_at, updated_at, client_id, period, period_key, period_start, period_end, is_test, status, send_at, recipients, cc, subject, failure_count, warnings, content_version, rendered_version, rendered_at, render_error, claimed_at, attempts, sent_at, error, clients(company, contact_name)";
+
+function normReport(r: Record<string, unknown>): ReportRow {
+  const c = r.clients as { company: string | null; contact_name: string | null } | null;
+  const { clients: _, ...rest } = r;
+  return { ...(rest as ReportRow), client_name: c?.company || c?.contact_name || "Unknown client" };
+}
+
+/** Report rule violations as sentences (the guard trigger's own messages are already plain). */
+function reportError(e: { message: string; code?: string } | null) {
+  if (!e) return null;
+  if (e.code === "23514") return { message: "Something isn't valid: check the recipients (1 to 10 real addresses), the subject, and the body." };
+  if (e.code === "42501") return { message: "That change isn't allowed here." };
+  return e;
+}
 
 // Postgres numerics arrive as strings; make them numbers once, here.
 function normLead(r: Record<string, unknown>): Lead {

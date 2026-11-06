@@ -1,9 +1,14 @@
 // Sample data for `npm run demo`. Never included in a production build
 // (vite.config.ts only aliases $db to this file in demo mode).
 import catalogSeed from "../../../tests/fixtures/catalog.json";
+import reportSeed from "../../../tests/fixtures/report-content.json";
+import weeklyPage1 from "./demo/report-weekly-1.png";
+import weeklyPage2 from "./demo/report-weekly-2.png";
+import monthlyPage1 from "./demo/report-monthly-1.png";
+import monthlyPage2 from "./demo/report-monthly-2.png";
 import { priceQuote } from "./catalog.ts";
 import { catalog as liveCatalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, ProjectStatus, Quote, QuoteStatus, ServiceCategory, ServiceRow, VaultConfig } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, ProjectStatus, Quote, QuoteStatus, Report, ReportContent, ReportPage, ReportSettings, ServiceCategory, ServiceRow, VaultConfig } from "./types.ts";
 
 const categories: ServiceCategory[] = catalogSeed.map((c, i) => ({ id: c.id, name: c.name, blurb: c.blurb, sort: i * 10 }));
 const services: ServiceRow[] = catalogSeed.flatMap((c) => c.services.map((s, j) => ({
@@ -62,6 +67,7 @@ for (let i = 0; i < 46; i++) {
 
 // A few existing clients: some converted from won leads, one added by hand.
 const clients: Client[] = [];
+const NO_REPORTS = { action1_group: null, report_recipients: [] as string[], report_cc: [] as string[], reports_enabled: false };
 const clientServices: ClientService[] = [];
 const packages: PackageRow[] = [
   { id: "essential", name: "Essential", rates: [10, 9.5, 9, 8.5], sort: 0 },
@@ -75,6 +81,7 @@ function clientFromLead(l: Lead): string {
   clients.push({
     id, created_at: l.updated_at, updated_at: l.updated_at, company: l.company, contact_name: l.name, email: l.email, phone: l.phone,
     address: null, status: "active", started_on: l.updated_at.slice(0, 10), workstations: q?.workstations ?? 0, servers: q?.servers ?? 0, notes: null, lead_id: l.id,
+    ...NO_REPORTS,
   });
   const devices = (q?.workstations ?? 0) + (q?.servers ?? 0);
   q?.items.forEach((it, i) => {
@@ -87,7 +94,7 @@ function clientFromLead(l: Lead): string {
 leads.filter((l) => l.status === "won").slice(0, 7).forEach(clientFromLead);
 {
   const id = uuid();
-  clients.push({ id, created_at: new Date(now - 400 * 86400000).toISOString(), updated_at: new Date(now - 20 * 86400000).toISOString(), company: "Starlight Hospice", contact_name: "Dana Ortiz", email: "dana@starlighthospice.org", phone: "3235550142", address: "1200 Sunset Blvd, Los Angeles, CA", status: "active", started_on: "2025-08-01", workstations: 42, servers: 3, notes: "Renews every August. Prefers calls over email.", lead_id: null });
+  clients.push({ id, created_at: new Date(now - 400 * 86400000).toISOString(), updated_at: new Date(now - 20 * 86400000).toISOString(), company: "Starlight Hospice", contact_name: "Dana Ortiz", email: "dana@starlighthospice.org", phone: "3235550142", address: "1200 Sunset Blvd, Los Angeles, CA", status: "active", started_on: "2025-08-01", workstations: 42, servers: 3, notes: "Renews every August. Prefers calls over email.", lead_id: null, ...NO_REPORTS });
   ([["mdr", "24/7 MDR", 650, 1], ["patching", "Patching", 10, 48], ["hipaa", "HIPAA Security Support", 400, 1], ["cloudbackup", "Microsoft 365 and Google Backup", 4, 42]] as const).forEach(([sid, nm, unit, qty], i) =>
     clientServices.push({ id: uuid(), client_id: id, service_id: sid, name: nm, billing: "monthly", unit_amount: unit, quantity: qty, amount: total(unit, qty), notes: i === 0 ? "Discounted 10% (3-year term)" : null, sort: i * 10 }));
 }
@@ -124,6 +131,88 @@ if (openLeads[0]) seedProject({ lead_id: openLeads[0].id }, "Email security clea
   ["dmarc", "SPF, DKIM, and DMARC", "once", 750, 1], ["filtering", "Email Filtering", "monthly", 4, 12],
 ]);
 if (openLeads[1]) seedProject({ lead_id: openLeads[1].id }, "Pentest before insurance renewal", "proposed", 35, null, [["pentest", "Penetration Testing", "once", 5000, 1]]);
+
+// Patch reports. Content and page images are made up (from the reports repo's
+// invented test snapshot); a demo client gets them, plus two converted clients
+// with sample addresses on the reserved .example domain.
+const reportSettings: ReportSettings = { mode: "preview", auto_send_default: true, generate_time: "12:00:00", send_time: "08:00:00", sunday_review_email: true, updated_at: new Date(now - 9 * 86400000).toISOString() };
+const reports: Report[] = [];
+const reportPages = new Map<string, ReportPage[]>();
+const reportListeners = new Set<() => void>();
+const reportsChanged = () => reportListeners.forEach((cb) => cb());
+{
+  const harbor = uuid();
+  clients.push({ id: harbor, created_at: new Date(now - 300 * 86400000).toISOString(), updated_at: new Date(now - 30 * 86400000).toISOString(), company: "Harbor Light Dental", contact_name: "Jordan Reyes", email: "jordan@harborlight.example", phone: "8185550190", address: null, status: "active", started_on: "2026-01-12", workstations: 8, servers: 0, notes: null, lead_id: null,
+    action1_group: "DEMO", report_recipients: ["office@harborlight.example"], report_cc: ["jordan@harborlight.example"], reports_enabled: true });
+  const others = clients.filter((c) => c.lead_id && c.status === "active").slice(0, 2);
+  others.forEach((c, i) => Object.assign(c, { action1_group: `DEMO${i + 2}`, report_recipients: [`it@client${i + 2}.example`], report_cc: [], reports_enabled: true }));
+
+  // Next Monday 8:00 AM (this browser's time) and the Monday before.
+  const d = new Date(now);
+  d.setDate(d.getDate() + (((8 - d.getDay()) % 7) || 7));
+  d.setHours(8, 0, 0, 0);
+  const nextMon = d.getTime();
+  const lastMon = nextMon - 7 * 86400000;
+  const ymd = (t: number) => { const x = new Date(t); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+  const isoWeek = (t: number) => {
+    const x = new Date(Date.UTC(new Date(t).getFullYear(), new Date(t).getMonth(), new Date(t).getDate()));
+    x.setUTCDate(x.getUTCDate() + 4 - (x.getUTCDay() || 7));
+    const y = x.getUTCFullYear();
+    return `${y}-W${String(Math.ceil(((x.getTime() - Date.UTC(y, 0, 1)) / 86400000 + 1) / 7)).padStart(2, "0")}`;
+  };
+  const weeklyContent = reportSeed.weekly.content as ReportContent;
+  const monthlyContent = reportSeed.monthly.content as ReportContent;
+  const renamed = (c: ReportContent, name: string): ReportContent => ({ ...structuredClone(c), title: name, doc_title: c.doc_title.replace("Harbor Light Dental", name) });
+  const add = (o: { client: Client; period: "weekly" | "monthly"; content: ReportContent; email: { subject: string; body: string }; sendAt: number; status: Report["status"]; test?: boolean; warnings?: string[]; error?: string | null; pages?: string[] }) => {
+    const id = uuid();
+    const created = new Date(o.sendAt - 20 * 3600000).toISOString();
+    const friday = ymd(o.sendAt - 3 * 86400000);
+    const lastMonth = new Date(new Date(o.sendAt).getFullYear(), new Date(o.sendAt).getMonth() - 1, 1);
+    const monthKey = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
+    const name = o.client.company ?? "Client";
+    const subject = o.email.subject.replace("Harbor Light Dental", name);
+    const body = o.email.body.replace("Harbor Light Dental", name);
+    reports.push({
+      id, created_at: created, updated_at: created, client_id: o.client.id, client_name: name, period: o.period,
+      period_key: o.period === "weekly" ? isoWeek(o.sendAt - 86400000) : monthKey,
+      period_start: o.period === "weekly" ? friday : `${monthKey}-01`, period_end: o.period === "weekly" ? friday : ymd(new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0).getTime()),
+      is_test: !!o.test, status: o.status, send_at: new Date(o.sendAt).toISOString(), recipients: o.client.report_recipients, cc: o.client.report_cc,
+      subject, email_body: body, content: o.content, original: { content: structuredClone(o.content), subject, email_body: body },
+      failure_count: o.period === "weekly" ? 5 : 4, warnings: o.warnings ?? [], content_version: 1, rendered_version: 1, rendered_at: created, render_error: null,
+      claimed_at: o.status === "sent" || o.status === "failed" ? new Date(o.sendAt + 120000).toISOString() : null, attempts: o.status === "sent" || o.status === "failed" ? 1 : 0,
+      sent_at: o.status === "sent" ? new Date(o.sendAt + 240000).toISOString() : null, error: o.error ?? null,
+    });
+    if (o.pages && o.status !== "sent") reportPages.set(id, o.pages.map((src, i) => ({ page: i + 1, version: 1, src })));
+  };
+  const h = clients.find((c) => c.id === harbor)!;
+  add({ client: h, period: "weekly", content: weeklyContent, email: reportSeed.weekly.email, sendAt: nextMon, status: "scheduled", pages: [weeklyPage1, weeklyPage2] });
+  add({ client: h, period: "monthly", content: monthlyContent, email: reportSeed.monthly.email, sendAt: nextMon, status: "held", pages: [monthlyPage1, monthlyPage2] });
+  add({ client: h, period: "weekly", content: weeklyContent, email: reportSeed.weekly.email, sendAt: nextMon, status: "held", test: true, pages: [weeklyPage1, weeklyPage2] });
+  add({ client: h, period: "weekly", content: weeklyContent, email: reportSeed.weekly.email, sendAt: lastMon, status: "sent" });
+  if (others[0]) {
+    add({ client: others[0], period: "weekly", content: renamed(weeklyContent, others[0].company ?? "Client"), email: reportSeed.weekly.email, sendAt: nextMon, status: "held",
+      warnings: [`No patch run this week. The report repeats the run from ${ymd(lastMon - 3 * 86400000)}.`] });
+    add({ client: others[0], period: "weekly", content: renamed(weeklyContent, others[0].company ?? "Client"), email: reportSeed.weekly.email, sendAt: lastMon, status: "sent" });
+  }
+  if (others[1]) {
+    add({ client: others[1], period: "weekly", content: renamed(weeklyContent, others[1].company ?? "Client"), email: reportSeed.weekly.email, sendAt: nextMon, status: "scheduled" });
+    add({ client: others[1], period: "weekly", content: renamed(weeklyContent, others[1].company ?? "Client"), email: reportSeed.weekly.email, sendAt: lastMon, status: "failed",
+      error: "Graph sendMail failed: HTTP 403 ErrorAccessDenied" });
+  }
+}
+/** Like the database's audit trigger: no big columns, content only when it changed. */
+function logReport(action: AuditEntry["action"], before: Report | null, after: Report | null) {
+  const light = (r: Report | null, keepContent: boolean) => {
+    if (!r) return null;
+    const { original: _o, content, ...rest } = r;
+    return keepContent ? { ...rest, content } : rest;
+  };
+  const contentChanged = !!before && !!after && JSON.stringify(before.content) !== JSON.stringify(after.content);
+  log("reports", action, (after ?? before)!.id, light(before, contentChanged), light(after, contentChanged));
+}
+const ALLOWED: Record<string, string[]> = {
+  scheduled: ["held", "cancelled"], held: ["scheduled", "cancelled"], failed: ["scheduled", "held", "cancelled"], cancelled: ["held", "scheduled"], sending: ["sent", "failed"], sent: [],
+};
 
 const hiddenIds = new Set<number>();
 // Like the database's audit trigger: credentials are logged without their ciphertext.
@@ -292,7 +381,7 @@ const db: Db = {
   clientServices: (id) => wait(clientServices.filter((s) => s.client_id === id).sort((a, b) => a.sort - b.sort)),
   async createClient(c) {
     const id = uuid(), at = new Date().toISOString();
-    clients.push({ ...c, id, created_at: at, updated_at: at });
+    clients.push({ ...NO_REPORTS, ...c, id, created_at: at, updated_at: at });
     log("clients", "insert", id, null, { ...c });
     return id;
   },
@@ -302,6 +391,7 @@ const db: Db = {
     Object.assign(c, patch, { updated_at: new Date().toISOString() });
   },
   async deleteClient(id) {
+    if (reports.some((r) => r.client_id === id)) throw new Error("This client has patch reports, which are kept for the record. Set their status to Former instead.");
     clients.splice(clients.findIndex((x) => x.id === id), 1);
     for (let i = clientServices.length - 1; i >= 0; i--) if (clientServices[i]!.client_id === id) clientServices.splice(i, 1);
     projects.filter((p) => p.client_id === id).forEach((p) => dropProject(p.id));
@@ -420,6 +510,87 @@ const db: Db = {
   subscribe(cb) {
     listeners.add(cb);
     return () => listeners.delete(cb);
+  },
+  reports: () => wait(reports.map(({ content: _c, original: _o, email_body: _b, ...r }) => r).sort((a, b) => b.send_at.localeCompare(a.send_at))),
+  report: (id) => wait(reports.find((r) => r.id === id) ?? null),
+  reportFiles: (id) => {
+    const r = reports.find((x) => x.id === id);
+    if (!r || !r.rendered_version) return wait([]);
+    const at = r.rendered_at ?? r.created_at;
+    return wait([
+      { kind: "client" as const, page: 0, version: r.rendered_version, size: 34239, created_at: at },
+      { kind: "internal" as const, page: 0, version: r.rendered_version, size: 41615, created_at: at },
+      ...(reportPages.get(id) ?? []).map((p) => ({ kind: "page" as const, page: p.page, version: r.rendered_version, size: 30000, created_at: at })),
+    ]);
+  },
+  reportPages: (id) => wait(reportPages.get(id) ?? []),
+  reportPdf: async () => {
+    throw new Error("The demo has no PDFs to download. The real panel downloads the rendered PDF.");
+  },
+  reportActivity: (id) => wait(audit.filter((a) => a.table_name === "reports" && a.row_id === id).sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
+  async updateReport(id, patch) {
+    const r = reports.find((x) => x.id === id)!;
+    const before = structuredClone(r);
+    if ((r.status === "sending" || r.status === "sent") && Object.keys(patch).some((k) => k !== "status")) throw new Error(`This report is ${r.status} and can't be edited`);
+    if (patch.status && patch.status !== r.status && !ALLOWED[r.status]!.includes(patch.status)) throw new Error(`A report can't go from ${r.status} to ${patch.status}`);
+    if (patch.recipients && (patch.recipients.length < 1 || patch.recipients.length > 10)) throw new Error("Something isn't valid: check the recipients (1 to 10 real addresses), the subject, and the body.");
+    Object.assign(r, patch, { updated_at: new Date().toISOString() });
+    if (patch.content && JSON.stringify(patch.content) !== JSON.stringify(before.content)) r.content_version++;
+    if (patch.status === "sent") r.sent_at = new Date().toISOString();
+    if (patch.status === "failed" && before.status === "sending") r.error = "Marked as not sent from the dashboard.";
+    if (patch.status === "scheduled") r.error = null;
+    logReport("update", before, r);
+    reportsChanged();
+  },
+  async moveReports(ids, from, to) {
+    let n = 0;
+    for (const r of reports.filter((x) => ids.includes(x.id) && x.status === from)) {
+      await db.updateReport(r.id, { status: to });
+      n++;
+    }
+    return n;
+  },
+  async deleteReport(id) {
+    const r = reports.find((x) => x.id === id)!;
+    if (r.status === "sending" || (r.status === "sent" && !r.is_test)) throw new Error("Sent reports are kept for the record and can't be deleted");
+    reports.splice(reports.indexOf(r), 1);
+    logReport("delete", r, null);
+    reportsChanged();
+  },
+  async reportAction(id, action) {
+    const r = reports.find((x) => x.id === id)!;
+    if (r.status === "sending") throw new Error("This report is already sending.");
+    if (r.status === "sent") throw new Error("This report was already sent.");
+    if (action === "render") {
+      if (r.rendered_version >= r.content_version) return { started: null };
+      // The real panel takes about a minute (a GitHub run); the demo keeps the sample pages.
+      setTimeout(() => { r.rendered_version = r.content_version; r.rendered_at = new Date().toISOString(); reportsChanged(); }, 2500);
+      return { started: "render" };
+    }
+    await db.updateReport(id, { status: "scheduled", send_at: new Date().toISOString() });
+    setTimeout(() => {
+      const before = structuredClone(r);
+      Object.assign(r, { status: "sending", claimed_at: new Date().toISOString(), attempts: r.attempts + 1 });
+      logReport("update", before, r);
+      reportsChanged();
+      setTimeout(() => {
+        const b2 = structuredClone(r);
+        Object.assign(r, { status: "sent", sent_at: new Date().toISOString(), rendered_version: r.content_version });
+        reportPages.delete(id);
+        logReport("update", b2, r);
+        reportsChanged();
+      }, 2500);
+    }, 1500);
+    return { started: "send" };
+  },
+  reportSettings: () => wait(reportSettings),
+  async saveReportSettings(patch) {
+    log("report_settings", "update", "settings", { ...reportSettings }, { ...reportSettings, ...patch });
+    Object.assign(reportSettings, patch, { updated_at: new Date().toISOString() });
+  },
+  subscribeReports(cb) {
+    reportListeners.add(cb);
+    return () => reportListeners.delete(cb);
   },
 };
 

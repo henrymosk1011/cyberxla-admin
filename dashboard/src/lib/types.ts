@@ -55,7 +55,7 @@ export type AuditEntry = {
   actor_role: string;
   action: "insert" | "update" | "delete";
   table_name: "leads" | "quotes" | "lead_notes" | "clients" | "client_services" | "services" | "service_categories"
-    | "projects" | "project_services" | "project_credentials";
+    | "projects" | "project_services" | "project_credentials" | "reports" | "report_settings";
   row_id: string | null;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
@@ -152,6 +152,26 @@ export interface Db {
   deleteCredential(id: string): Promise<void>;
 
   subscribe(cb: (e: ChangeEvent) => void): () => void;
+
+  /** Recent reports (about four months), newest send first. Light columns only. */
+  reports(): Promise<ReportRow[]>;
+  report(id: string): Promise<Report | null>;
+  reportFiles(id: string): Promise<ReportFile[]>;
+  /** The client PDF's pages as image sources, in order. */
+  reportPages(id: string): Promise<ReportPage[]>;
+  /** A PDF as base64, or null if it hasn't been rendered. */
+  reportPdf(id: string, kind: "client" | "internal"): Promise<string | null>;
+  reportActivity(id: string): Promise<AuditEntry[]>;
+  updateReport(id: string, patch: ReportPatch): Promise<void>;
+  /** Move these reports from one status to another (Hold all, Resume all). Returns how many moved. */
+  moveReports(ids: string[], from: ReportStatus, to: ReportStatus): Promise<number>;
+  deleteReport(id: string): Promise<void>;
+  /** Send now, or re-render the PDFs after an edit (report-action Edge Function). */
+  reportAction(id: string, action: "render" | "send_now"): Promise<{ started: "render" | "send" | null }>;
+  reportSettings(): Promise<ReportSettings>;
+  saveReportSettings(patch: Partial<Omit<ReportSettings, "updated_at">>): Promise<void>;
+  /** Called on any change to reports; refetch what you show. */
+  subscribeReports(cb: () => void): () => void;
 }
 
 export type Unit = "dev" | "mo" | "once" | "devonce";
@@ -195,9 +215,15 @@ export type Client = {
   servers: number;
   notes: string | null;
   lead_id: string | null;
+  /** Patch reports: the client's Action1 group, who gets them, and whether they are on. */
+  action1_group: string | null;
+  report_recipients: string[];
+  report_cc: string[];
+  reports_enabled: boolean;
 };
 
-export type ClientInput = Omit<Client, "id" | "created_at" | "updated_at">;
+type ReportFields = "action1_group" | "report_recipients" | "report_cc" | "reports_enabled";
+export type ClientInput = Omit<Client, "id" | "created_at" | "updated_at" | ReportFields> & Partial<Pick<Client, ReportFields>>;
 
 /** A priced service on a client or project. */
 export type ServiceLine = {
@@ -250,3 +276,101 @@ export type Credential = {
 export type CredentialInput = Pick<Credential, "id" | "project_id" | "label" | "secret" | "sort">;
 
 export type ToastMsg = { id: number; title: string; body: string; href?: string };
+
+// ---------------------------------------------------------------------------
+// Patch reports (made in the cyberxla-patch-reports repo, edited here)
+// ---------------------------------------------------------------------------
+
+export const REPORT_STATUSES = ["scheduled", "held", "sending", "sent", "failed", "cancelled"] as const;
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+export type ReportPeriod = "weekly" | "monthly";
+
+export type ReportSettings = {
+  mode: "preview" | "live";
+  auto_send_default: boolean;
+  /** "12:00:00", Pacific */
+  generate_time: string;
+  send_time: string;
+  sunday_review_email: boolean;
+  updated_at: string;
+};
+
+export const TONES = ["good", "warn", "bad", "info", "lime"] as const;
+export type Tone = (typeof TONES)[number];
+
+/** One computer: its row in "Your computers" and its card in "Updates installed". */
+export type ReportComputer = {
+  name: string;
+  /** Weekly: Success, Failed or No result. Monthly: "4 of 5". */
+  run: string;
+  pending: string;
+  crit: string;
+  status: string;
+  tone: Tone;
+  hidden: boolean;
+  updates: { count: number; items: { name: string; count: number; severity: string | null }[]; empty: string };
+};
+
+/**
+ * Every client facing string in the PDF (lib/content.js in the reports repo).
+ * Text may use **bold**. Labels the PDF shows in capitals are stored in normal case.
+ */
+export type ReportContent = {
+  v: 1;
+  period: ReportPeriod;
+  doc_title: string;
+  label: string;
+  title: string;
+  subtitle: string;
+  headline: string;
+  pill: { text: string; tone: Tone };
+  kpis: { value: string; label: string; note?: string | null; highlight?: boolean }[];
+  weeks: { title: string; bars: { pct: number; label: string; sub: string }[] } | null;
+  did: { title: string; items: { title: string; text: string }[] };
+  computers: { title: string; columns: { key: string; label: string }[]; list: ReportComputer[] };
+  updates_title: string;
+  security: { title: string; text: string; apps_intro: string; apps: { name: string; detail: string }[]; note: string };
+  next_window: { label: string; when: string; note: string };
+};
+
+/** A report as listed (no content). */
+export type ReportRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  client_id: string;
+  client_name: string;
+  period: ReportPeriod;
+  /** 2026-W45 or 2026-10 */
+  period_key: string;
+  period_start: string;
+  period_end: string;
+  is_test: boolean;
+  status: ReportStatus;
+  send_at: string;
+  recipients: string[];
+  cc: string[];
+  subject: string;
+  failure_count: number;
+  warnings: string[];
+  content_version: number;
+  rendered_version: number;
+  rendered_at: string | null;
+  render_error: string | null;
+  claimed_at: string | null;
+  attempts: number;
+  sent_at: string | null;
+  error: string | null;
+};
+
+export type Report = ReportRow & {
+  email_body: string;
+  content: ReportContent;
+  /** As generated, for Reset to generated. */
+  original: { content: ReportContent; subject: string; email_body: string };
+};
+
+export type ReportPatch = Partial<Pick<Report, "status" | "send_at" | "recipients" | "cc" | "subject" | "email_body" | "content">>;
+export type ReportFile = { kind: "client" | "internal" | "page"; page: number; version: number; size: number; created_at: string };
+/** src is a data: URL (or a bundled image in the demo). */
+export type ReportPage = { page: number; version: number; src: string };
