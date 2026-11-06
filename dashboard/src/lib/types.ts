@@ -365,6 +365,8 @@ export type ReportContent = {
   kpis: { value: string; label: string; note?: string | null; highlight?: boolean }[];
   weeks: { title: string; bars: { pct: number; label: string; sub: string }[] } | null;
   did: { title: string; items: { title: string; text: string }[] };
+  /** Optional one-off section (a router replaced, a new computer set up), added by hand. Prints first on page 2. */
+  extra?: { title: string; items: { title: string; text: string }[] } | null;
   computers: { title: string; columns: { key: string; label: string }[]; list: ReportComputer[] };
   updates_title: string;
   security: { title: string; text: string; apps_intro: string; apps: { name: string; detail: string }[]; note: string };

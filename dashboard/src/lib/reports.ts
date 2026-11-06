@@ -179,6 +179,10 @@ export function contentProblem(c: unknown): string | null {
     for (const [i, b] of c.weeks.bars.entries()) if (!isObj(b) || !Number.isFinite(b.pct)) return `weeks.bars[${i}].pct must be a number.`;
   }
   if (!isObj(c.did) || !Array.isArray(c.did.items)) return "did.items must be a list.";
+  if (c.extra !== null && c.extra !== undefined) {
+    if (!isObj(c.extra) || !isText(c.extra.title) || !Array.isArray(c.extra.items)) return "extra needs a title and items (or set extra to null).";
+    for (const [i, it] of c.extra.items.entries()) if (!isObj(it) || !isText(it.title) || !isText(it.text)) return `extra.items[${i}] needs a title and text.`;
+  }
   if (!isObj(c.computers) || !Array.isArray(c.computers.columns) || !Array.isArray(c.computers.list)) return "computers needs columns and list.";
   for (const [i, r] of c.computers.list.entries()) {
     if (!isObj(r) || !isText(r.name)) return `computers.list[${i}].name must be text.`;

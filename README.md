@@ -190,6 +190,8 @@ Monday, send time        every report still scheduled goes out; held ones don't
   week. Send now shows exactly who it goes to first.
 - **Preview mode** (the starting mode) sends every report to you, tagged with
   who it's for. Switch to **Live** in Reports, Settings.
+- **Extra section** on any report, for one-off work like a router replaced:
+  a title and items, only on that report, printed first on page 2.
 - **Report template** (Reports, Template): the wording and order every new
   report starts from, including the What we did list. Saving it changes reports
   generated from then on; reports already made don't change. On a report,
