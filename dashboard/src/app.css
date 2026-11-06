@@ -38,6 +38,9 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: var(--plane); color: var(--text); }
+/* While a popup (lightbox, confirm, form) is open, the page behind it stays put.
+   The gutter keeps the page from shifting sideways when its scrollbar goes away. */
+html:has(dialog[open]) { overflow: hidden; scrollbar-gutter: stable; }
 body {
   font-family: var(--sans);
   font-size: 15px;

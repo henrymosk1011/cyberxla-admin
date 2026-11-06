@@ -69,7 +69,8 @@
   h2 { font-size: 16px; font-weight: 600; }
   h2 span { margin-left: 8px; font-weight: 500; color: var(--text-2); }
   .ctl { display: flex; gap: 8px; }
-  .frame { overflow: auto; padding: 16px; background: var(--plane); }
+  /* Scrolling past the top or bottom of the page image stops here, not on the page behind. */
+  .frame { overflow: auto; overscroll-behavior: contain; padding: 16px; background: var(--plane); }
   img { display: block; width: 100%; max-width: 935px; height: auto; margin: 0 auto; border-radius: 4px; background: #fff; }
   @media (max-width: 640px) {
     .frame { padding: 8px; }
