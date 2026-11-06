@@ -8,6 +8,10 @@
 
   let { client, onsaved }: { client: Client; onsaved: () => void } = $props();
 
+  // Until migration 0010 runs these columns don't exist; show the card empty instead of breaking the page.
+  const to0 = $derived((client.report_recipients ?? []).join(", "));
+  const cc0 = $derived((client.report_cc ?? []).join(", "));
+
   let form = $state({ group: "", to: "", cc: "", enabled: false });
   let reports = $state<ReportRow[]>([]);
   let error = $state("");
@@ -16,18 +20,17 @@
 
   // Reset the form only when these saved values change, not every time the
   // client page reloads (saving notes elsewhere shouldn't wipe edits here).
-  const savedKey = $derived(JSON.stringify([client.id, client.action1_group, client.report_recipients, client.report_cc, client.reports_enabled]));
+  const savedKey = $derived(JSON.stringify([client.id, client.action1_group, to0, cc0, client.reports_enabled]));
   $effect(() => {
     void savedKey;
-    form = { group: client.action1_group ?? "", to: client.report_recipients.join(", "), cc: client.report_cc.join(", "), enabled: client.reports_enabled };
+    form = { group: client.action1_group ?? "", to: to0, cc: cc0, enabled: !!client.reports_enabled };
   });
   $effect(() => {
     const id = client.id;
     db.reports().then((r) => (reports = r.filter((x) => x.client_id === id && !x.is_test).slice(0, 5)), () => {});
   });
 
-  const dirty = $derived(form.group !== (client.action1_group ?? "") || form.to !== client.report_recipients.join(", ")
-    || form.cc !== client.report_cc.join(", ") || form.enabled !== client.reports_enabled);
+  const dirty = $derived(form.group !== (client.action1_group ?? "") || form.to !== to0 || form.cc !== cc0 || form.enabled !== !!client.reports_enabled);
 
   async function save(e: SubmitEvent) {
     e.preventDefault();

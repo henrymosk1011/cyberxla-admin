@@ -116,7 +116,7 @@
           {#each on as c (c.id)}
             <li>
               <a href="#/clients/{c.id}"><strong>{name(c)}</strong></a>
-              <span class="muted">Action1 group {c.action1_group} · to {c.report_recipients.join(", ")}{c.report_cc.length ? ` · cc ${c.report_cc.join(", ")}` : ""}{c.status !== "active" ? ` · ${c.status}` : ""}</span>
+              <span class="muted">Action1 group {c.action1_group} · to {(c.report_recipients ?? []).join(", ")}{c.report_cc?.length ? ` · cc ${c.report_cc.join(", ")}` : ""}{c.status !== "active" ? ` · ${c.status}` : ""}</span>
             </li>
           {/each}
         </ul>
