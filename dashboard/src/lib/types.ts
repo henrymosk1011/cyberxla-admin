@@ -167,7 +167,7 @@ export interface Db {
   moveReports(ids: string[], from: ReportStatus, to: ReportStatus): Promise<number>;
   deleteReport(id: string): Promise<void>;
   /** Send now, or re-render the PDFs after an edit (report-action Edge Function). */
-  reportAction(id: string, action: "render" | "send_now"): Promise<{ started: "render" | "send" | null }>;
+  reportAction(id: string, action: "render" | "rebuild" | "send_now"): Promise<{ started: "render" | "send" | null }>;
   reportSettings(): Promise<ReportSettings>;
   saveReportSettings(patch: Partial<Omit<ReportSettings, "updated_at">>): Promise<void>;
   /** Called on any change to reports; refetch what you show. */

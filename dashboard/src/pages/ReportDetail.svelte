@@ -17,7 +17,9 @@
   let client = $state<Client | null>(null);
   let settings = $state<ReportSettings | null>(null);
   let pages = $state<ReportPage[]>([]);
-  let pagesFor = -1;
+  let pagesFor = "";
+  // Rebuild pressed: the build time and error it started from, so we can tell when it's done.
+  let rebuild = $state<{ at: string | null; err: string | null; started: number } | null>(null);
   let history = $state<AuditEntry[]>([]);
   let error = $state("");
   let notice = $state("");
@@ -64,9 +66,18 @@
       client = await db.client(r.client_id);
       if (fresh || !dirty) takeDrafts(r);
       else if (JSON.stringify(norm(r.content)) !== base.content) changedElsewhere = true;
-      if (r.rendered_version !== pagesFor) {
+      // A Rebuild keeps the version but changes the build time, so key on both.
+      const builtKey = `${r.rendered_version} ${r.rendered_at ?? ""}`;
+      if (builtKey !== pagesFor) {
         pages = await db.reportPages(id);
-        pagesFor = r.rendered_version;
+        pagesFor = builtKey;
+      }
+      if (rebuild && r.rendered_at !== rebuild.at) {
+        rebuild = null;
+        notice = "Rebuilt. The preview and PDF are up to date.";
+      } else if (rebuild && r.render_error && r.render_error !== rebuild.err) {
+        rebuild = null;
+        error = `The PDF couldn't be rebuilt: ${r.render_error}`;
       }
       error = "";
     } catch (e) {
@@ -76,7 +87,8 @@
 
   $effect(() => {
     void id;
-    pagesFor = -1;
+    pagesFor = "";
+    rebuild = null;
     load(true);
     let pending: ReturnType<typeof setTimeout> | undefined;
     const unsub = db.subscribeReports(() => {
@@ -94,6 +106,8 @@
   const can = $derived(report ? reportActions(report, now) : null);
   const locked = $derived(!can?.edit);
   const rendering = $derived(!!report && report.content_version > report.rendered_version && !locked);
+  // A rebuild takes about a minute; after 12 with no news, offer the button again.
+  const rebuilding = $derived(!!rebuild && now - rebuild.started < 12 * 60_000);
   const dashes = $derived(draft ? dashFields({ report: draft, email: { subject: mail.subject, body: mail.body } }) : []);
   const entries = $derived(history.map((a) => ({ a, text: describeReport(a) })).filter((e) => e.text));
   const shown = $derived(draft ? draft.computers.list.filter((c) => !c.hidden).length : 0);
@@ -206,6 +220,18 @@
       error = e instanceof Error ? e.message : "Couldn't delete.";
     }
   }
+  /** Build the PDF and preview again from what's saved, even with no changes. */
+  async function rebuildPdf() {
+    if (!report) return;
+    if (dirty) return (error = "You have unsaved changes. Save them (that rebuilds the PDF too) or Discard them first.");
+    const from = { at: report.rendered_at, err: report.render_error, started: Date.now() };
+    now = from.started;
+    await act(async () => {
+      await db.reportAction(id, "rebuild");
+      rebuild = from;
+    }, "Rebuilding the PDF. The preview updates in about a minute.");
+  }
+
   async function retryRender() {
     await act(() => db.reportAction(id, "render"), "The preview is updating.");
   }
@@ -536,15 +562,21 @@
         <div class="card-head">
           <h2>Preview</h2>
           <span class="sub" role="status">
-            {#if report.render_error && rendering}Preview failed{:else if rendering}Rebuilding the PDF with your changes, about a minute{:else if pages.length}Up to date{report.rendered_at ? `, built ${dateTime(report.rendered_at)}` : ""}{/if}
+            {#if report.render_error && rendering}Preview failed{:else if rendering}Rebuilding the PDF with your changes, about a minute{:else if rebuilding}Rebuilding the PDF, about a minute{:else if pages.length}Up to date{report.rendered_at ? `, built ${dateTime(report.rendered_at)}` : ""}{/if}
           </span>
         </div>
         {#if report.render_error && rendering}
           <p class="error">The PDF couldn't be built: {report.render_error}</p>
           <button class="btn sm" disabled={busy} onclick={retryRender}>Try again</button>
         {/if}
+        {#if !locked}
+          <div class="rebuild">
+            <button class="btn sm" disabled={busy || rebuilding || rendering} onclick={rebuildPdf}>{rebuilding || rendering ? "Rebuilding…" : "Rebuild PDF"}</button>
+            <span class="hint">Builds the PDF and preview again from this report as saved.</span>
+          </div>
+        {/if}
         {#if pages.length}
-          <div class="pages" class:stale={rendering} role="region" aria-label="Preview pages">
+          <div class="pages" class:stale={rendering || rebuilding} role="region" aria-label="Preview pages">
             {#each pages as p, i (p.page)}
               <button type="button" class="pagebtn" onclick={(e) => lightbox?.open(i, e.currentTarget)}>
                 <img src={p.src} alt="Page {p.page} of {pages.length} of the client PDF" loading="lazy" width="935" height="1210" />
@@ -562,6 +594,7 @@
           <button class="btn sm" onclick={() => download("client")}>Download PDF</button>
           <button class="btn sm ghost" onclick={() => download("internal")}>Internal PDF</button>
         </div>
+
       </section>
     </aside>
   </div>
@@ -638,6 +671,7 @@
   .preview .sub { font-size: 13px; color: var(--text-2); }
   .pages { display: flex; flex-direction: column; gap: 10px; transition: opacity 0.3s; }
   .pages.stale { opacity: 0.55; }
+  .rebuild { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; }
   /* position: relative keeps the hidden "open larger" text inside the scrolling strip on phones. */
   .pagebtn { position: relative; display: block; padding: 0; border: 0; background: none; border-radius: 6px; cursor: zoom-in; transition: transform 0.2s var(--ease); }
   .pagebtn:hover { transform: translateY(-2px); }

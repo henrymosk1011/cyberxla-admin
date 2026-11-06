@@ -561,8 +561,8 @@ const db: Db = {
     const r = reports.find((x) => x.id === id)!;
     if (r.status === "sending") throw new Error("This report is already sending.");
     if (r.status === "sent") throw new Error("This report was already sent.");
-    if (action === "render") {
-      if (r.rendered_version >= r.content_version) return { started: null };
+    if (action === "render" || action === "rebuild") {
+      if (action === "render" && r.rendered_version >= r.content_version) return { started: null };
       // The real panel takes about a minute (a GitHub run); the demo keeps the sample pages.
       setTimeout(() => { r.rendered_version = r.content_version; r.rendered_at = new Date().toISOString(); reportsChanged(); }, 2500);
       return { started: "render" };

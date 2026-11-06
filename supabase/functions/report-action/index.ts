@@ -1,4 +1,4 @@
-// report-action: the dashboard's Send now and re-render buttons for patch reports.
+// report-action: the dashboard's Send now, re-render and Rebuild buttons for patch reports.
 //
 // 1. POST only, from admin.cyberx.la only, with a small body cap.
 // 2. Every database call runs as the signed-in user (their token plus the
@@ -8,7 +8,8 @@
 // 4. Send now marks the report scheduled for right now (the database's guard
 //    checks the move) and starts the Send reports workflow for it, which
 //    claims it in one step, so it can't go out twice. Render starts the Render
-//    report workflow when the PDFs are behind the latest edits.
+//    report workflow when the PDFs are behind the latest edits; Rebuild starts
+//    it with force, so it renders even when they're up to date.
 // 5. GitHub is called with a fine grained token that can only run Actions on
 //    the reports repo, and it expires.
 //
@@ -87,8 +88,8 @@ function asUser(authorization: string) {
   };
 }
 
-async function dispatch(workflow: "send.yml" | "render.yml", reportId: string) {
-  const { url, init } = dispatchRequest(env("REPORTS_REPO"), workflow, reportId, env("GH_ACTIONS_TOKEN"));
+async function dispatch(workflow: "send.yml" | "render.yml", reportId: string, force = false) {
+  const { url, init } = dispatchRequest(env("REPORTS_REPO"), workflow, reportId, env("GH_ACTIONS_TOKEN"), force);
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) });
   if (res.status !== 204) {
     const detail = res.status === 401 ? "the GitHub token has expired or was revoked" : `GitHub answered ${res.status}`;
@@ -128,6 +129,10 @@ Deno.serve(async (req) => {
       await dispatch("render.yml", reportId);
       return reply(200, { ok: true, started: "render" }, headers);
     }
+    if (action === "rebuild") {
+      await dispatch("render.yml", reportId, true);
+      return reply(200, { ok: true, started: "render" }, headers);
+    }
 
     if (!(await db.scheduleNow(reportId, r.status))) return reply(409, { error: "The report changed a moment ago. Reload and try again." }, headers);
     await dispatch("send.yml", reportId);
@@ -136,7 +141,7 @@ Deno.serve(async (req) => {
     const err = e as Error & { status?: number; github?: boolean; dbMessage?: string };
     console.error("report-action", action, reportId, err.message);
     if (err.github) {
-      const what = action === "send_now" ? "It's marked to send now, but the send didn't start" : "The preview didn't start updating";
+      const what = action === "send_now" ? "It's marked to send now, but the send didn't start" : action === "rebuild" ? "The rebuild didn't start" : "The preview didn't start updating";
       return reply(502, { error: `${what}: ${err.message}. Try again in a minute.` }, headers);
     }
     if (err.status === 401) return reply(401, { error: "Sign in again." }, headers);
