@@ -48,6 +48,10 @@
     if (h === "/clients") return { page: "clients" as const };
     if (h === "/services") return { page: "services" as const };
     if (h === "/projects") return { page: "projects" as const };
+    if (h === "/reports") return { page: "reports" as const };
+    if (h === "/reports/settings") return { page: "report-settings" as const };
+    const r = h.match(/^\/reports\/([^/]+)$/);
+    if (r) return UUID.test(r[1]!) ? { page: "report" as const, id: r[1]! } : { page: "notfound" as const };
     const c = h.match(/^\/clients\/([^/]+)$/);
     if (c) return UUID.test(c[1]!) ? { page: "client" as const, id: c[1]! } : { page: "notfound" as const };
     const p = h.match(/^\/projects\/([^/]+)$/);
@@ -150,6 +154,7 @@
     { href: "#/board", label: "Board", match: ["board"], icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
     { href: "#/clients", label: "Clients", match: ["clients", "client"], icon: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01" },
     { href: "#/projects", label: "Projects", match: ["projects", "project"], icon: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18" },
+    { href: "#/reports", label: "Reports", match: ["reports", "report", "report-settings"], icon: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6M10 9h2" },
     { href: "#/services", label: "Services", match: ["services"], icon: "M12 2 3 7l9 5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5" },
   ];
 
@@ -228,6 +233,13 @@
         <ProjectDetail id={route.id} {version} {clients} {leads} quotes={activeQuotes} />
       {:else if route.page === "services"}
         <Services />
+      {:else if route.page === "reports"}
+        <!-- The report pages load on first visit, so they don't slow down the rest. -->
+        {#await import("./pages/Reports.svelte") then { default: Reports }}<Reports />{/await}
+      {:else if route.page === "report"}
+        {#await import("./pages/ReportDetail.svelte") then { default: ReportDetail }}<ReportDetail id={route.id} />{/await}
+      {:else if route.page === "report-settings"}
+        {#await import("./pages/ReportSettings.svelte") then { default: ReportSettings }}<ReportSettings {clients} />{/await}
       {:else}
         <p class="empty">Page not found. <a href="#/">Go to overview</a></p>
       {/if}

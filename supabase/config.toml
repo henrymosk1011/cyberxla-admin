@@ -3,3 +3,9 @@
 # instead of requiring a Supabase JWT.
 [functions.submit-quote]
 verify_jwt = false
+
+# The dashboard's patch report buttons. The function checks the caller itself:
+# it calls public.is_admin() with the caller's token (allowlist plus MFA), so
+# it doesn't depend on the gateway's JWT check.
+[functions.report-action]
+verify_jwt = false

@@ -3,7 +3,8 @@
   import Confirm from "../components/Confirm.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
-  import { describeLine, describeProject } from "../lib/activity.ts";
+  import ClientReportsCard from "../components/ClientReportsCard.svelte";
+  import { describeLine, describeProject, describeReport } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { CLIENT_STATUSES, type AuditEntry, type Client, type ClientService, type ClientStatus, type Project, type ProjectService } from "../lib/types.ts";
 
@@ -45,7 +46,8 @@
     details.phone !== (client.phone ?? "") || details.address !== (client.address ?? "") || details.workstations !== client.workstations ||
     details.servers !== client.servers || details.started_on !== (client.started_on ?? "")));
   const notesDirty = $derived(!!client && notes !== (client.notes ?? ""));
-  const visibleActivity = $derived(activity.filter((a) => showHidden || !a.hidden));
+  // Report bookkeeping (renders, send attempts) has no wording and stays off the timeline.
+  const visibleActivity = $derived(activity.filter((a) => (showHidden || !a.hidden) && describe(a) !== null));
   const hiddenCount = $derived(activity.filter((a) => a.hidden).length);
   const title = $derived(client ? client.company || client.contact_name || "Unnamed client" : "");
 
@@ -85,11 +87,14 @@
   }
   const toggleHidden = (a: AuditEntry) => run(() => db.hideActivity(a.id, !a.hidden));
 
-  function describe(a: AuditEntry): string {
+  function describe(a: AuditEntry): string | null {
     const n = a.new_data ?? {}, o = a.old_data ?? {};
+    if (a.table_name === "reports") return describeReport(a);
     if (a.table_name === "clients") {
       if (a.action === "insert") return n.lead_id ? "Client created from lead" : "Client added";
       if (n.status !== o.status) return `Status ${STATUS_LABEL[String(o.status)]} → ${STATUS_LABEL[String(n.status)]}`;
+      if (n.reports_enabled !== o.reports_enabled) return n.reports_enabled ? "Patch reports turned on" : "Patch reports turned off";
+      if (["action1_group", "report_recipients", "report_cc"].some((k) => JSON.stringify(n[k]) !== JSON.stringify(o[k]))) return "Patch report settings updated";
       if (n.notes !== o.notes) return "Notes updated";
       return "Details updated";
     }
@@ -154,6 +159,8 @@
     </div>
 
     <aside class="side">
+      <ClientReportsCard {client} onsaved={load} />
+
       <section class="card">
         <div class="card-head"><h2>Details</h2></div>
         <form class="form" onsubmit={saveDetails}>
