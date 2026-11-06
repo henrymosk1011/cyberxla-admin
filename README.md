@@ -184,7 +184,8 @@ Monday, send time        every report still scheduled goes out; held ones don't
 - **Every word is editable**: the email (recipients, subject, body) and every
   line of the PDF, plus raw JSON for anything else. Reset to generated undoes
   it all. The preview is images of the real PDF and refreshes about a minute
-  after a save.
+  after a save. **Rebuild PDF** builds it again with no changes, for example
+  after a layout change in the reports repo.
 - **Hold, Resume, Send now**, one at a time or Hold all and Resume all for the
   week. Send now shows exactly who it goes to first.
 - **Preview mode** (the starting mode) sends every report to you, tagged with

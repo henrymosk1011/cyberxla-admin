@@ -5,8 +5,9 @@ import { BadRequest, dispatchRequest, parseAction, publishableKey, refusal, rend
 const ID = "6f1c2b9e-1d2a-4c3b-9e8f-0a1b2c3d4e5f";
 const rejects = (body: unknown, field: string) => assert.throws(() => parseAction(body), (e) => e instanceof BadRequest && e.message === field);
 
-test("accepts render and send_now for a report id", () => {
+test("accepts render, rebuild and send_now for a report id", () => {
   assert.deepEqual(parseAction({ action: "render", report_id: ID }), { action: "render", reportId: ID });
+  assert.deepEqual(parseAction({ action: "rebuild", report_id: ID }), { action: "rebuild", reportId: ID });
   assert.deepEqual(parseAction({ action: "send_now", report_id: ID.toUpperCase() }), { action: "send_now", reportId: ID });
 });
 
@@ -48,4 +49,11 @@ test("finds the public key under any of its names", () => {
   assert.equal(publishableKey(env({ SUPABASE_PUBLISHABLE_KEYS: '{"default":"sb_publishable_y"}' })), "sb_publishable_y");
   assert.equal(publishableKey(env({ SUPABASE_PUBLISHABLE_KEYS: "not json", SUPABASE_ANON_KEY: "legacy" })), "legacy");
   assert.throws(() => publishableKey(env({})), /PUBLISHABLE_KEY/);
+});
+
+test("Rebuild asks render.yml to build even when up to date; nothing else gets force", () => {
+  const forced = dispatchRequest("acme/reports", "render.yml", ID, "tok", true);
+  assert.deepEqual(JSON.parse(forced.init.body), { ref: "main", inputs: { report_id: ID, force: "true" } });
+  assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "render.yml", ID, "tok").init.body).inputs, { report_id: ID });
+  assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "send.yml", ID, "tok", true).init.body).inputs, { report_id: ID });
 });

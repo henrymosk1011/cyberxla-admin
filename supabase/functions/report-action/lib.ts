@@ -8,7 +8,9 @@ export const REPO = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 
 export class BadRequest extends Error {}
 
-export type Action = "render" | "send_now";
+// render: bring the PDFs up to the latest edits. rebuild: build them again even
+// if they're up to date (the Rebuild button). send_now: send it now.
+export type Action = "render" | "rebuild" | "send_now";
 export type ReportState = {
   id: string;
   status: "scheduled" | "held" | "sending" | "sent" | "failed" | "cancelled";
@@ -21,12 +23,12 @@ export function parseAction(body: unknown): { action: Action; reportId: string }
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new BadRequest("body");
   const b = body as Record<string, unknown>;
   if (Object.keys(b).some((k) => k !== "action" && k !== "report_id")) throw new BadRequest("body");
-  if (b.action !== "render" && b.action !== "send_now") throw new BadRequest("action");
+  if (b.action !== "render" && b.action !== "rebuild" && b.action !== "send_now") throw new BadRequest("action");
   if (typeof b.report_id !== "string" || !UUID.test(b.report_id)) throw new BadRequest("report_id");
   return { action: b.action, reportId: b.report_id.toLowerCase() };
 }
 
-/** Why nothing can be done to this report any more, or null. Applies to both actions. */
+/** Why nothing can be done to this report any more, or null. Applies to every action. */
 export function refusal(r: ReportState): string | null {
   if (r.status === "sending") return "This report is already sending.";
   if (r.status === "sent") return "This report was already sent.";
@@ -36,8 +38,8 @@ export function refusal(r: ReportState): string | null {
 /** Nothing to render: the PDFs already match the latest edits. */
 export const renderIsCurrent = (r: ReportState) => r.rendered_version >= r.content_version;
 
-/** The GitHub call that starts a workflow for one report. */
-export function dispatchRequest(repo: string, workflow: "send.yml" | "render.yml", reportId: string, token: string) {
+/** The GitHub call that starts a workflow for one report. force (render.yml only) renders even if up to date. */
+export function dispatchRequest(repo: string, workflow: "send.yml" | "render.yml", reportId: string, token: string, force = false) {
   if (!REPO.test(repo)) throw new Error("REPORTS_REPO must look like owner/name");
   if (!UUID.test(reportId)) throw new Error("bad report id");
   return {
@@ -51,7 +53,7 @@ export function dispatchRequest(repo: string, workflow: "send.yml" | "render.yml
         "Content-Type": "application/json",
         "User-Agent": "cyberxla-admin-report-action",
       },
-      body: JSON.stringify({ ref: "main", inputs: { report_id: reportId } }),
+      body: JSON.stringify({ ref: "main", inputs: force && workflow === "render.yml" ? { report_id: reportId, force: "true" } : { report_id: reportId } }),
     },
   };
 }
