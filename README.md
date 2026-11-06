@@ -31,6 +31,7 @@ access to any table.
 | `supabase/migrations/0005_catalog_and_clients.sql` | Services catalog (managed in the dashboard, read live by the website and the quote function) and clients |
 | `supabase/migrations/0009_projects.sql` | Projects for leads and clients, with services, notes, and browser-encrypted credentials |
 | `supabase/migrations/0010_reports.sql` | Patch reports: drafts, PDFs, settings, the `report_writer` role and its functions |
+| `supabase/migrations/0011_report_exclude.sql` | Computers to always leave off a client's patch reports |
 | `supabase/functions/report-action/` | The dashboard's Send now and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
@@ -187,7 +188,10 @@ Monday, send time        every report still scheduled goes out; held ones don't
   week. Send now shows exactly who it goes to first.
 - **Preview mode** (the starting mode) sends every report to you, tagged with
   who it's for. Switch to **Live** in Reports, Settings.
-- Who gets a client's reports is set on the client's page (Patch reports card).
+- Who gets a client's reports is set on the client's page (Patch reports card),
+  along with computers to always leave off. A computer can also be marked to
+  leave off future reports from any report; hiding or deleting one on a report
+  only changes that report.
 - Test reports (from a manual run) never block the real Sunday report, never
   send on a schedule, and always go to you only.
 

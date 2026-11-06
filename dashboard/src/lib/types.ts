@@ -220,9 +220,11 @@ export type Client = {
   report_recipients: string[];
   report_cc: string[];
   reports_enabled: boolean;
+  /** Computers to always leave off this client's reports, by the name shown on the report. */
+  report_exclude: string[];
 };
 
-type ReportFields = "action1_group" | "report_recipients" | "report_cc" | "reports_enabled";
+type ReportFields = "action1_group" | "report_recipients" | "report_cc" | "reports_enabled" | "report_exclude";
 export type ClientInput = Omit<Client, "id" | "created_at" | "updated_at" | ReportFields> & Partial<Pick<Client, ReportFields>>;
 
 /** A priced service on a client or project. */

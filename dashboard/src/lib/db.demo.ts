@@ -67,7 +67,7 @@ for (let i = 0; i < 46; i++) {
 
 // A few existing clients: some converted from won leads, one added by hand.
 const clients: Client[] = [];
-const NO_REPORTS = { action1_group: null, report_recipients: [] as string[], report_cc: [] as string[], reports_enabled: false };
+const NO_REPORTS = { action1_group: null, report_recipients: [] as string[], report_cc: [] as string[], reports_enabled: false, report_exclude: [] as string[] };
 const clientServices: ClientService[] = [];
 const packages: PackageRow[] = [
   { id: "essential", name: "Essential", rates: [10, 9.5, 9, 8.5], sort: 0 },
@@ -143,7 +143,7 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
 {
   const harbor = uuid();
   clients.push({ id: harbor, created_at: new Date(now - 300 * 86400000).toISOString(), updated_at: new Date(now - 30 * 86400000).toISOString(), company: "Harbor Light Dental", contact_name: "Jordan Reyes", email: "jordan@harborlight.example", phone: "8185550190", address: null, status: "active", started_on: "2026-01-12", workstations: 8, servers: 0, notes: null, lead_id: null,
-    action1_group: "DEMO", report_recipients: ["office@harborlight.example"], report_cc: ["jordan@harborlight.example"], reports_enabled: true });
+    action1_group: "DEMO", report_recipients: ["office@harborlight.example"], report_cc: ["jordan@harborlight.example"], reports_enabled: true, report_exclude: [] });
   const others = clients.filter((c) => c.lead_id && c.status === "active").slice(0, 2);
   others.forEach((c, i) => Object.assign(c, { action1_group: `DEMO${i + 2}`, report_recipients: [`it@client${i + 2}.example`], report_cc: [], reports_enabled: true }));
 

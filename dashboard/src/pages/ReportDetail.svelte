@@ -6,12 +6,14 @@
   import ReportPill from "../components/ReportPill.svelte";
   import { describeReport } from "../lib/activity.ts";
   import { dateTime } from "../lib/format.ts";
-  import { blankComputer, contentProblem, dashFields, parseEmails, periodLabel, recalcKpis, reportActions, reportState, sendNowText } from "../lib/reports.ts";
-  import { TONES, type AuditEntry, type Report, type ReportContent, type ReportPage, type ReportPatch, type ReportSettings, type Tone } from "../lib/types.ts";
+  import { blankComputer, contentProblem, dashFields, isLeftOff, parseEmails, periodLabel, recalcKpis, reportActions, reportState, sendNowText, withName } from "../lib/reports.ts";
+  import { TONES, type AuditEntry, type Client, type Report, type ReportContent, type ReportPage, type ReportPatch, type ReportSettings, type Tone } from "../lib/types.ts";
 
   let { id }: { id: string } = $props();
 
   let report = $state<Report | null | undefined>(undefined);
+  /** The report's client, for its always leave off list. */
+  let client = $state<Client | null>(null);
   let settings = $state<ReportSettings | null>(null);
   let pages = $state<ReportPage[]>([]);
   let pagesFor = -1;
@@ -58,6 +60,7 @@
       settings = s;
       history = h;
       if (!r) return;
+      client = await db.client(r.client_id);
       if (fresh || !dirty) takeDrafts(r);
       else if (JSON.stringify(norm(r.content)) !== base.content) changedElsewhere = true;
       if (r.rendered_version !== pagesFor) {
@@ -250,6 +253,28 @@
       jsonError = `That isn't valid JSON: ${e instanceof Error ? e.message : ""}`;
     }
   }
+  /**
+   * Always leave a computer off this client's future reports (or include it
+   * again). Saved on the client right away; leaving it off also hides it on
+   * this report, which Save then rebuilds.
+   */
+  async function leaveOff(pc: ReportContent["computers"]["list"][number], on: boolean) {
+    if (!client || !report) return;
+    const name = pc.name.trim();
+    if (!name) return (error = "Give the computer a name first.");
+    error = "";
+    try {
+      await db.updateClient(client.id, { report_exclude: withName(client.report_exclude ?? [], name, on) });
+      client = await db.client(client.id);
+      if (on) pc.hidden = true;
+      notice = on
+        ? `${name} will be left off ${report.client_name}'s future reports. It's hidden here too: Save to rebuild this one.`
+        : `${name} will be included in ${report.client_name}'s future reports again.`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Couldn't update the list.";
+    }
+  }
+
   const move = <T,>(list: T[], i: number, by: number) => {
     const j = i + by;
     if (j < 0 || j >= list.length) return;
@@ -377,7 +402,7 @@
             {#each draft.computers.list as pc, i (i)}
               <li class:hiddenpc={pc.hidden}>
                 <details>
-                  <summary><strong>{pc.name || "Unnamed"}</strong> <span class="muted">{pc.run} · {pc.status}{pc.hidden ? " · hidden" : ""} · {pc.updates.count} {pc.updates.count === 1 ? "update" : "updates"}</span></summary>
+                  <summary><strong>{pc.name || "Unnamed"}</strong> <span class="muted">{pc.run} · {pc.status}{pc.hidden ? " · hidden" : ""}{isLeftOff(client?.report_exclude, pc.name) ? " · always left off" : ""} · {pc.updates.count} {pc.updates.count === 1 ? "update" : "updates"}</span></summary>
                   <div class="pc">
                     <div class="grid">
                       <div class="field"><label for="pc-{i}-n">Name</label><input id="pc-{i}-n" class="input" bind:value={pc.name} /></div>
@@ -387,7 +412,16 @@
                       <div class="field"><label for="pc-{i}-s">{draft.computers.columns[4]?.label ?? "Status"}</label><input id="pc-{i}-s" class="input" bind:value={pc.status} /></div>
                       <div class="field"><label for="pc-{i}-t">Status color</label><select id="pc-{i}-t" class="input" bind:value={pc.tone}>{#each TONES as t (t)}<option value={t}>{TONE_LABEL[t]}</option>{/each}</select></div>
                     </div>
-                    <label class="check"><input type="checkbox" bind:checked={pc.hidden} /> Hide this computer from the report</label>
+                    <label class="check"><input type="checkbox" bind:checked={pc.hidden} /> Hide this computer from this report</label>
+                    <div class="leaveoff">
+                      {#if isLeftOff(client?.report_exclude, pc.name)}
+                        <p class="hint">Always left off {report.client_name}'s future reports.</p>
+                        <button type="button" class="btn sm" onclick={() => leaveOff(pc, false)}>Include in future reports<span class="sr-only"> {pc.name}</span></button>
+                      {:else}
+                        <p class="hint">Hiding or deleting only changes this report. To skip this computer every week:</p>
+                        <button type="button" class="btn sm" onclick={() => leaveOff(pc, true)}>Leave off future reports<span class="sr-only"> {pc.name}</span></button>
+                      {/if}
+                    </div>
                     <fieldset class="updates">
                       <legend>Updates installed on {pc.name || "this computer"}</legend>
                       <div class="grid">
@@ -504,12 +538,13 @@
     </aside>
   </div>
 
-  {#if dirty && !locked}
-    <div class="savebar" role="region" aria-label="Unsaved changes">
-      <span>Unsaved changes{contentDirty ? ". Saving rebuilds the PDF (about a minute)." : ""}</span>
+  {#if !locked}
+    <!-- Always on screen while the report can be edited, so Save is easy to find. -->
+    <div class="savebar" class:clean={!dirty} role="region" aria-label="Save">
+      <span>{dirty ? `Unsaved changes${contentDirty ? ". Saving rebuilds the PDF (about a minute)." : ""}` : "No unsaved changes"}</span>
       <div>
-        <button class="btn ghost" disabled={busy} onclick={discard}>Discard</button>
-        <button class="btn primary" disabled={busy} onclick={save}>{busy ? "Saving…" : contentDirty ? "Save and rebuild PDF" : "Save"}</button>
+        {#if dirty}<button class="btn ghost" disabled={busy} onclick={discard}>Discard</button>{/if}
+        <button class="btn primary" disabled={busy || !dirty} onclick={save}>{busy ? "Saving…" : contentDirty ? "Save and rebuild PDF" : "Save"}</button>
       </div>
     </div>
   {/if}
@@ -582,6 +617,8 @@
   .dl { display: flex; gap: 8px; flex-wrap: wrap; }
   .savebar { position: sticky; bottom: 12px; z-index: 10; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--lime); border-radius: 14px; background: var(--surface-2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); font-size: 14px; font-weight: 600; }
   .savebar div { display: flex; gap: 8px; }
+  .savebar.clean { border-color: var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); font-weight: 500; color: var(--text-2); }
+  .leaveoff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   @media (max-width: 1100px) {
     .cols { grid-template-columns: 1fr; }
     .side { position: static; order: -1; }

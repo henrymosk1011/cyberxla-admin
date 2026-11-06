@@ -205,3 +205,30 @@ export function sendNowText(r: Pick<ReportRow, "is_test" | "recipients" | "cc">,
   if (mode === "preview") return `Preview mode: it goes to you only, tagged for ${to}${cc}. Switch to live in Settings to send to the client. ${fresh}`;
   return `Live: it goes to ${to}${cc} right now, with replies to you. ${fresh}`;
 }
+
+// ---------------------------------------------------------------------------
+// Always leave off
+// ---------------------------------------------------------------------------
+
+const normName = (s: string) => s.trim().toLowerCase();
+
+/** Whether a computer name is on a client's leave off list (any case, as the Sunday run matches). */
+export const isLeftOff = (list: readonly string[] | null | undefined, name: string) =>
+  (list ?? []).some((n) => normName(n) === normName(name));
+
+/** One name per line (or commas) -> a clean list: trimmed, no blanks, no repeats (any case). */
+export function parseNames(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of text.split(/[\n,]+/)) {
+    const n = raw.trim().replace(/\s+/g, " ");
+    if (!n || seen.has(normName(n))) continue;
+    seen.add(normName(n));
+    out.push(n);
+  }
+  return out;
+}
+
+/** The list with a name added or taken out. */
+export const withName = (list: readonly string[], name: string, on: boolean) =>
+  on ? (isLeftOff(list, name) ? [...list] : [...list, name.trim()]) : list.filter((n) => normName(n) !== normName(name));
