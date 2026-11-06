@@ -1,6 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import PageLightbox from "../components/PageLightbox.svelte";
   import ReportPill from "../components/ReportPill.svelte";
   import { describeReport } from "../lib/activity.ts";
   import { dateTime } from "../lib/format.ts";
@@ -19,6 +20,7 @@
   let busy = $state(false);
   let now = $state(Date.now());
   let confirm: Confirm;
+  let lightbox = $state<PageLightbox>();
 
   // What you are editing, and what was last loaded, to tell what changed.
   let draft = $state<ReportContent | null>(null);
@@ -485,13 +487,15 @@
           <button class="btn sm" disabled={busy} onclick={retryRender}>Try again</button>
         {/if}
         {#if pages.length}
-          <!-- On narrow screens the pages scroll sideways, so keyboard users need to be able to focus the strip. -->
-          <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-          <div class="pages" class:stale={rendering} role="region" aria-label="Preview pages" tabindex="0">
-            {#each pages as p (p.page)}
-              <img src={p.src} alt="Page {p.page} of {pages.length} of the client PDF" loading="lazy" width="935" height="1210" />
+          <div class="pages" class:stale={rendering} role="region" aria-label="Preview pages">
+            {#each pages as p, i (p.page)}
+              <button type="button" class="pagebtn" onclick={(e) => lightbox?.open(i, e.currentTarget)}>
+                <img src={p.src} alt="Page {p.page} of {pages.length} of the client PDF" loading="lazy" width="935" height="1210" />
+                <span class="sr-only">, open larger</span>
+              </button>
             {/each}
           </div>
+          <p class="hint">Click a page to see it larger.</p>
         {:else if report.status === "sent"}
           <p class="muted">Sent reports keep the PDF only. Download it below.</p>
         {:else}
@@ -517,6 +521,7 @@
 {/if}
 
 <Confirm bind:this={confirm} />
+{#if report}<PageLightbox bind:this={lightbox} {pages} title={`${report.client_name}, ${report.period === "weekly" ? "weekly" : "monthly"} report`} />{/if}
 
 <style>
   .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
@@ -575,7 +580,10 @@
   .preview .sub { font-size: 13px; color: var(--text-2); }
   .pages { display: flex; flex-direction: column; gap: 10px; transition: opacity 0.3s; }
   .pages.stale { opacity: 0.55; }
-  .pages img { width: 100%; height: auto; border-radius: 6px; background: #fff; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+  /* position: relative keeps the hidden "open larger" text inside the scrolling strip on phones. */
+  .pagebtn { position: relative; display: block; padding: 0; border: 0; background: none; border-radius: 6px; cursor: zoom-in; transition: transform 0.2s var(--ease); }
+  .pagebtn:hover { transform: translateY(-2px); }
+  .pages img { display: block; width: 100%; height: auto; border-radius: 6px; background: #fff; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
   .dl { display: flex; gap: 8px; flex-wrap: wrap; }
   .savebar { position: sticky; bottom: 12px; z-index: 10; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--lime); border-radius: 14px; background: var(--surface-2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); font-size: 14px; font-weight: 600; }
   .savebar div { display: flex; gap: 8px; }
@@ -583,7 +591,8 @@
     .cols { grid-template-columns: 1fr; }
     .side { position: static; order: -1; }
     .pages { flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; }
-    .pages img { width: min(340px, 80vw); flex: none; scroll-snap-align: start; }
+    .pagebtn { flex: none; scroll-snap-align: start; }
+    .pages img { width: min(340px, 80vw); }
   }
   @media (max-width: 640px) {
     h1 { font-size: 26px; }
