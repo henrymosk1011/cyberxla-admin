@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { contentProblem, countdown, dashFields, groupBySend, hasDash, parseEmails, recalcKpis, reportActions, reportState, sendNowText, thisWeek } from "./reports.ts";
+import { contentProblem, countdown, dashFields, groupBySend, hasDash, isLeftOff, parseEmails, parseNames, recalcKpis, reportActions, reportState, sendNowText, thisWeek, withName } from "./reports.ts";
 import type { ReportContent, ReportRow } from "./types.ts";
 
 // Made up content from the reports repo's generator (see the file's _note).
@@ -120,4 +120,14 @@ test("Send now says where it goes", () => {
   assert.match(sendNowText(r, "live"), /^Live: it goes to office@example\.com \(cc owner@example\.com\) right now/);
   assert.match(sendNowText(r, "preview"), /^Preview mode: it goes to you only, tagged for office@example\.com/);
   assert.match(sendNowText({ ...r, is_test: true }, "live"), /^This is a test report, so it goes to you only/);
+});
+
+test("always leave off list", () => {
+  assert.deepEqual(parseNames(" Front Desk \nspare pc, Front  desk\n\nOld Laptop "), ["Front Desk", "spare pc", "Old Laptop"]);
+  assert.equal(isLeftOff(["Front Desk"], " front desk "), true);
+  assert.equal(isLeftOff(["Front Desk"], "Front Desk 2"), false);
+  assert.equal(isLeftOff(undefined, "x"), false);
+  assert.deepEqual(withName(["A"], "b", true), ["A", "b"]);
+  assert.deepEqual(withName(["A"], "a", true), ["A"]);
+  assert.deepEqual(withName(["A", "B"], "a", false), ["B"]);
 });
