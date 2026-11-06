@@ -12,6 +12,12 @@
   let error = $state("");
   let enrollment = $state<Enrollment | null>(null);
   let showSecret = $state(false);
+  let codeInput = $state<HTMLInputElement>();
+
+  // Put the cursor in the field you type in first: email on sign in, the code
+  // on the two-factor steps. The field's instructions are linked with
+  // aria-describedby, so screen readers still hear them.
+  const focusOnShow = (el: HTMLInputElement) => el.focus();
 
   async function run(fn: () => Promise<AuthState>) {
     busy = true;
@@ -22,6 +28,9 @@
       onauth(next);
     } catch (e) {
       error = e instanceof Error ? e.message : "Something went wrong.";
+      // A wrong code: back in the code field, ready to type it again.
+      codeInput?.focus();
+      codeInput?.select();
     } finally {
       busy = false;
     }
@@ -49,7 +58,7 @@
       <form onsubmit={(e) => { e.preventDefault(); run(() => db.signIn(email.trim(), password)); }}>
         <div class="field">
           <label for="email">Email</label>
-          <input id="email" class="input" type="email" autocomplete="username" required bind:value={email} />
+          <input id="email" class="input" type="email" autocomplete="username" required bind:value={email} use:focusOnShow />
         </div>
         <div class="field">
           <label for="pw">Password</label>
@@ -61,7 +70,7 @@
 
     {:else if auth.step === "enroll"}
       <h1>Set up two-factor</h1>
-      <p class="lead">Scan this with your authenticator app (1Password, Authy, Google Authenticator), then enter the 6-digit code it shows. You'll need it every time you sign in.</p>
+      <p class="lead" id="code-help">Scan this with your authenticator app (1Password, Authy, Google Authenticator), then enter the 6-digit code it shows. You'll need it every time you sign in.</p>
       {#if enrollment}
         <div class="qr"><img src={enrollment.qr} alt="QR code for your authenticator app" width="180" height="180" /></div>
         <button type="button" class="btn ghost sm" onclick={() => (showSecret = !showSecret)}>{showSecret ? "Hide" : "Can't scan? Show"} setup key</button>
@@ -73,7 +82,7 @@
 
     {:else if auth.step === "mfa"}
       <h1>Verify it's you</h1>
-      <p class="lead">Enter the 6-digit code from your authenticator app.</p>
+      <p class="lead" id="code-help">Enter the 6-digit code from your authenticator app.</p>
       {@render codeForm("Verify")}
 
     {:else if auth.step === "denied"}
@@ -90,8 +99,8 @@
     <div class="field">
       <label for="code">6-digit code</label>
       <input
-        id="code" class="input code mono" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required
-        value={code} oninput={(e) => (code = cleanCode(e.currentTarget.value))}
+        id="code" class="input code mono" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required aria-describedby="code-help"
+        value={code} oninput={(e) => (code = cleanCode(e.currentTarget.value))} bind:this={codeInput} use:focusOnShow
       />
     </div>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
