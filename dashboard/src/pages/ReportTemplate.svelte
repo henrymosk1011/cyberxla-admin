@@ -191,13 +191,15 @@
 
       <section class="card">
         <div class="card-head"><h2>Network updates</h2></div>
-        <p class="hint">Only on a report for a period when one of the client's UniFi devices was updated: a section after the updates with one line per device, the router first. Same for weekly and monthly, and editable on each report.</p>
+        <p class="hint">Only on a report for a period when at least one of the client's UniFi devices was updated. The section then lists every device, the router first: the updated ones with the update lines, the others with the no update lines. Same for weekly and monthly, and editable on each report.</p>
         {@render field("t-net-title", "Section title", draft, "network_title")}
         <div class="grid">
-          {@render field("t-router-title", "Router: title", draft, "router_update_title")}
-          <div class="wide">{@render field("t-router-text", "Router: text", draft, "router_update_text", ph("version", "from", "date"), 2)}</div>
-          {@render field("t-dev-title", "Other devices (access points, switches): title", draft, "device_update_title", ph("device"))}
-          <div class="wide">{@render field("t-dev-text", "Other devices: text", draft, "device_update_text", ph("device", "version", "from", "date"), 2)}</div>
+          {@render field("t-router-title", "Router updated: title", draft, "router_update_title")}
+          <div class="wide">{@render field("t-router-text", "Router updated: text", draft, "router_update_text", ph("version", "from", "date"), 2)}</div>
+          {@render field("t-dev-title", "Other device updated (access points, switches): title", draft, "device_update_title", ph("device"))}
+          <div class="wide">{@render field("t-dev-text", "Other device updated: text", draft, "device_update_text", ph("device", "version", "from", "date"), 2)}</div>
+          {@render field("t-chk-title", "Any device not updated (router included): title", draft, "device_checked_title", ph("device"))}
+          <div class="wide">{@render field("t-chk-text", "Any device not updated: text", draft, "device_checked_text", ph("device", "version", "period"), 2)}</div>
         </div>
       </section>
 

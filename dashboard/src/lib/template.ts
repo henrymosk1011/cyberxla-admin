@@ -61,6 +61,7 @@ const NAMES: Record<string, string> = {
   next_label: "next patch window label", next_when: "next patch window time", next_note: "next patch window note",
   network_title: "network section title", router_update_title: "router update title", router_update_text: "router update text",
   device_update_title: "other device update title", device_update_text: "other device update text",
+  device_checked_title: "no update title", device_checked_text: "no update text",
 };
 
 /** A field path in plain words: weekly.kpi_labels[1] is "Weekly number label 2". */
