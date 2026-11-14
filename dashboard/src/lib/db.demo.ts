@@ -8,7 +8,7 @@ import monthlyPage1 from "./demo/report-monthly-1.png";
 import monthlyPage2 from "./demo/report-monthly-2.png";
 import { priceQuote } from "./catalog.ts";
 import { catalog as liveCatalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, ProjectStatus, Quote, QuoteStatus, Report, ReportContent, ReportPage, ReportSettings, ServiceCategory, ServiceRow, VaultConfig } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, ProjectStatus, Quote, QuoteStatus, Report, ReportContent, ReportPage, ReportSettings, ServiceCategory, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
 
 const categories: ServiceCategory[] = catalogSeed.map((c, i) => ({ id: c.id, name: c.name, blurb: c.blurb, sort: i * 10 }));
 const services: ServiceRow[] = catalogSeed.flatMap((c) => c.services.map((s, j) => ({
@@ -138,6 +138,8 @@ if (openLeads[1]) seedProject({ lead_id: openLeads[1].id }, "Pentest before insu
 const reportSettings: ReportSettings = { mode: "preview", auto_send_default: true, generate_time: "12:00:00", send_time: "08:00:00", sunday_review_email: true, template: {}, updated_at: new Date(now - 9 * 86400000).toISOString() };
 const reports: Report[] = [];
 const reportPages = new Map<string, ReportPage[]>();
+/** UniFi status by client (made up): Harbor Light's gateway, updated ten days ago, with an access point waiting. */
+const unifi = new Map<string, UnifiStatus>();
 const reportListeners = new Set<() => void>();
 const reportsChanged = () => reportListeners.forEach((cb) => cb());
 {
@@ -146,6 +148,19 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
     action1_group: "DEMO", report_recipients: ["office@harborlight.example"], report_cc: ["jordan@harborlight.example"], reports_enabled: true, report_exclude: [], unifi_console: "Harbor Light Gateway" });
   const others = clients.filter((c) => c.lead_id && c.status === "active").slice(0, 2);
   others.forEach((c, i) => Object.assign(c, { action1_group: `DEMO${i + 2}`, report_recipients: [`it@client${i + 2}.example`], report_cc: [], reports_enabled: true }));
+  const day = 86400000;
+  const iso = (ago: number) => new Date(now - ago).toISOString();
+  unifi.set(harbor, {
+    client_id: harbor, console: "Harbor Light Gateway", checked_at: iso(3 * 3600000),
+    data: {
+      v: 1, found: true, error: null, console: "Harbor Light Gateway",
+      router: { name: "Harbor Light Gateway", model: "UCG Ultra", isConsole: true, status: "online", online: true, version: "4.4.1", needsUpdate: false, updateAvailable: null, startupTime: iso(10 * day), lastUpdate: { from: "4.3.6", to: "4.4.1", at: iso(10 * day) }, trackedSince: iso(60 * day) },
+      devices: [
+        { name: "Harbor Light Gateway", model: "UCG Ultra", isConsole: true, status: "online", online: true, version: "4.4.1", needsUpdate: false, updateAvailable: null, startupTime: iso(10 * day), lastUpdate: { from: "4.3.6", to: "4.4.1", at: iso(10 * day) }, trackedSince: iso(60 * day) },
+        { name: "Front Office AP", model: "U6 Lite", isConsole: false, status: "online", online: true, version: "6.6.77", needsUpdate: true, updateAvailable: "6.7.10", startupTime: iso(42 * day), lastUpdate: null, trackedSince: iso(60 * day) },
+      ],
+    },
+  });
 
   // Next Monday 8:00 AM (this browser's time) and the Monday before.
   const d = new Date(now);
@@ -559,6 +574,12 @@ const db: Db = {
   },
   async reportAction(id, action) {
     const r = reports.find((x) => x.id === id)!;
+    if (action === "unifi") {
+      // The real check is a GitHub run (about a minute); the demo just stamps the time.
+      const s = unifi.get(r.client_id);
+      if (s) setTimeout(() => { s.checked_at = new Date().toISOString(); }, 2500);
+      return { started: "unifi" };
+    }
     if (r.status === "sending") throw new Error("This report is already sending.");
     if (r.status === "sent") throw new Error("This report was already sent.");
     if (action === "render" || action === "rebuild") {
@@ -583,6 +604,7 @@ const db: Db = {
     }, 1500);
     return { started: "send" };
   },
+  unifiStatus: (clientId: string) => wait(structuredClone(unifi.get(clientId) ?? null)),
   reportSettings: () => wait(reportSettings),
   async saveReportSettings(patch) {
     log("report_settings", "update", "settings", { ...reportSettings }, { ...reportSettings, ...patch });

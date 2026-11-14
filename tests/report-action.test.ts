@@ -5,7 +5,8 @@ import { BadRequest, dispatchRequest, parseAction, publishableKey, refusal, rend
 const ID = "6f1c2b9e-1d2a-4c3b-9e8f-0a1b2c3d4e5f";
 const rejects = (body: unknown, field: string) => assert.throws(() => parseAction(body), (e) => e instanceof BadRequest && e.message === field);
 
-test("accepts render, rebuild and send_now for a report id", () => {
+test("accepts render, rebuild, send_now and unifi for a report id", () => {
+  assert.deepEqual(parseAction({ action: "unifi", report_id: ID }), { action: "unifi", reportId: ID });
   assert.deepEqual(parseAction({ action: "render", report_id: ID }), { action: "render", reportId: ID });
   assert.deepEqual(parseAction({ action: "rebuild", report_id: ID }), { action: "rebuild", reportId: ID });
   assert.deepEqual(parseAction({ action: "send_now", report_id: ID.toUpperCase() }), { action: "send_now", reportId: ID });
@@ -56,4 +57,13 @@ test("Rebuild asks render.yml to build even when up to date; nothing else gets f
   assert.deepEqual(JSON.parse(forced.init.body), { ref: "main", inputs: { report_id: ID, force: "true" } });
   assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "render.yml", ID, "tok").init.body).inputs, { report_id: ID });
   assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "send.yml", ID, "tok", true).init.body).inputs, { report_id: ID });
+});
+
+test("Check now starts the UniFi check for the client, and only that", () => {
+  const CLIENT = "0b9a8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d";
+  const { url, init } = dispatchRequest("acme/reports", "unifi-check.yml", CLIENT, "tok");
+  assert.equal(url, "https://api.github.com/repos/acme/reports/actions/workflows/unifi-check.yml/dispatches");
+  assert.deepEqual(JSON.parse(init.body), { ref: "main", inputs: { client_id: CLIENT } });
+  assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "unifi-check.yml", CLIENT, "tok", true).init.body).inputs, { client_id: CLIENT });
+  assert.throws(() => dispatchRequest("a/b", "unifi-check.yml", "x", "tok"), /client id/);
 });

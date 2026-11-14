@@ -4,7 +4,7 @@
 import { createClient, FunctionsHttpError, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
 import { catalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, Quote, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, VaultConfig } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, Quote, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -521,7 +521,14 @@ const db: Db = {
       }
       throw new Error(message);
     }
-    return { started: (data as { started: "render" | "send" | null }).started };
+    return { started: (data as { started: "render" | "send" | "unifi" | null }).started };
+  },
+
+  async unifiStatus(clientId) {
+    if (!UUID.test(clientId)) return null;
+    const { data, error } = await sb.from("unifi_status").select("client_id, console, checked_at, data").eq("client_id", clientId).maybeSingle();
+    fail(error);
+    return (data as UnifiStatus) ?? null;
   },
 
   async reportSettings() {

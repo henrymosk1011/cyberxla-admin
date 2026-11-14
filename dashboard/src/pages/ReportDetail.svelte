@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { onDestroy, tick } from "svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import DidItems from "../components/DidItems.svelte";
@@ -7,9 +7,9 @@
   import ReportPill from "../components/ReportPill.svelte";
   import { describeReport } from "../lib/activity.ts";
   import { resolveTemplate } from "../lib/template.ts";
-  import { dateTime } from "../lib/format.ts";
+  import { dateTime, shortDate } from "../lib/format.ts";
   import { blankComputer, contentProblem, dashFields, isLeftOff, parseEmails, periodLabel, recalcKpis, reportActions, reportState, sendNowText, withName } from "../lib/reports.ts";
-  import { TONES, type AuditEntry, type Client, type Report, type ReportContent, type ReportPage, type ReportPatch, type ReportSettings, type Tone } from "../lib/types.ts";
+  import { TONES, type AuditEntry, type Client, type Report, type ReportContent, type ReportPage, type ReportPatch, type ReportSettings, type Tone, type UnifiStatus } from "../lib/types.ts";
 
   let { id }: { id: string } = $props();
 
@@ -36,6 +36,30 @@
   let changedElsewhere = $state(false);
   let json = $state("");
   let jsonError = $state("");
+
+  // The page's sections, as tabs. The last one you used is remembered in this browser.
+  type TabId = "text" | "computers" | "email" | "unifi" | "history" | "advanced";
+  const TAB_IDS: TabId[] = ["text", "computers", "email", "unifi", "history", "advanced"];
+  function savedTab(): TabId {
+    try {
+      const t = localStorage.getItem("report.tab");
+      if (t && (TAB_IDS as string[]).includes(t)) return t as TabId;
+    } catch { /* storage off: start on the first tab */ }
+    return "text";
+  }
+  let tab = $state<TabId>(savedTab());
+  function pick(t: TabId) {
+    tab = t;
+    try { localStorage.setItem("report.tab", t); } catch { /* not remembered; fine */ }
+  }
+
+  // UniFi: the client's latest status, and Check now.
+  let unifi = $state<UnifiStatus | null>(null);
+  let unifiLoaded = $state(false);
+  let unifiChecking = $state(false);
+  let unifiMsg = $state("");
+  let gone = false;
+  onDestroy(() => (gone = true));
 
   const TONE_LABEL: Record<Tone, string> = { good: "Good (green)", warn: "Needs attention (amber)", bad: "Problem (red)", info: "Note (gray)", lime: "Highlight (lime)" };
   const SEVERITIES = ["Critical", "Important", "Moderate", "Low"];
@@ -64,7 +88,9 @@
       settings = s;
       history = h;
       if (!r) return;
+      const before = client?.id;
       client = await db.client(r.client_id);
+      if (client && (client.id !== before || !unifiLoaded)) loadUnifi();
       if (fresh || !dirty) takeDrafts(r);
       else if (JSON.stringify(norm(r.content)) !== base.content) changedElsewhere = true;
       // A Rebuild keeps the version but changes the build time, so key on both.
@@ -112,6 +138,29 @@
   const dashes = $derived(draft ? dashFields({ report: draft, email: { subject: mail.subject, body: mail.body } }) : []);
   const entries = $derived(history.map((a) => ({ a, text: describeReport(a) })).filter((e) => e.text));
   const shown = $derived(draft ? draft.computers.list.filter((c) => !c.hidden).length : 0);
+  // Which tabs have unsaved edits (a dot on the tab).
+  const baseDraft = $derived(base.content ? (JSON.parse(base.content) as ReportContent) : null);
+  const textDirty = $derived(!!draft && !!baseDraft && JSON.stringify({ ...draft, computers: null }) !== JSON.stringify({ ...baseDraft, computers: null }));
+  const compsDirty = $derived(!!draft && !!baseDraft && JSON.stringify(draft.computers) !== JSON.stringify(baseDraft.computers));
+  const TABS = $derived<{ id: TabId; label: string; dirty: boolean }[]>([
+    { id: "text", label: "Report text", dirty: textDirty },
+    { id: "computers", label: "Computers", dirty: compsDirty },
+    { id: "email", label: "Email", dirty: mailDirty },
+    { id: "unifi", label: "UniFi", dirty: false },
+    { id: "history", label: "History", dirty: false },
+    { id: "advanced", label: "Advanced", dirty: false },
+  ]);
+  // Arrow keys, Home and End move between tabs (and show them).
+  async function tabKey(e: KeyboardEvent, i: number) {
+    const n = TABS.length;
+    const j = e.key === "ArrowRight" ? (i + 1) % n : e.key === "ArrowLeft" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    pick(TABS[j]!.id);
+    await tick();
+    document.getElementById(`tab-${TABS[j]!.id}`)?.focus();
+  }
+  const unifiOthers = $derived(unifi?.data.devices.filter((d) => !d.isConsole) ?? []);
 
   // Leaving with unsaved edits: ask first (links in the app, and closing the tab).
   $effect(() => {
@@ -148,27 +197,64 @@
     }
   }
 
+  async function loadUnifi() {
+    if (!client) return;
+    try {
+      unifi = await db.unifiStatus(client.id);
+    } catch (e) {
+      unifiMsg = e instanceof Error ? `Couldn't load the UniFi status: ${e.message}` : "Couldn't load the UniFi status.";
+    }
+    unifiLoaded = true;
+  }
+  /** Check now: start the read only UniFi check for this client and wait for its result (about a minute). */
+  async function checkUnifi() {
+    if (!client || unifiChecking) return;
+    const before = unifi?.checked_at ?? null;
+    unifiMsg = "";
+    try {
+      await db.reportAction(id, "unifi");
+    } catch (e) {
+      unifiMsg = e instanceof Error ? e.message : "The check didn't start. Try again.";
+      return;
+    }
+    unifiChecking = true;
+    unifiMsg = "Checking UniFi. This takes about a minute.";
+    for (let i = 0; i < 48 && !gone; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      await loadUnifi();
+      if (unifi && unifi.checked_at !== before) {
+        unifiChecking = false;
+        unifiMsg = `Checked ${dateTime(unifi.checked_at)}.`;
+        return;
+      }
+    }
+    unifiChecking = false;
+    if (!gone) unifiMsg = "The check is taking longer than usual. Look again in a few minutes.";
+  }
+
   async function save() {
     if (!report || !draft) return;
     error = "";
     const patch: ReportPatch = {};
     if (mailDirty) {
       const to = parseEmails(mail.to), cc = parseEmails(mail.cc);
-      if (to.invalid.length || cc.invalid.length) return (error = `These don't look like email addresses: ${[...to.invalid, ...cc.invalid].join(", ")}`);
-      if (!to.emails.length) return (error = "Add at least one recipient.");
-      if (to.emails.length > 10 || cc.emails.length > 10) return (error = "Up to 10 recipients and 10 cc.");
-      if (!mail.subject.trim()) return (error = "The email needs a subject.");
-      if (!mail.body.trim()) return (error = "The email needs a body.");
+      const bad = (m: string) => (pick("email"), (error = m));
+      if (to.invalid.length || cc.invalid.length) return bad(`These don't look like email addresses: ${[...to.invalid, ...cc.invalid].join(", ")}`);
+      if (!to.emails.length) return bad("Add at least one recipient.");
+      if (to.emails.length > 10 || cc.emails.length > 10) return bad("Up to 10 recipients and 10 cc.");
+      if (!mail.subject.trim()) return bad("The email needs a subject.");
+      if (!mail.body.trim()) return bad("The email needs a body.");
       Object.assign(patch, { recipients: to.emails, cc: cc.emails, subject: mail.subject.trim(), email_body: mail.body.trim() });
     }
     if (contentDirty) {
       if (draft.extra) {
         // Empty rows are dropped; the section needs a title and at least one titled item.
         draft.extra.items = draft.extra.items.filter((i) => i.title.trim() || i.text.trim());
-        if (!draft.extra.title.trim()) return (error = "The extra section needs a title.");
-        if (!draft.extra.items.length) return (error = "Add at least one item to the extra section, or remove the section.");
+        const bad = (m: string) => (pick("text"), (error = m));
+        if (!draft.extra.title.trim()) return bad("The extra section needs a title.");
+        if (!draft.extra.items.length) return bad("Add at least one item to the extra section, or remove the section.");
         const untitled = draft.extra.items.findIndex((i) => !i.title.trim());
-        if (untitled >= 0) return (error = `Extra section item ${untitled + 1} needs a title.`);
+        if (untitled >= 0) return bad(`Extra section item ${untitled + 1} needs a title.`);
       }
       const problem = contentProblem(draft);
       if (problem) return (error = `The report can't be saved: ${problem}`);
@@ -402,202 +488,286 @@
 
   <div class="cols">
     <div class="main">
-      <fieldset class="plain" disabled={locked || busy}>
-        <section class="card">
-          <div class="card-head"><h2>Email</h2><span class="sub">{settings?.mode === "live" && !report.is_test ? "Goes to the client" : "Preview: goes to you, tagged for these addresses"}</span></div>
-          <div class="grid">
-            <div class="field wide"><label for="m-to">To</label><input id="m-to" class="input" autocomplete="off" bind:value={mail.to} aria-describedby="m-to-h" /><span id="m-to-h" class="hint">Separate addresses with commas. Up to 10.</span></div>
-            <div class="field wide"><label for="m-cc">Cc</label><input id="m-cc" class="input" autocomplete="off" bind:value={mail.cc} /></div>
-            <div class="field wide"><label for="m-subject">Subject</label><input id="m-subject" class="input" maxlength="300" bind:value={mail.subject} /></div>
-            <div class="field wide"><label for="m-body">Body</label><textarea id="m-body" class="input" rows="10" maxlength="20000" bind:value={mail.body} aria-describedby="m-body-h"></textarea><span id="m-body-h" class="hint">A blank line starts a new paragraph. **Two asterisks** make text bold. The PDF is attached.</span></div>
-          </div>
-        </section>
+      <div class="tabs" role="tablist" aria-label="Report sections">
+        {#each TABS as t, i (t.id)}
+          <button type="button" role="tab" id="tab-{t.id}" aria-selected={tab === t.id} aria-controls="panel-{t.id}" tabindex={tab === t.id ? 0 : -1} onclick={() => pick(t.id)} onkeydown={(e) => tabKey(e, i)}>
+            {t.label}{#if t.dirty}<span class="dot" aria-hidden="true"></span><span class="sr-only"> (unsaved changes)</span>{/if}
+          </button>
+        {/each}
+      </div>
 
-        <section class="card">
-          <div class="card-head"><h2>Top of the report</h2></div>
-          <div class="grid">
-            <div class="field"><label for="c-label">Label (top right, in capitals)</label><input id="c-label" class="input" bind:value={draft.label} /></div>
-            <div class="field"><label for="c-title">Title</label><input id="c-title" class="input" bind:value={draft.title} /></div>
-            <div class="field wide"><label for="c-sub">Subtitle</label><input id="c-sub" class="input" bind:value={draft.subtitle} /></div>
-            <div class="field wide"><label for="c-head">Headline</label><textarea id="c-head" class="input" rows="2" bind:value={draft.headline}></textarea></div>
-            <div class="field"><label for="c-pill">Status pill text (blank hides it)</label><input id="c-pill" class="input" bind:value={draft.pill.text} /></div>
-            <div class="field"><label for="c-pill-tone">Status pill color</label><select id="c-pill-tone" class="input" bind:value={draft.pill.tone}>{#each TONES as t (t)}<option value={t}>{TONE_LABEL[t]}</option>{/each}</select></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head"><h2>Numbers</h2><button type="button" class="btn sm" onclick={recalc}>Recalculate from computers</button></div>
-          <p class="hint top">Recalculate counts the computers table below ({shown} shown): managed, {draft.period === "weekly" ? "patched this week" : "patched every week"}, updates installed, need attention. It also sets the status pill.</p>
-          {#each draft.kpis as k, i (i)}
-            <div class="row3">
-              <div class="field"><label for="k-{i}-v">Number {i + 1}</label><input id="k-{i}-v" class="input num" bind:value={k.value} /></div>
-              <div class="field"><label for="k-{i}-l">Label</label><input id="k-{i}-l" class="input" bind:value={k.label} /></div>
-              <label class="check"><input type="checkbox" bind:checked={k.highlight} /> Dark box</label>
-            </div>
-          {/each}
-        </section>
-
-        {#if draft.weeks}
-          <section class="card">
-            <div class="card-head"><h2>Patch success by week</h2></div>
-            <div class="field"><label for="w-title">Section title</label><input id="w-title" class="input" bind:value={draft.weeks.title} /></div>
-            {#each draft.weeks.bars as b, i (i)}
-              <div class="row3">
-                <div class="field"><label for="w-{i}-l">Week {i + 1} label</label><input id="w-{i}-l" class="input" bind:value={b.label} /></div>
-                <div class="field"><label for="w-{i}-s">Under it</label><input id="w-{i}-s" class="input" bind:value={b.sub} /></div>
-                <div class="field"><label for="w-{i}-p">Percent</label><input id="w-{i}-p" class="input num" type="number" min="0" max="100" bind:value={b.pct} /></div>
+      <div role="tabpanel" id="panel-text" aria-labelledby="tab-text" class="panel" hidden={tab !== "text"}>
+        <fieldset class="plain" disabled={locked || busy}>
+            <section class="card">
+              <div class="card-head"><h2>Top of the report</h2></div>
+              <div class="grid">
+                <div class="field"><label for="c-label">Label (top right, in capitals)</label><input id="c-label" class="input" bind:value={draft.label} /></div>
+                <div class="field"><label for="c-title">Title</label><input id="c-title" class="input" bind:value={draft.title} /></div>
+                <div class="field wide"><label for="c-sub">Subtitle</label><input id="c-sub" class="input" bind:value={draft.subtitle} /></div>
+                <div class="field wide"><label for="c-head">Headline</label><textarea id="c-head" class="input" rows="2" bind:value={draft.headline}></textarea></div>
+                <div class="field"><label for="c-pill">Status pill text (blank hides it)</label><input id="c-pill" class="input" bind:value={draft.pill.text} /></div>
+                <div class="field"><label for="c-pill-tone">Status pill color</label><select id="c-pill-tone" class="input" bind:value={draft.pill.tone}>{#each TONES as t (t)}<option value={t}>{TONE_LABEL[t]}</option>{/each}</select></div>
               </div>
-            {/each}
-          </section>
-        {/if}
+            </section>
 
-        <section class="card">
-          <div class="card-head">
-            <h2>What we did</h2>
-            <div class="headbtns">
-              <button type="button" class="btn sm ghost" onclick={useListForFuture}>Use this list for future reports</button>
-              <button type="button" class="btn sm" onclick={() => draft!.did.items.push({ title: "", text: "" })}>Add item</button>
-            </div>
-          </div>
-          <div class="field"><label for="d-title">Section title</label><input id="d-title" class="input" bind:value={draft.did.title} /></div>
-          <DidItems bind:items={draft.did.items} />
-        </section>
+            <section class="card">
+              <div class="card-head"><h2>Numbers</h2><button type="button" class="btn sm" onclick={recalc}>Recalculate from computers</button></div>
+              <p class="hint top">Recalculate counts the computers table below ({shown} shown): managed, {draft.period === "weekly" ? "patched this week" : "patched every week"}, updates installed, need attention. It also sets the status pill.</p>
+              {#each draft.kpis as k, i (i)}
+                <div class="row3">
+                  <div class="field"><label for="k-{i}-v">Number {i + 1}</label><input id="k-{i}-v" class="input num" bind:value={k.value} /></div>
+                  <div class="field"><label for="k-{i}-l">Label</label><input id="k-{i}-l" class="input" bind:value={k.label} /></div>
+                  <label class="check"><input type="checkbox" bind:checked={k.highlight} /> Dark box</label>
+                </div>
+              {/each}
+            </section>
 
-        <section class="card">
-          {#if draft.extra}
-            <div class="card-head">
-              <h2>Extra section</h2>
-              <div class="headbtns">
-                <button type="button" class="btn sm ghost" onclick={removeExtra}>Remove section</button>
-                <button type="button" class="btn sm" onclick={() => draft!.extra!.items.push({ title: "", text: "" })}>Add item</button>
+            {#if draft.weeks}
+              <section class="card">
+                <div class="card-head"><h2>Patch success by week</h2></div>
+                <div class="field"><label for="w-title">Section title</label><input id="w-title" class="input" bind:value={draft.weeks.title} /></div>
+                {#each draft.weeks.bars as b, i (i)}
+                  <div class="row3">
+                    <div class="field"><label for="w-{i}-l">Week {i + 1} label</label><input id="w-{i}-l" class="input" bind:value={b.label} /></div>
+                    <div class="field"><label for="w-{i}-s">Under it</label><input id="w-{i}-s" class="input" bind:value={b.sub} /></div>
+                    <div class="field"><label for="w-{i}-p">Percent</label><input id="w-{i}-p" class="input num" type="number" min="0" max="100" bind:value={b.pct} /></div>
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            <section class="card">
+              <div class="card-head">
+                <h2>What we did</h2>
+                <div class="headbtns">
+                  <button type="button" class="btn sm ghost" onclick={useListForFuture}>Use this list for future reports</button>
+                  <button type="button" class="btn sm" onclick={() => draft!.did.items.push({ title: "", text: "" })}>Add item</button>
+                </div>
               </div>
-            </div>
-            <p class="hint">Only on this report. Prints at the top of page 2 as section 03; the sections after it move down one.</p>
-            <div class="field"><label for="x-title">Section title</label><input id="x-title" class="input" bind:value={draft.extra.title} /></div>
-            <DidItems bind:items={draft.extra.items} idPrefix="x" />
+              <div class="field"><label for="d-title">Section title</label><input id="d-title" class="input" bind:value={draft.did.title} /></div>
+              <DidItems bind:items={draft.did.items} />
+            </section>
+
+            <section class="card">
+              {#if draft.extra}
+                <div class="card-head">
+                  <h2>Extra section</h2>
+                  <div class="headbtns">
+                    <button type="button" class="btn sm ghost" onclick={removeExtra}>Remove section</button>
+                    <button type="button" class="btn sm" onclick={() => draft!.extra!.items.push({ title: "", text: "" })}>Add item</button>
+                  </div>
+                </div>
+                <p class="hint">Only on this report. Prints at the top of page 2 as section 03; the sections after it move down one.</p>
+                <div class="field"><label for="x-title">Section title</label><input id="x-title" class="input" bind:value={draft.extra.title} /></div>
+                <DidItems bind:items={draft.extra.items} idPrefix="x" />
+              {:else}
+                <div class="card-head"><h2>Extra section</h2></div>
+                <p class="hint">For one-off work on this report only, like a router replaced or a new computer set up. It prints at the top of page 2.</p>
+                <div><button type="button" id="x-add" class="btn sm" onclick={addExtra}>Add an extra section</button></div>
+              {/if}
+            </section>
+
+            <section class="card">
+              <div class="card-head"><h2>Open security risks</h2><button type="button" class="btn sm" onclick={() => draft!.security.apps.push({ name: "", detail: "on 1 computer" })}>Add app</button></div>
+              <div class="field"><label for="s-title">Section title</label><input id="s-title" class="input" bind:value={draft.security.title} /></div>
+              <div class="field"><label for="s-text">Text</label><textarea id="s-text" class="input" rows="4" bind:value={draft.security.text}></textarea></div>
+              <div class="field"><label for="s-intro">Before the app list</label><input id="s-intro" class="input" bind:value={draft.security.apps_intro} /></div>
+              {#each draft.security.apps as a, i (i)}
+                <div class="item">
+                  <div class="field"><label for="s-{i}-n">App {i + 1}</label><input id="s-{i}-n" class="input" bind:value={a.name} /></div>
+                  <div class="field"><label for="s-{i}-d">App {i + 1} detail</label><input id="s-{i}-d" class="input" bind:value={a.detail} /></div>
+                  <button type="button" class="btn sm ghost" onclick={() => draft!.security.apps.splice(i, 1)}>Remove<span class="sr-only"> app {i + 1}</span></button>
+                </div>
+              {/each}
+              <div class="field"><label for="s-note">Closing note</label><textarea id="s-note" class="input" rows="2" bind:value={draft.security.note}></textarea></div>
+            </section>
+
+            <section class="card">
+              <div class="card-head"><h2>Next patch window</h2></div>
+              <div class="grid">
+                <div class="field"><label for="n-label">Label</label><input id="n-label" class="input" bind:value={draft.next_window.label} /></div>
+                <div class="field"><label for="n-when">When</label><input id="n-when" class="input" bind:value={draft.next_window.when} /></div>
+                <div class="field wide"><label for="n-note">Note</label><textarea id="n-note" class="input" rows="2" bind:value={draft.next_window.note}></textarea></div>
+              </div>
+            </section>
+
+        </fieldset>
+      </div>
+
+      <div role="tabpanel" id="panel-computers" aria-labelledby="tab-computers" class="panel" hidden={tab !== "computers"}>
+        <fieldset class="plain" disabled={locked || busy}>
+            <section class="card">
+              <div class="card-head"><h2>Computers and updates</h2><button type="button" class="btn sm" onclick={() => draft!.computers.list.push(blankComputer())}>Add computer</button></div>
+              <div class="grid">
+                <div class="field"><label for="p-title">Table title</label><input id="p-title" class="input" bind:value={draft.computers.title} /></div>
+                <div class="field"><label for="u-title">Updates section title</label><input id="u-title" class="input" bind:value={draft.updates_title} /></div>
+              </div>
+              <fieldset class="cols5">
+                <legend>Column headings</legend>
+                {#each draft.computers.columns as col, i (col.key)}
+                  <div class="field"><label for="col-{i}">Column {i + 1}</label><input id="col-{i}" class="input" bind:value={col.label} /></div>
+                {/each}
+              </fieldset>
+              <ul class="pcs">
+                {#each draft.computers.list as pc, i (i)}
+                  <li class:hiddenpc={pc.hidden}>
+                    <details>
+                      <summary><strong>{pc.name || "Unnamed"}</strong> <span class="muted">{pc.run} · {pc.status}{pc.hidden ? " · hidden" : ""}{isLeftOff(client?.report_exclude, pc.name) ? " · always left off" : ""} · {pc.updates.count} {pc.updates.count === 1 ? "update" : "updates"}</span></summary>
+                      <div class="pc">
+                        <div class="grid">
+                          <div class="field"><label for="pc-{i}-n">Name</label><input id="pc-{i}-n" class="input" bind:value={pc.name} /></div>
+                          <div class="field"><label for="pc-{i}-h">Computer name</label><input id="pc-{i}-h" class="input" bind:value={pc.host} aria-describedby="pc-{i}-h-hint" /><span id="pc-{i}-h-hint" class="hint">Shown smaller after the name. Leave blank to hide it.</span></div>
+                          <div class="field"><label for="pc-{i}-r">{draft.computers.columns[1]?.label ?? "Run"}</label><input id="pc-{i}-r" class="input" bind:value={pc.run} /></div>
+                          <div class="field"><label for="pc-{i}-q">{draft.computers.columns[2]?.label ?? "Updates queued"}</label><input id="pc-{i}-q" class="input" bind:value={pc.pending} /></div>
+                          <div class="field"><label for="pc-{i}-c">{draft.computers.columns[3]?.label ?? "Critical risks"}</label><input id="pc-{i}-c" class="input" bind:value={pc.crit} /></div>
+                          <div class="field"><label for="pc-{i}-s">{draft.computers.columns[4]?.label ?? "Status"}</label><input id="pc-{i}-s" class="input" bind:value={pc.status} /></div>
+                          <div class="field"><label for="pc-{i}-t">Status color</label><select id="pc-{i}-t" class="input" bind:value={pc.tone}>{#each TONES as t (t)}<option value={t}>{TONE_LABEL[t]}</option>{/each}</select></div>
+                        </div>
+                        <label class="check"><input type="checkbox" bind:checked={pc.hidden} /> Hide this computer from this report</label>
+                        <div class="leaveoff">
+                          {#if isLeftOff(client?.report_exclude, pc.name)}
+                            <p class="hint">Always left off {report.client_name}'s future reports.</p>
+                            <button type="button" class="btn sm" onclick={() => leaveOff(pc, false)}>Include in future reports<span class="sr-only"> {pc.name}</span></button>
+                          {:else}
+                            <p class="hint">Hiding or deleting only changes this report. To skip this computer every week:</p>
+                            <button type="button" class="btn sm" onclick={() => leaveOff(pc, true)}>Leave off future reports<span class="sr-only"> {pc.name}</span></button>
+                          {/if}
+                        </div>
+                        <fieldset class="updates">
+                          <legend>Updates installed on {pc.name || "this computer"}</legend>
+                          <div class="grid">
+                            <div class="field"><label for="pc-{i}-uc">Count shown</label><input id="pc-{i}-uc" class="input num" type="number" min="0" bind:value={pc.updates.count} /></div>
+                            <div class="field"><label for="pc-{i}-ue">Text when there are none</label><input id="pc-{i}-ue" class="input" bind:value={pc.updates.empty} /></div>
+                          </div>
+                          {#each pc.updates.items as u, j (j)}
+                            <div class="upd">
+                              <div class="field grow"><label for="pc-{i}-u{j}-n">Update {j + 1}</label><input id="pc-{i}-u{j}-n" class="input" bind:value={u.name} /></div>
+                              <div class="field"><label for="pc-{i}-u{j}-c">Times</label><input id="pc-{i}-u{j}-c" class="input num" type="number" min="1" bind:value={u.count} /></div>
+                              <div class="field"><label for="pc-{i}-u{j}-s">Severity tag</label><select id="pc-{i}-u{j}-s" class="input" bind:value={u.severity}><option value={null}>None</option>{#each SEVERITIES.includes(u.severity ?? "") || !u.severity ? SEVERITIES : [...SEVERITIES, u.severity] as sv (sv)}<option value={sv}>{sv}</option>{/each}</select></div>
+                              <button type="button" class="btn sm ghost" onclick={() => pc.updates.items.splice(j, 1)}>Remove<span class="sr-only"> update {j + 1} from {pc.name}</span></button>
+                            </div>
+                          {/each}
+                          <button type="button" class="btn sm" onclick={() => pc.updates.items.push({ name: "", count: 1, severity: null })}>Add update<span class="sr-only"> to {pc.name}</span></button>
+                        </fieldset>
+                        <div class="pcacts">
+                          <button type="button" class="btn sm ghost" disabled={i === 0} onclick={() => move(draft!.computers.list, i, -1)}>Move up<span class="sr-only"> {pc.name}</span></button>
+                          <button type="button" class="btn sm ghost" disabled={i === draft.computers.list.length - 1} onclick={() => move(draft!.computers.list, i, 1)}>Move down<span class="sr-only"> {pc.name}</span></button>
+                          <button type="button" class="btn sm ghost del" onclick={() => draft!.computers.list.splice(i, 1)}>Delete computer<span class="sr-only"> {pc.name}</span></button>
+                        </div>
+                      </div>
+                    </details>
+                  </li>
+                {/each}
+              </ul>
+            </section>
+
+        </fieldset>
+      </div>
+
+      <div role="tabpanel" id="panel-email" aria-labelledby="tab-email" class="panel" hidden={tab !== "email"}>
+        <fieldset class="plain" disabled={locked || busy}>
+            <section class="card">
+              <div class="card-head"><h2>Email</h2><span class="sub">{settings?.mode === "live" && !report.is_test ? "Goes to the client" : "Preview: goes to you, tagged for these addresses"}</span></div>
+              <div class="grid">
+                <div class="field wide"><label for="m-to">To</label><input id="m-to" class="input" autocomplete="off" bind:value={mail.to} aria-describedby="m-to-h" /><span id="m-to-h" class="hint">Separate addresses with commas. Up to 10.</span></div>
+                <div class="field wide"><label for="m-cc">Cc</label><input id="m-cc" class="input" autocomplete="off" bind:value={mail.cc} /></div>
+                <div class="field wide"><label for="m-subject">Subject</label><input id="m-subject" class="input" maxlength="300" bind:value={mail.subject} /></div>
+                <div class="field wide"><label for="m-body">Body</label><textarea id="m-body" class="input" rows="10" maxlength="20000" bind:value={mail.body} aria-describedby="m-body-h"></textarea><span id="m-body-h" class="hint">A blank line starts a new paragraph. **Two asterisks** make text bold. The PDF is attached.</span></div>
+              </div>
+            </section>
+
+        </fieldset>
+      </div>
+
+      <div role="tabpanel" id="panel-unifi" aria-labelledby="tab-unifi" class="panel" hidden={tab !== "unifi"}>
+        <section class="card">
+          <div class="card-head"><h2>UniFi</h2>{#if unifi}<span class="sub">Last checked {dateTime(unifi.checked_at)}</span>{/if}</div>
+          {#if !client?.unifi_console}
+            <p class="muted">No UniFi console is set for {report.client_name}. Add it on <a href="#/clients/{report.client_id}">{report.client_name}'s page</a>, in the Patch reports card.</p>
           {:else}
-            <div class="card-head"><h2>Extra section</h2></div>
-            <p class="hint">For one-off work on this report only, like a router replaced or a new computer set up. It prints at the top of page 2.</p>
-            <div><button type="button" id="x-add" class="btn sm" onclick={addExtra}>Add an extra section</button></div>
+            {#if !unifiLoaded}
+              <p class="muted">Loading…</p>
+            {:else if !unifi}
+              <p class="muted">Not checked yet. Press Check now.</p>
+            {:else if unifi.data.error}
+              <p class="error">UniFi couldn't be read: {unifi.data.error}</p>
+            {:else if !unifi.data.found}
+              <p class="error">UniFi has no console named "{client.unifi_console}". Check the name on <a href="#/clients/{report.client_id}">{report.client_name}'s page</a>.</p>
+            {:else if !unifi.data.router}
+              <p class="muted">UniFi lists no router on this console.</p>
+            {:else}
+              {@const r = unifi.data.router}
+              <dl class="facts">
+                <div><dt>Router</dt><dd>{r.name} <span class="muted">{r.model}</span></dd></div>
+                <div><dt>Software version</dt><dd>{r.version || "Unknown"}</dd></div>
+                <div><dt>Update</dt><dd>{#if r.needsUpdate}<ReportPill label={r.updateAvailable ? `Update waiting: ${r.updateAvailable}` : "Update waiting"} tone="warn" />{:else}<ReportPill label="Up to date" tone="good" />{/if}</dd></div>
+                <div>
+                  <dt>Last update</dt>
+                  <dd>
+                    {#if r.lastUpdate}{dateTime(r.lastUpdate.at)} <span class="muted">({r.lastUpdate.from} to {r.lastUpdate.to})</span>
+                    {:else}None seen yet{r.trackedSince ? ` (checks began ${shortDate(r.trackedSince)})` : ""}{/if}
+                  </dd>
+                </div>
+                <div><dt>Last restart</dt><dd>{r.startupTime ? dateTime(r.startupTime) : "Unknown"}</dd></div>
+                <div><dt>Status</dt><dd>{r.online ? "Online" : r.status || "Offline"}</dd></div>
+              </dl>
+              {#if unifiOthers.length}
+                <h3 class="minor">Other UniFi devices</h3>
+                <ul class="devs">
+                  {#each unifiOthers as d, i (i)}
+                    <li>
+                      <span><strong>{d.name}</strong> <span class="muted">{d.model}</span></span>
+                      <span class="muted">{d.version || "Unknown"}{d.lastUpdate ? `, updated ${shortDate(d.lastUpdate.at)}` : ""}</span>
+                      {#if d.needsUpdate}<ReportPill label={d.updateAvailable ? `Update waiting: ${d.updateAvailable}` : "Update waiting"} tone="warn" />{:else if !d.online}<ReportPill label="Offline" tone="bad" />{:else}<ReportPill label="Up to date" tone="good" />{/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            {/if}
+            <div class="checknow">
+              <button type="button" class="btn sm" disabled={unifiChecking} onclick={checkUnifi}>{unifiChecking ? "Checking…" : "Check now"}</button>
+              <span class="hint" role="status">{unifiMsg}</span>
+            </div>
+            <p class="hint">Reads the router through UniFi; it changes nothing. It's also checked every morning and when the Sunday reports are made.</p>
           {/if}
         </section>
+      </div>
 
-        <section class="card">
-          <div class="card-head"><h2>Computers and updates</h2><button type="button" class="btn sm" onclick={() => draft!.computers.list.push(blankComputer())}>Add computer</button></div>
-          <div class="grid">
-            <div class="field"><label for="p-title">Table title</label><input id="p-title" class="input" bind:value={draft.computers.title} /></div>
-            <div class="field"><label for="u-title">Updates section title</label><input id="u-title" class="input" bind:value={draft.updates_title} /></div>
-          </div>
-          <fieldset class="cols5">
-            <legend>Column headings</legend>
-            {#each draft.computers.columns as col, i (col.key)}
-              <div class="field"><label for="col-{i}">Column {i + 1}</label><input id="col-{i}" class="input" bind:value={col.label} /></div>
-            {/each}
-          </fieldset>
-          <ul class="pcs">
-            {#each draft.computers.list as pc, i (i)}
-              <li class:hiddenpc={pc.hidden}>
-                <details>
-                  <summary><strong>{pc.name || "Unnamed"}</strong> <span class="muted">{pc.run} · {pc.status}{pc.hidden ? " · hidden" : ""}{isLeftOff(client?.report_exclude, pc.name) ? " · always left off" : ""} · {pc.updates.count} {pc.updates.count === 1 ? "update" : "updates"}</span></summary>
-                  <div class="pc">
-                    <div class="grid">
-                      <div class="field"><label for="pc-{i}-n">Name</label><input id="pc-{i}-n" class="input" bind:value={pc.name} /></div>
-                      <div class="field"><label for="pc-{i}-h">Computer name</label><input id="pc-{i}-h" class="input" bind:value={pc.host} aria-describedby="pc-{i}-h-hint" /><span id="pc-{i}-h-hint" class="hint">Shown smaller after the name. Leave blank to hide it.</span></div>
-                      <div class="field"><label for="pc-{i}-r">{draft.computers.columns[1]?.label ?? "Run"}</label><input id="pc-{i}-r" class="input" bind:value={pc.run} /></div>
-                      <div class="field"><label for="pc-{i}-q">{draft.computers.columns[2]?.label ?? "Updates queued"}</label><input id="pc-{i}-q" class="input" bind:value={pc.pending} /></div>
-                      <div class="field"><label for="pc-{i}-c">{draft.computers.columns[3]?.label ?? "Critical risks"}</label><input id="pc-{i}-c" class="input" bind:value={pc.crit} /></div>
-                      <div class="field"><label for="pc-{i}-s">{draft.computers.columns[4]?.label ?? "Status"}</label><input id="pc-{i}-s" class="input" bind:value={pc.status} /></div>
-                      <div class="field"><label for="pc-{i}-t">Status color</label><select id="pc-{i}-t" class="input" bind:value={pc.tone}>{#each TONES as t (t)}<option value={t}>{TONE_LABEL[t]}</option>{/each}</select></div>
-                    </div>
-                    <label class="check"><input type="checkbox" bind:checked={pc.hidden} /> Hide this computer from this report</label>
-                    <div class="leaveoff">
-                      {#if isLeftOff(client?.report_exclude, pc.name)}
-                        <p class="hint">Always left off {report.client_name}'s future reports.</p>
-                        <button type="button" class="btn sm" onclick={() => leaveOff(pc, false)}>Include in future reports<span class="sr-only"> {pc.name}</span></button>
-                      {:else}
-                        <p class="hint">Hiding or deleting only changes this report. To skip this computer every week:</p>
-                        <button type="button" class="btn sm" onclick={() => leaveOff(pc, true)}>Leave off future reports<span class="sr-only"> {pc.name}</span></button>
-                      {/if}
-                    </div>
-                    <fieldset class="updates">
-                      <legend>Updates installed on {pc.name || "this computer"}</legend>
-                      <div class="grid">
-                        <div class="field"><label for="pc-{i}-uc">Count shown</label><input id="pc-{i}-uc" class="input num" type="number" min="0" bind:value={pc.updates.count} /></div>
-                        <div class="field"><label for="pc-{i}-ue">Text when there are none</label><input id="pc-{i}-ue" class="input" bind:value={pc.updates.empty} /></div>
-                      </div>
-                      {#each pc.updates.items as u, j (j)}
-                        <div class="upd">
-                          <div class="field grow"><label for="pc-{i}-u{j}-n">Update {j + 1}</label><input id="pc-{i}-u{j}-n" class="input" bind:value={u.name} /></div>
-                          <div class="field"><label for="pc-{i}-u{j}-c">Times</label><input id="pc-{i}-u{j}-c" class="input num" type="number" min="1" bind:value={u.count} /></div>
-                          <div class="field"><label for="pc-{i}-u{j}-s">Severity tag</label><select id="pc-{i}-u{j}-s" class="input" bind:value={u.severity}><option value={null}>None</option>{#each SEVERITIES.includes(u.severity ?? "") || !u.severity ? SEVERITIES : [...SEVERITIES, u.severity] as sv (sv)}<option value={sv}>{sv}</option>{/each}</select></div>
-                          <button type="button" class="btn sm ghost" onclick={() => pc.updates.items.splice(j, 1)}>Remove<span class="sr-only"> update {j + 1} from {pc.name}</span></button>
-                        </div>
-                      {/each}
-                      <button type="button" class="btn sm" onclick={() => pc.updates.items.push({ name: "", count: 1, severity: null })}>Add update<span class="sr-only"> to {pc.name}</span></button>
-                    </fieldset>
-                    <div class="pcacts">
-                      <button type="button" class="btn sm ghost" disabled={i === 0} onclick={() => move(draft!.computers.list, i, -1)}>Move up<span class="sr-only"> {pc.name}</span></button>
-                      <button type="button" class="btn sm ghost" disabled={i === draft.computers.list.length - 1} onclick={() => move(draft!.computers.list, i, 1)}>Move down<span class="sr-only"> {pc.name}</span></button>
-                      <button type="button" class="btn sm ghost del" onclick={() => draft!.computers.list.splice(i, 1)}>Delete computer<span class="sr-only"> {pc.name}</span></button>
-                    </div>
-                  </div>
-                </details>
-              </li>
-            {/each}
-          </ul>
-        </section>
-
-        <section class="card">
-          <div class="card-head"><h2>Open security risks</h2><button type="button" class="btn sm" onclick={() => draft!.security.apps.push({ name: "", detail: "on 1 computer" })}>Add app</button></div>
-          <div class="field"><label for="s-title">Section title</label><input id="s-title" class="input" bind:value={draft.security.title} /></div>
-          <div class="field"><label for="s-text">Text</label><textarea id="s-text" class="input" rows="4" bind:value={draft.security.text}></textarea></div>
-          <div class="field"><label for="s-intro">Before the app list</label><input id="s-intro" class="input" bind:value={draft.security.apps_intro} /></div>
-          {#each draft.security.apps as a, i (i)}
-            <div class="item">
-              <div class="field"><label for="s-{i}-n">App {i + 1}</label><input id="s-{i}-n" class="input" bind:value={a.name} /></div>
-              <div class="field"><label for="s-{i}-d">App {i + 1} detail</label><input id="s-{i}-d" class="input" bind:value={a.detail} /></div>
-              <button type="button" class="btn sm ghost" onclick={() => draft!.security.apps.splice(i, 1)}>Remove<span class="sr-only"> app {i + 1}</span></button>
-            </div>
-          {/each}
-          <div class="field"><label for="s-note">Closing note</label><textarea id="s-note" class="input" rows="2" bind:value={draft.security.note}></textarea></div>
-        </section>
-
-        <section class="card">
-          <div class="card-head"><h2>Next patch window</h2></div>
-          <div class="grid">
-            <div class="field"><label for="n-label">Label</label><input id="n-label" class="input" bind:value={draft.next_window.label} /></div>
-            <div class="field"><label for="n-when">When</label><input id="n-when" class="input" bind:value={draft.next_window.when} /></div>
-            <div class="field wide"><label for="n-note">Note</label><textarea id="n-note" class="input" rows="2" bind:value={draft.next_window.note}></textarea></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <details ontoggle={(e) => (e.currentTarget as HTMLDetailsElement).open && loadJson()}>
-            <summary><h2 class="inline">Advanced: raw JSON</h2></summary>
-            <p class="hint top">Everything above, plus anything they don't show. Apply checks it, then Save keeps it.</p>
-            <label class="sr-only" for="raw">Report content as JSON</label>
-            <textarea id="raw" class="input mono" rows="18" spellcheck="false" bind:value={json} aria-describedby={jsonError ? "raw-err" : undefined}></textarea>
-            {#if jsonError}<p id="raw-err" class="error" role="alert">{jsonError}</p>{/if}
-            <div class="rowbtns">
-              <button type="button" class="btn sm ghost" onclick={loadJson}>Reload from the form</button>
-              <button type="button" class="btn sm" onclick={applyJson}>Apply JSON</button>
-            </div>
-          </details>
-          <div class="reset">
-            <p class="hint">Undo every edit to the report, subject and body.</p>
-            <button type="button" class="btn sm" onclick={resetToGenerated}>Reset to generated</button>
-          </div>
-        </section>
-      </fieldset>
-
-      {#if entries.length}
+      <div role="tabpanel" id="panel-history" aria-labelledby="tab-history" class="panel" hidden={tab !== "history"}>
         <section class="card">
           <div class="card-head"><h2>History</h2></div>
-          <ol class="timeline">
-            {#each entries as e (e.a.id)}<li><span class="dot" aria-hidden="true"></span><div><p>{e.text}</p><span class="muted small">{dateTime(e.a.at)}{e.a.actor_role === "report_writer" ? " · automatic" : ""}</span></div></li>{/each}
-          </ol>
+          {#if entries.length}
+            <ol class="timeline">
+              {#each entries as e (e.a.id)}<li><span class="dot" aria-hidden="true"></span><div><p>{e.text}</p><span class="muted small">{dateTime(e.a.at)}{e.a.actor_role === "report_writer" ? " · automatic" : ""}</span></div></li>{/each}
+            </ol>
+          {:else}
+            <p class="muted">Nothing yet.</p>
+          {/if}
         </section>
-      {/if}
+      </div>
+
+      <div role="tabpanel" id="panel-advanced" aria-labelledby="tab-advanced" class="panel" hidden={tab !== "advanced"}>
+        <fieldset class="plain" disabled={locked || busy}>
+            <section class="card">
+              <details ontoggle={(e) => (e.currentTarget as HTMLDetailsElement).open && loadJson()}>
+                <summary><h2 class="inline">Advanced: raw JSON</h2></summary>
+                <p class="hint top">Everything above, plus anything they don't show. Apply checks it, then Save keeps it.</p>
+                <label class="sr-only" for="raw">Report content as JSON</label>
+                <textarea id="raw" class="input mono" rows="18" spellcheck="false" bind:value={json} aria-describedby={jsonError ? "raw-err" : undefined}></textarea>
+                {#if jsonError}<p id="raw-err" class="error" role="alert">{jsonError}</p>{/if}
+                <div class="rowbtns">
+                  <button type="button" class="btn sm ghost" onclick={loadJson}>Reload from the form</button>
+                  <button type="button" class="btn sm" onclick={applyJson}>Apply JSON</button>
+                </div>
+              </details>
+              <div class="reset">
+                <p class="hint">Undo every edit to the report, subject and body.</p>
+                <button type="button" class="btn sm" onclick={resetToGenerated}>Reset to generated</button>
+              </div>
+            </section>
+        </fieldset>
+      </div>
+
     </div>
 
     <aside class="side">
@@ -675,6 +845,26 @@
   .link { background: none; border: 0; padding: 0; color: var(--lime); font-weight: 600; text-decoration: underline; }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 16px; align-items: start; }
   .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  /* Tabs: one row that scrolls sideways on a phone rather than wrapping. */
+  .tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow-x: auto; scrollbar-width: thin; }
+  .tabs [role="tab"] {
+    position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 0; border-radius: 8px;
+    background: none; color: var(--text-2); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .tabs [role="tab"]:hover { color: var(--text); background: var(--surface-2); }
+  .tabs [role="tab"][aria-selected="true"] { color: var(--ink); background: var(--lime); }
+  .tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
+  .tabs [aria-selected="true"] .dot { background: var(--ink); }
+  .panel { min-width: 0; }
+  .panel[hidden] { display: none; }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+  .facts div { min-width: 0; }
+  .facts dt { font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
+  .facts dd { font-size: 15px; overflow-wrap: anywhere; }
+  .minor { font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 4px; }
+  .devs { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .devs li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+  .checknow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; border-top: 1px solid var(--line); padding-top: 12px; }
   .side { position: sticky; top: 16px; min-width: 0; }
   fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
   fieldset.plain:disabled .card { opacity: 0.75; }
@@ -734,7 +924,7 @@
   }
   @media (max-width: 640px) {
     h1 { font-size: 26px; }
-    .grid, .row3, .item, .upd { grid-template-columns: 1fr; }
+    .grid, .row3, .item, .upd, .facts { grid-template-columns: 1fr; }
     fieldset.cols5 { grid-template-columns: 1fr 1fr; }
     .check { min-height: 0; }
   }
