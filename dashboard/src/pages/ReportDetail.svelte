@@ -479,6 +479,9 @@
   {:else if report.status === "sending"}
     <div class="callout warn" role="note"><strong>Sending.</strong> <p>It can't be edited while it goes out. If it doesn't finish, look in Sent Items of reports@cyberx.la for the subject below, then Mark as sent or Mark as not sent.</p></div>
   {/if}
+  {#if report.cleared_at}
+    <div class="callout" role="note"><strong>Cleared from the Reports list</strong> <p>It's kept; it just doesn't show in the list. <button class="link" disabled={busy} onclick={() => act(() => db.clearReports([id], false), "Back on the Reports list.")}>Put it back on the list</button></p></div>
+  {/if}
   {#if changedElsewhere}
     <div class="callout warn" role="alert"><strong>This report changed somewhere else</strong> <p>Saving now replaces that change with yours. <button class="link" onclick={() => report && takeDrafts(report)}>Load the latest instead</button></p></div>
   {/if}

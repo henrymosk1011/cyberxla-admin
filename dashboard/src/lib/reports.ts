@@ -28,7 +28,7 @@ export function countdown(iso: string, now = Date.now()): string {
 
 export type StateTone = "good" | "warn" | "bad" | "info" | "lime" | "muted";
 export type ReportState = { label: string; tone: StateTone; note: string };
-type StateInput = Pick<ReportRow, "status" | "send_at" | "sent_at" | "claimed_at" | "error" | "is_test">;
+type StateInput = Pick<ReportRow, "status" | "send_at" | "sent_at" | "claimed_at" | "error" | "is_test"> & { cleared_at?: string | null };
 
 /** What a report's status means right now, in words (status pills are text, never color alone). */
 export function reportState(r: StateInput, now = Date.now()): ReportState {
@@ -71,6 +71,9 @@ export function reportActions(r: StateInput, now = Date.now()) {
     markSent: r.status === "sending",
     markNotSent: r.status === "sending",
     remove: r.status !== "sending" && (r.status !== "sent" || r.is_test),
+    // Clear: off the Reports list (kept). Finished reports only, and tests.
+    clear: !r.cleared_at && (r.is_test ? r.status !== "sending" : r.status === "sent" || r.status === "failed" || r.status === "cancelled"),
+    restore: !!r.cleared_at,
   };
 }
 

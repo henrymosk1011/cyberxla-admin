@@ -502,6 +502,13 @@ const db: Db = {
     return count ?? 0;
   },
 
+  async clearReports(ids, cleared) {
+    if (!ids.length) return 0;
+    const { error, count } = await sb.from("reports").update({ cleared_at: cleared ? new Date().toISOString() : null }, { count: "exact" }).in("id", ids);
+    fail(reportError(error));
+    return count ?? 0;
+  },
+
   async deleteReport(id) {
     const { error, count } = await sb.from("reports").delete({ count: "exact" }).eq("id", id);
     fail(reportError(error));
@@ -550,7 +557,7 @@ const db: Db = {
   },
 };
 
-const REPORT_LIST = "id, created_at, updated_at, client_id, period, period_key, period_start, period_end, is_test, status, send_at, recipients, cc, subject, failure_count, warnings, content_version, rendered_version, rendered_at, render_error, claimed_at, attempts, sent_at, error, clients(company, contact_name)";
+const REPORT_LIST = "id, created_at, updated_at, client_id, period, period_key, period_start, period_end, is_test, status, send_at, recipients, cc, subject, failure_count, warnings, content_version, rendered_version, rendered_at, render_error, claimed_at, attempts, sent_at, error, cleared_at, clients(company, contact_name)";
 
 function normReport(r: Record<string, unknown>): ReportRow {
   const c = r.clients as { company: string | null; contact_name: string | null } | null;
