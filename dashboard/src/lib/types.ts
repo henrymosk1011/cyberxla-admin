@@ -165,6 +165,8 @@ export interface Db {
   updateReport(id: string, patch: ReportPatch): Promise<void>;
   /** Move these reports from one status to another (Hold all, Resume all). Returns how many moved. */
   moveReports(ids: string[], from: ReportStatus, to: ReportStatus): Promise<number>;
+  /** Clear finished reports from the Reports list, or bring them back. Returns how many changed. */
+  clearReports(ids: string[], cleared: boolean): Promise<number>;
   deleteReport(id: string): Promise<void>;
   /** Send now, re-render the PDFs after an edit, or check the client's UniFi now (report-action Edge Function). */
   reportAction(id: string, action: "render" | "rebuild" | "send_now" | "unifi"): Promise<{ started: "render" | "send" | "unifi" | null }>;
@@ -435,6 +437,8 @@ export type ReportRow = {
   attempts: number;
   sent_at: string | null;
   error: string | null;
+  /** Cleared from the Reports list (still kept); null when on the list. */
+  cleared_at: string | null;
 };
 
 export type Report = ReportRow & {

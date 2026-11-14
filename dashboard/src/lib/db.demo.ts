@@ -195,7 +195,7 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
       subject, email_body: body, content: o.content, original: { content: structuredClone(o.content), subject, email_body: body },
       failure_count: o.period === "weekly" ? 5 : 4, warnings: o.warnings ?? [], content_version: 1, rendered_version: 1, rendered_at: created, render_error: null,
       claimed_at: o.status === "sent" || o.status === "failed" ? new Date(o.sendAt + 120000).toISOString() : null, attempts: o.status === "sent" || o.status === "failed" ? 1 : 0,
-      sent_at: o.status === "sent" ? new Date(o.sendAt + 240000).toISOString() : null, error: o.error ?? null,
+      sent_at: o.status === "sent" ? new Date(o.sendAt + 240000).toISOString() : null, error: o.error ?? null, cleared_at: null,
     });
     if (o.pages && o.status !== "sent") reportPages.set(id, o.pages.map((src, i) => ({ page: i + 1, version: 1, src })));
   };
@@ -554,8 +554,21 @@ const db: Db = {
     if (patch.status === "sent") r.sent_at = new Date().toISOString();
     if (patch.status === "failed" && before.status === "sending") r.error = "Marked as not sent from the dashboard.";
     if (patch.status === "scheduled") r.error = null;
+    if (patch.status === "scheduled" || patch.status === "held") r.cleared_at = null;
     logReport("update", before, r);
     reportsChanged();
+  },
+  async clearReports(ids, cleared) {
+    let n = 0;
+    for (const r of reports.filter((x) => ids.includes(x.id))) {
+      if (cleared && !(r.is_test ? r.status !== "sending" : ["sent", "failed", "cancelled"].includes(r.status))) throw new Error("Only sent, failed, cancelled or test reports can be cleared");
+      const before = structuredClone(r);
+      r.cleared_at = cleared ? new Date().toISOString() : null;
+      logReport("update", before, r);
+      n++;
+    }
+    reportsChanged();
+    return n;
   },
   async moveReports(ids, from, to) {
     let n = 0;

@@ -53,6 +53,7 @@ export function describeReport(a: AuditEntry): string | null {
     return `${what}: ${label(o.status)} → ${label(n.status)}`;
   }
   if ("content" in n) return `${what}: report edited`;
+  if (n.cleared_at !== o.cleared_at && (n.cleared_at || o.cleared_at)) return `${what}: ${n.cleared_at ? "cleared from the list" : "back on the list"}`;
   const same = (k: string) => JSON.stringify(n[k]) === JSON.stringify(o[k]);
   if (!same("subject") || !same("email_body") || !same("recipients") || !same("cc")) return `${what}: email edited`;
   return null;

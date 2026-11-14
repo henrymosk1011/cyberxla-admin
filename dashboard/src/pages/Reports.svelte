@@ -13,7 +13,7 @@
   let notice = $state("");
   let busy = $state(false);
   let now = $state(Date.now());
-  let show = $state<"current" | "all">("current");
+  let show = $state<"current" | "all" | "cleared">("current");
 
   // Sorting: newest send date first unless you pick another column. Remembered
   // in this browser only (a convenience; it falls back to the default).
@@ -63,14 +63,19 @@
   });
 
   const WEEK = 7 * 86400000;
+  // Cleared reports are off the list (kept) until you open the Cleared view.
+  const listed = $derived(rows.filter((r) => !r.cleared_at));
+  const cleared = $derived(rows.filter((r) => r.cleared_at));
   // Current: anything still to send, tests, and what went out in the last week.
-  const visible = $derived(show === "all" ? rows : rows.filter((r) =>
+  const visible = $derived(show === "cleared" ? cleared : show === "all" ? listed : listed.filter((r) =>
     r.is_test || Date.parse(r.send_at) > now - WEEK || r.status === "scheduled" || r.status === "held" || r.status === "failed" || r.status === "sending"));
+  // Test reports Clear test reports would take off the list.
+  const clearableTests = $derived(listed.filter((r) => r.is_test && r.status !== "sending"));
   const sorted = $derived(sortReports(visible, sort.key, sort.dir));
   const week = $derived(thisWeek(rows, now));
   const next = $derived(rows.filter((r) => !r.is_test && r.status === "scheduled" && Date.parse(r.send_at) > now).sort((a, b) => a.send_at.localeCompare(b.send_at))[0]);
   const count = (s: ReportRow["status"]) => rows.filter((r) => !r.is_test && r.status === s && now - Date.parse(r.send_at) <= 86400000).length;
-  const needsLook = $derived(rows.filter((r) => !r.is_test && ["failed", "sending"].includes(r.status) && Date.parse(r.send_at) > now - WEEK).length);
+  const needsLook = $derived(listed.filter((r) => !r.is_test && ["failed", "sending"].includes(r.status) && Date.parse(r.send_at) > now - WEEK).length);
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
   async function act(fn: () => Promise<unknown>, ok: string) {
@@ -106,6 +111,13 @@
     await act(async () => db.moveReports(week.toResume.map((r) => r.id), "held", "scheduled"), `${plural(n, "report is", "reports are")} scheduled.`);
   }
   const open = (id: string) => (location.hash = `#/reports/${id}`);
+  const clear = (r: ReportRow) => act(() => db.clearReports([r.id], true), `${r.client_name}, ${periodLabel(r)} is cleared from the list. Find it under Cleared.`);
+  const restore = (r: ReportRow) => act(() => db.clearReports([r.id], false), `${r.client_name}, ${periodLabel(r)} is back on the list.`);
+  async function clearTests() {
+    const n = clearableTests.length;
+    if (!(await confirm.ask({ title: `Clear ${plural(n, "test report", "test reports")}?`, body: "They leave the list now (find them under Cleared). Test reports delete themselves a week after they're made.", action: "Clear" }))) return;
+    await act(() => db.clearReports(clearableTests.map((r) => r.id), true), `${plural(n, "test report is", "test reports are")} cleared.`);
+  }
 </script>
 
 <header class="top">
@@ -146,6 +158,7 @@
     <div class="bulk">
       <button class="btn" disabled={busy || !week.toHold.length} onclick={holdAll}>Hold all this week{week.toHold.length ? ` (${week.toHold.length})` : ""}</button>
       <button class="btn" disabled={busy || !week.toResume.length} onclick={resumeAll}>Resume all{week.toResume.length ? ` (${week.toResume.length})` : ""}</button>
+      <button class="btn ghost" disabled={busy || !clearableTests.length} onclick={clearTests}>Clear test reports{clearableTests.length ? ` (${clearableTests.length})` : ""}</button>
     </div>
   </section>
 
@@ -153,6 +166,7 @@
     <div class="seg" role="group" aria-label="Which reports">
       <button aria-pressed={show === "current"} onclick={() => (show = "current")}>This week</button>
       <button aria-pressed={show === "all"} onclick={() => (show = "all")}>Last 4 months</button>
+      <button aria-pressed={show === "cleared"} onclick={() => (show = "cleared")}>Cleared{cleared.length ? ` (${cleared.length})` : ""}</button>
     </div>
   </div>
 
@@ -200,6 +214,8 @@
                 {#if can.hold}<button class="btn sm" disabled={busy} onclick={() => hold(r)}>Hold<span class="sr-only"> {r.client_name}</span></button>{/if}
                 {#if can.resume}<button class="btn sm" disabled={busy} onclick={() => resume(r)}>Resume<span class="sr-only"> {r.client_name}</span></button>{/if}
                 {#if can.sendNow}<button class="btn sm" disabled={busy} onclick={() => sendNow(r)}>Send now<span class="sr-only"> {r.client_name}</span></button>{/if}
+                {#if can.clear}<button class="btn sm ghost" disabled={busy} onclick={() => clear(r)}>Clear<span class="sr-only"> {r.client_name} {periodLabel(r)} from the list</span></button>{/if}
+                {#if can.restore}<button class="btn sm" disabled={busy} onclick={() => restore(r)}>Restore<span class="sr-only"> {r.client_name} {periodLabel(r)} to the list</span></button>{/if}
                 <button class="btn sm ghost" onclick={() => open(r.id)}>Open<span class="sr-only"> {r.client_name} {periodLabel(r)}</span></button>
               </td>
             </tr>
@@ -210,7 +226,7 @@
   {:else}
     <section class="card">
       <p class="empty">
-        {rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
+        {show === "cleared" ? "Nothing cleared. Clear a finished report (sent, failed, cancelled or a test) to take it off the list." : rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
       </p>
     </section>
   {/if}

@@ -35,6 +35,7 @@ access to any table.
 | `supabase/migrations/0012_report_template.sql` | The report template every new patch report starts from |
 | `supabase/migrations/0013_unifi.sql` | A client's UniFi console, and the log of UniFi software versions the reports have seen |
 | `supabase/migrations/0014_unifi_status.sql` | Each client's latest UniFi status for the UniFi tab on a report |
+| `supabase/migrations/0015_report_clear.sql` | Clearing finished reports from the Reports list; test reports delete themselves after a week |
 | `supabase/functions/report-action/` | The dashboard's Send now and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
@@ -216,6 +217,11 @@ Monday, send time        every report still scheduled goes out; held ones don't
   unsaved edits.
 - Test reports (from a manual run) never block the real Sunday report, never
   send on a schedule, and always go to you only.
+- Clear takes a finished report (sent, failed, cancelled) or a test report off
+  the Reports list; it's kept, under Cleared, where Restore brings it back.
+  Clear test reports does every test at once. Test reports delete themselves
+  a week after they're made (each Sunday run calls
+  reporting.purge_test_reports()).
 
 How it's kept safe:
 
