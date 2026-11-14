@@ -3,7 +3,7 @@
   import Confirm from "../components/Confirm.svelte";
   import ReportPill from "../components/ReportPill.svelte";
   import { dateTime } from "../lib/format.ts";
-  import { countdown, groupBySend, periodLabel, reportActions, reportState, sendNowText, thisWeek } from "../lib/reports.ts";
+  import { countdown, periodLabel, reportActions, reportState, sendNowText, sortReports, thisWeek, type ReportSortKey, type SortDir } from "../lib/reports.ts";
   import type { ReportRow, ReportSettings } from "../lib/types.ts";
 
   let rows = $state<ReportRow[]>([]);
@@ -14,6 +14,31 @@
   let busy = $state(false);
   let now = $state(Date.now());
   let show = $state<"current" | "all">("current");
+
+  // Sorting: newest send date first unless you pick another column. Remembered
+  // in this browser only (a convenience; it falls back to the default).
+  const COLUMNS: { key: ReportSortKey; label: string; first: SortDir }[] = [
+    { key: "client", label: "Client", first: "asc" },
+    { key: "report", label: "Report", first: "desc" },
+    { key: "status", label: "Status", first: "asc" },
+    { key: "sends", label: "Sends", first: "desc" },
+    { key: "generated", label: "Generated", first: "desc" },
+  ];
+  const DEFAULT_SORT = { key: "sends" as ReportSortKey, dir: "desc" as SortDir };
+  function savedSort() {
+    try {
+      const v = JSON.parse(localStorage.getItem("reports.sort") || "null");
+      if (v && COLUMNS.some((c) => c.key === v.key) && (v.dir === "asc" || v.dir === "desc")) return v as typeof DEFAULT_SORT;
+    } catch { /* storage off or unreadable: use the default */ }
+    return DEFAULT_SORT;
+  }
+  let sort = $state(savedSort());
+  function sortBy(key: ReportSortKey, dir?: SortDir) {
+    const col = COLUMNS.find((c) => c.key === key)!;
+    sort = { key, dir: dir ?? (sort.key === key ? (sort.dir === "asc" ? "desc" : "asc") : col.first) };
+    try { localStorage.setItem("reports.sort", JSON.stringify(sort)); } catch { /* not saved; fine */ }
+  }
+  const ariaSort = (key: ReportSortKey) => (sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined);
   let confirm: Confirm;
 
   async function load() {
@@ -41,7 +66,7 @@
   // Current: anything still to send, tests, and what went out in the last week.
   const visible = $derived(show === "all" ? rows : rows.filter((r) =>
     r.is_test || Date.parse(r.send_at) > now - WEEK || r.status === "scheduled" || r.status === "held" || r.status === "failed" || r.status === "sending"));
-  const groups = $derived(groupBySend(visible));
+  const sorted = $derived(sortReports(visible, sort.key, sort.dir));
   const week = $derived(thisWeek(rows, now));
   const next = $derived(rows.filter((r) => !r.is_test && r.status === "scheduled" && Date.parse(r.send_at) > now).sort((a, b) => a.send_at.localeCompare(b.send_at))[0]);
   const count = (s: ReportRow["status"]) => rows.filter((r) => !r.is_test && r.status === s && now - Date.parse(r.send_at) <= 86400000).length;
@@ -131,30 +156,46 @@
     </div>
   </div>
 
-  {#each groups as g (g.key)}
-    <section class="card flush group">
-      <h2 class="ghead">{g.label}</h2>
+  {#if sorted.length}
+    <section class="card flush list">
+      <div class="phone-sort">
+        <label for="sort-key">Sort by</label>
+        <select id="sort-key" class="input" value={sort.key} onchange={(e) => sortBy(e.currentTarget.value as ReportSortKey, COLUMNS.find((c) => c.key === e.currentTarget.value)!.first)}>
+          {#each COLUMNS as c (c.key)}<option value={c.key}>{c.label}</option>{/each}
+        </select>
+        <button type="button" class="btn sm" onclick={() => sortBy(sort.key, sort.dir === "asc" ? "desc" : "asc")}>{sort.dir === "asc" ? "Oldest or A to Z first" : "Newest or Z to A first"}</button>
+      </div>
       <table class="table">
-        <thead><tr><th>Client and report</th><th>Status</th><th class="hide-sm">Notes</th><th class="r"><span class="sr-only">Actions</span></th></tr></thead>
+        <caption class="sr-only">Reports, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
+        <thead>
+          <tr>
+            {#each COLUMNS as c (c.key)}
+              <th aria-sort={ariaSort(c.key)} class:hide-md={c.key === "generated"}>
+                <button type="button" class="sort" class:on={sort.key === c.key} onclick={() => sortBy(c.key)}>
+                  {c.label}<span class="arrow" aria-hidden="true">{sort.key === c.key ? (sort.dir === "asc" ? "↑" : "↓") : "↕"}</span>
+                </button>
+              </th>
+            {/each}
+            <th class="r"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
         <tbody>
-          {#each g.rows as r (r.id)}
+          {#each sorted as r (r.id)}
             {@const st = reportState(r, now)}
             {@const can = reportActions(r, now)}
             <tr>
-              <td class="who">
-                <a href="#/reports/{r.id}"><strong>{r.client_name}</strong></a>
-                <span class="muted">{periodLabel(r)}</span>
-                <span class="gen">Generated {dateTime(r.created_at)}</span>
-              </td>
+              <td class="who"><a href="#/reports/{r.id}"><strong>{r.client_name}</strong></a></td>
+              <td class="rep">{periodLabel(r)}</td>
               <td class="st">
                 <ReportPill label={st.label} tone={st.tone} test={r.is_test} />
-                <span class="stnote">{st.note}</span>
+                <!-- The full explanation is on the report; here only what needs you. -->
+                {#if st.tone === "bad"}<span class="stnote">{st.note}</span>{/if}
+                {#if r.warnings.length}<span class="stnote warn">{r.warnings[0]}</span>{/if}
+                {#if r.failure_count}<span class="stnote">{plural(r.failure_count, "failure", "failures")} to check</span>{/if}
+                {#if r.content_version > r.rendered_version && can.edit}<span class="stnote">Preview updating</span>{/if}
               </td>
-              <td class="hide-sm note">
-                {#if r.warnings.length}<span class="warn">{r.warnings[0]}</span>{/if}
-                {#if r.failure_count}<span>{plural(r.failure_count, "failure", "failures")} in the internal report</span>{/if}
-                {#if r.content_version > r.rendered_version && can.edit}<span>Preview updating</span>{/if}
-              </td>
+              <td class="when-cell"><span class="lbl" aria-hidden="true">Sends </span>{dateTime(r.send_at)}</td>
+              <td class="hide-md gen">{dateTime(r.created_at)}</td>
               <td class="r acts">
                 {#if can.hold}<button class="btn sm" disabled={busy} onclick={() => hold(r)}>Hold<span class="sr-only"> {r.client_name}</span></button>{/if}
                 {#if can.resume}<button class="btn sm" disabled={busy} onclick={() => resume(r)}>Resume<span class="sr-only"> {r.client_name}</span></button>{/if}
@@ -172,7 +213,7 @@
         {rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
       </p>
     </section>
-  {/each}
+  {/if}
 {/if}
 
 <Confirm bind:this={confirm} />
@@ -193,28 +234,39 @@
   .warn { color: var(--warning); font-size: 13px; }
   .bulk { display: flex; gap: 8px; flex-wrap: wrap; }
   .filters { margin-bottom: 16px; }
-  .group { margin-bottom: 16px; }
+  .list { margin-bottom: 16px; }
   .flush { padding: 8px 8px 0; }
-  .ghead { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-2); padding: 10px 12px 12px; }
-  .group .table { table-layout: fixed; }
-  .group th:nth-child(1) { width: 24%; }
-  .group th:nth-child(2) { width: 30%; }
-  .group th:nth-child(4) { width: 270px; }
-  .who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .list .table { table-layout: fixed; }
+  .list th:nth-child(1) { width: 17%; }
+  .list th:nth-child(2) { width: 17%; }
+  .list th:nth-child(3) { width: auto; }
+  .list th:nth-child(4) { width: 14%; }
+  .list th:nth-child(5) { width: 13%; }
+  .list th:nth-child(6) { width: 250px; }
+  th .sort {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; margin: -4px -6px; border: 0; border-radius: 6px;
+    background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
+  }
+  th .sort:hover { color: var(--text); background: var(--surface-2); }
+  th .sort.on { color: var(--text); }
+  .arrow { font-size: 12px; color: var(--muted); }
+  .sort.on .arrow { color: var(--lime); }
+  .who { min-width: 0; }
   .who a { text-decoration: none; }
   .who a:hover strong { text-decoration: underline; }
-  .who .muted { font-size: 13px; }
-  .gen { font-size: 12px; color: var(--muted); }
+  .rep { font-size: 14px; color: var(--text-2); }
+  .gen, .when-cell { font-size: 13px; color: var(--text-2); }
+  .when-cell .lbl { display: none; }
   .st { min-width: 0; }
-  .stnote { display: block; margin-top: 4px; font-size: 13px; color: var(--text-2); max-width: 360px; }
-  .note { font-size: 13px; color: var(--text-2); max-width: 320px; }
-  .note span { display: block; }
+  .stnote { display: block; margin-top: 4px; font-size: 13px; color: var(--text-2); }
+  .stnote.warn { color: var(--warning); }
+  .phone-sort { display: none; }
   .acts { white-space: nowrap; text-align: right; }
   .acts .btn { margin-left: 4px; }
   @media (max-width: 860px) {
     .top { flex-direction: column; align-items: stretch; }
   }
-  @media (max-width: 720px) { .hide-sm { display: none; } }
+  @media (max-width: 1100px) { .hide-md { display: none; } }
   @media (max-width: 640px) {
     .flush { padding: 4px; }
     .table thead { display: none; }
@@ -222,8 +274,12 @@
     .table tbody tr { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px; padding: 14px 12px; border-bottom: 1px solid var(--line); }
     .table tbody tr:last-child { border-bottom: 0; }
     .table td { display: block; padding: 0; border: 0; }
-    .table td.hide-sm { display: none; }
-    .st { grid-column: 1 / -1; }
+    .table td.hide-md { display: none; }
+    .st, .rep, .when-cell { grid-column: 1 / -1; }
+    .when-cell .lbl { display: inline; }
+    .phone-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 8px 12px; border-bottom: 1px solid var(--line); }
+    .phone-sort label { font-size: 13px; color: var(--text-2); }
+    .phone-sort .input { height: 36px; width: auto; }
     .acts { grid-column: 1 / -1; white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; }
     .acts .btn { margin-left: 0; }
   }

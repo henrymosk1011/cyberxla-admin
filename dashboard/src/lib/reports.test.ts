@@ -135,3 +135,21 @@ test("always leave off list", () => {
   assert.deepEqual(withName(["A"], "a", true), ["A"]);
   assert.deepEqual(withName(["A", "B"], "a", false), ["B"]);
 });
+
+test("sortReports sorts by each column and breaks ties by send date, newest first", async () => {
+  const { sortReports } = await import("./reports.ts");
+  const r = (client_name: string, status: string, send_at: string, created_at: string, period_start = "2026-11-06", period = "weekly") =>
+    ({ client_name, status, send_at, created_at, period_start, period }) as Parameters<typeof sortReports>[0][number];
+  const rows = [
+    r("Bayside Vet", "sent", "2026-11-09T16:00:00Z", "2026-11-08T20:00:00Z", "2026-10-30"),
+    r("Alder Dental", "held", "2026-11-16T16:00:00Z", "2026-11-15T20:00:00Z"),
+    r("Cedar Law", "failed", "2026-11-16T16:00:00Z", "2026-11-15T20:05:00Z"),
+  ];
+  const names = (x: typeof rows) => x.map((y) => y.client_name);
+  assert.deepEqual(names(sortReports(rows, "sends", "desc")), ["Alder Dental", "Cedar Law", "Bayside Vet"]);
+  assert.deepEqual(names(sortReports(rows, "sends", "asc")), ["Bayside Vet", "Alder Dental", "Cedar Law"]);
+  assert.deepEqual(names(sortReports(rows, "client", "asc")), ["Alder Dental", "Bayside Vet", "Cedar Law"]);
+  assert.deepEqual(names(sortReports(rows, "status", "asc")), ["Cedar Law", "Alder Dental", "Bayside Vet"]);
+  assert.deepEqual(names(sortReports(rows, "generated", "desc")), ["Cedar Law", "Alder Dental", "Bayside Vet"]);
+  assert.deepEqual(names(sortReports(rows, "report", "asc")), ["Bayside Vet", "Alder Dental", "Cedar Law"]);
+});

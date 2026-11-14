@@ -80,6 +80,26 @@ export function periodLabel(r: Pick<ReportRow, "period" | "period_start">): stri
   return r.period === "weekly" ? `Weekly, patch window ${shortDate(r.period_start + "T12:00:00")}` : `Monthly, ${MONTH.format(new Date(r.period_start + "T12:00:00Z"))}`;
 }
 
+export type ReportSortKey = "client" | "report" | "status" | "sends" | "generated";
+export type SortDir = "asc" | "desc";
+
+// What needs you comes first when sorting by status.
+const STATUS_RANK: Record<string, number> = { failed: 0, sending: 1, held: 2, scheduled: 3, sent: 4 };
+
+/** Reports sorted by one column. Ties fall back to send date, newest first, then client. */
+export function sortReports<T extends Pick<ReportRow, "client_name" | "period" | "period_start" | "status" | "send_at" | "created_at">>(rows: T[], key: ReportSortKey, dir: SortDir): T[] {
+  const time = (s: string) => Date.parse(s) || 0;
+  const by: Record<ReportSortKey, (a: T, b: T) => number> = {
+    client: (a, b) => a.client_name.localeCompare(b.client_name, "en", { sensitivity: "base" }),
+    report: (a, b) => a.period_start.localeCompare(b.period_start) || a.period.localeCompare(b.period),
+    status: (a, b) => (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9),
+    sends: (a, b) => time(a.send_at) - time(b.send_at),
+    generated: (a, b) => time(a.created_at) - time(b.created_at),
+  };
+  const sign = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => sign * by[key](a, b) || time(b.send_at) - time(a.send_at) || a.client_name.localeCompare(b.client_name));
+}
+
 /** Reports grouped by the day they send (tests on their own), soonest last week first. */
 export function groupBySend<T extends Pick<ReportRow, "send_at" | "is_test" | "client_name" | "period">>(rows: T[]) {
   const day = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
