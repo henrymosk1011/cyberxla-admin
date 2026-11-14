@@ -51,7 +51,7 @@
     "next_label": "Next patch window",
     "next_when": "{next_day} at 9:00 PM",
     "next_note": "Please leave computers powered on and plugged in Friday night. They restart on their own once updates finish.",
-    "network_title": "Network",
+    "network_title": "Router",
     "router_update_title": "Updated the router software",
     "router_update_text": "Your router now runs version {version}, installed {date}.",
     "device_update_title": "Updated the {device} software",

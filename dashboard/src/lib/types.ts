@@ -168,6 +168,8 @@ export interface Db {
   /** Clear finished reports from the Reports list, or bring them back. Returns how many changed. */
   clearReports(ids: string[], cleared: boolean): Promise<number>;
   deleteReport(id: string): Promise<void>;
+  /** Delete reports for good (with their PDFs). Returns how many were deleted. */
+  deleteReports(ids: string[]): Promise<number>;
   /** Send now, re-render the PDFs after an edit, or check the client's UniFi now (report-action Edge Function). */
   reportAction(id: string, action: "render" | "rebuild" | "send_now" | "unifi"): Promise<{ started: "render" | "send" | "unifi" | null }>;
   /** A client's latest UniFi status (saved by the reports repo), or null if never checked. */

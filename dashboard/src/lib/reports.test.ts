@@ -164,4 +164,9 @@ test("Clear is for finished reports and tests; Restore for cleared ones", () => 
   assert.equal(reportActions(r("sending", true)).clear, false);
   assert.equal(reportActions(r("sent", false, at)).clear, false);
   assert.equal(reportActions(r("sent", false, at)).restore, true);
+  // Deleting for good: a sent client report only once it's cleared; never while sending.
+  assert.equal(reportActions(r("sent")).remove, false);
+  assert.equal(reportActions(r("sent", false, at)).remove, true);
+  assert.equal(reportActions(r("sending", false, at)).remove, false);
+  for (const s of ["failed", "cancelled"]) assert.equal(reportActions(r(s, false, at)).remove, true, s);
 });

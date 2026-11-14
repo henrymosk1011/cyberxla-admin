@@ -202,7 +202,7 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
   };
   const h = clients.find((c) => c.id === harbor)!;
   // The scheduled weekly report caught a UniFi update (made up), so it has a Network section.
-  const withNetwork: ReportContent = { ...structuredClone(weeklyContent), network: { title: "Network", items: [
+  const withNetwork: ReportContent = { ...structuredClone(weeklyContent), network: { title: "Router", items: [
     { title: "Updated the router software", text: "Your router now runs version 4.4.1, installed Nov 4." },
     { title: "Updated the UniFi Network software", text: "Your UniFi Network now runs version 10.6.109, installed Nov 4." },
     { title: "No update this week: the Wi-Fi access point software", text: "Your Wi-Fi access point runs version 6.6.77." },
@@ -587,10 +587,25 @@ const db: Db = {
   },
   async deleteReport(id) {
     const r = reports.find((x) => x.id === id)!;
-    if (r.status === "sending" || (r.status === "sent" && !r.is_test)) throw new Error("Sent reports are kept for the record and can't be deleted");
+    if (r.status === "sending") throw new Error("This report is sending and can't be deleted");
+    if (r.status === "sent" && !r.is_test && !r.cleared_at) throw new Error("Sent reports are kept for the record. Clear it first, then delete it from Cleared.");
     reports.splice(reports.indexOf(r), 1);
     logReport("delete", r, null);
     reportsChanged();
+  },
+  async deleteReports(ids) {
+    // All or nothing, like the database (one statement).
+    const list = reports.filter((x) => ids.includes(x.id));
+    for (const r of list) {
+      if (r.status === "sending") throw new Error("This report is sending and can't be deleted");
+      if (r.status === "sent" && !r.is_test && !r.cleared_at) throw new Error("Sent reports are kept for the record. Clear it first, then delete it from Cleared.");
+    }
+    for (const r of list) {
+      reports.splice(reports.indexOf(r), 1);
+      logReport("delete", r, null);
+    }
+    reportsChanged();
+    return list.length;
   },
   async reportAction(id, action) {
     const r = reports.find((x) => x.id === id)!;

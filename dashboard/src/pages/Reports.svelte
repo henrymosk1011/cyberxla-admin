@@ -73,7 +73,7 @@
   const clearableTests = $derived(listed.filter((r) => r.is_test && r.status !== "sending"));
   const sorted = $derived(sortReports(visible, sort.key, sort.dir));
 
-  // Ticked rows, for Clear selected (or Restore selected in the Cleared view).
+  // Ticked rows, for Clear selected (or Restore selected and Delete selected in the Cleared view).
   // Only rows that can be cleared (or restored) get a checkbox.
   let picked = $state<string[]>([]);
   const canPick = (r: ReportRow) => (show === "cleared" ? !!r.cleared_at : reportActions(r, now).clear);
@@ -142,6 +142,20 @@
     }
     picked = [];
   }
+  // Delete for good, from the Cleared view: the reports and their PDFs go.
+  const deleteText = (n: number) => `This removes ${n === 1 ? "the report and its PDFs" : "the reports and their PDFs"} for good. It can't be undone. The record in Activity stays.`;
+  async function deletePicked() {
+    const ids = picked.filter((id) => { const r = rows.find((x) => x.id === id); return r && reportActions(r, now).remove; });
+    const n = ids.length;
+    if (!n) return;
+    if (!(await confirm.ask({ title: `Delete ${plural(n, "report", "reports")} for good?`, body: deleteText(n), action: "Delete", danger: true }))) return;
+    await act(() => db.deleteReports(ids), `${plural(n, "report is", "reports are")} deleted.`);
+    picked = [];
+  }
+  async function deleteOne(r: ReportRow) {
+    if (!(await confirm.ask({ title: `Delete ${r.client_name}, ${periodLabel(r)} for good?`, body: deleteText(1), action: "Delete", danger: true }))) return;
+    await act(() => db.deleteReports([r.id]), `${r.client_name}, ${periodLabel(r)} is deleted.`);
+  }
   const clear = (r: ReportRow) => act(() => db.clearReports([r.id], true), `${r.client_name}, ${periodLabel(r)} is cleared from the list. Find it under Cleared.`);
   const restore = (r: ReportRow) => act(() => db.clearReports([r.id], false), `${r.client_name}, ${periodLabel(r)} is back on the list.`);
   async function clearTests() {
@@ -208,6 +222,7 @@
           <span>{plural(picked.length, "report", "reports")} selected</span>
           <div>
             <button type="button" class="btn sm primary" disabled={busy} onclick={clearPicked}>{show === "cleared" ? "Restore selected" : "Clear selected"}</button>
+            {#if show === "cleared"}<button type="button" class="btn sm ghost del" disabled={busy} onclick={deletePicked}>Delete selected</button>{/if}
             <button type="button" class="btn sm ghost" onclick={() => (picked = [])}>Unselect all</button>
           </div>
         </div>
@@ -271,6 +286,7 @@
                 {#if can.sendNow}<button class="btn sm" disabled={busy} onclick={() => sendNow(r)}>Send now<span class="sr-only"> {r.client_name}</span></button>{/if}
                 {#if can.clear}<button class="btn sm ghost" disabled={busy} onclick={() => clear(r)}>Clear<span class="sr-only"> {r.client_name} {periodLabel(r)} from the list</span></button>{/if}
                 {#if can.restore}<button class="btn sm" disabled={busy} onclick={() => restore(r)}>Restore<span class="sr-only"> {r.client_name} {periodLabel(r)} to the list</span></button>{/if}
+                {#if show === "cleared" && can.remove}<button class="btn sm ghost del" disabled={busy} onclick={() => deleteOne(r)}>Delete<span class="sr-only"> {r.client_name} {periodLabel(r)} for good</span></button>{/if}
                 <button class="btn sm ghost" onclick={() => open(r.id)}>Open<span class="sr-only"> {r.client_name} {periodLabel(r)}</span></button>
               </td>
             </tr>
@@ -298,6 +314,8 @@
   .mode:hover { color: var(--text); }
   .banner { margin-bottom: 16px; }
   .notice { margin-bottom: 16px; font-size: 14px; color: var(--good-text); }
+  /* A little lighter than --critical so it stays readable on a ticked row's tint (4.5:1). */
+  .del { color: color-mix(in srgb, var(--critical) 85%, white); }
   .summary { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
   .next { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .when { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
