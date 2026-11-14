@@ -72,6 +72,25 @@
   // Test reports Clear test reports would take off the list.
   const clearableTests = $derived(listed.filter((r) => r.is_test && r.status !== "sending"));
   const sorted = $derived(sortReports(visible, sort.key, sort.dir));
+
+  // Ticked rows, for Clear selected (or Restore selected in the Cleared view).
+  // Only rows that can be cleared (or restored) get a checkbox.
+  let picked = $state<string[]>([]);
+  const canPick = (r: ReportRow) => (show === "cleared" ? !!r.cleared_at : reportActions(r, now).clear);
+  const pickable = $derived(sorted.filter(canPick));
+  // Keep only ticks that are still on screen and still allowed.
+  $effect(() => {
+    const ok = new Set(pickable.map((r) => r.id));
+    if (picked.some((id) => !ok.has(id))) picked = picked.filter((id) => ok.has(id));
+  });
+  const allPicked = $derived(pickable.length > 0 && pickable.every((r) => picked.includes(r.id)));
+  const somePicked = $derived(picked.length > 0 && !allPicked);
+  const togglePick = (id: string, on: boolean) => (picked = on ? [...new Set([...picked, id])] : picked.filter((x) => x !== id));
+  const toggleAll = (on: boolean) => (picked = on ? pickable.map((r) => r.id) : []);
+  function setShow(v: typeof show) {
+    show = v;
+    picked = [];
+  }
   const week = $derived(thisWeek(rows, now));
   const next = $derived(rows.filter((r) => !r.is_test && r.status === "scheduled" && Date.parse(r.send_at) > now).sort((a, b) => a.send_at.localeCompare(b.send_at))[0]);
   const count = (s: ReportRow["status"]) => rows.filter((r) => !r.is_test && r.status === s && now - Date.parse(r.send_at) <= 86400000).length;
@@ -111,6 +130,18 @@
     await act(async () => db.moveReports(week.toResume.map((r) => r.id), "held", "scheduled"), `${plural(n, "report is", "reports are")} scheduled.`);
   }
   const open = (id: string) => (location.hash = `#/reports/${id}`);
+  async function clearPicked() {
+    const ids = [...picked];
+    const n = ids.length;
+    if (!n) return;
+    if (show === "cleared") {
+      await act(() => db.clearReports(ids, false), `${plural(n, "report is", "reports are")} back on the list.`);
+    } else {
+      if (!(await confirm.ask({ title: `Clear ${plural(n, "report", "reports")}?`, body: "They leave the list now. Nothing is deleted: find them under Cleared, where Restore brings them back.", action: "Clear" }))) return;
+      await act(() => db.clearReports(ids, true), `${plural(n, "report is", "reports are")} cleared. Find them under Cleared.`);
+    }
+    picked = [];
+  }
   const clear = (r: ReportRow) => act(() => db.clearReports([r.id], true), `${r.client_name}, ${periodLabel(r)} is cleared from the list. Find it under Cleared.`);
   const restore = (r: ReportRow) => act(() => db.clearReports([r.id], false), `${r.client_name}, ${periodLabel(r)} is back on the list.`);
   async function clearTests() {
@@ -164,15 +195,28 @@
 
   <div class="filters">
     <div class="seg" role="group" aria-label="Which reports">
-      <button aria-pressed={show === "current"} onclick={() => (show = "current")}>This week</button>
-      <button aria-pressed={show === "all"} onclick={() => (show = "all")}>Last 4 months</button>
-      <button aria-pressed={show === "cleared"} onclick={() => (show = "cleared")}>Cleared{cleared.length ? ` (${cleared.length})` : ""}</button>
+      <button aria-pressed={show === "current"} onclick={() => setShow("current")}>This week</button>
+      <button aria-pressed={show === "all"} onclick={() => setShow("all")}>Last 4 months</button>
+      <button aria-pressed={show === "cleared"} onclick={() => setShow("cleared")}>Cleared{cleared.length ? ` (${cleared.length})` : ""}</button>
     </div>
   </div>
 
   {#if sorted.length}
     <section class="card flush list">
+      {#if picked.length}
+        <div class="picked" role="region" aria-label="Selected reports">
+          <span>{plural(picked.length, "report", "reports")} selected</span>
+          <div>
+            <button type="button" class="btn sm primary" disabled={busy} onclick={clearPicked}>{show === "cleared" ? "Restore selected" : "Clear selected"}</button>
+            <button type="button" class="btn sm ghost" onclick={() => (picked = [])}>Unselect all</button>
+          </div>
+        </div>
+      {/if}
       <div class="phone-sort">
+        {#if pickable.length}
+          <!-- Phones hide the table header, so its select all box lives here. -->
+          <label class="selall"><input type="checkbox" checked={allPicked} indeterminate={somePicked} onchange={(e) => toggleAll(e.currentTarget.checked)} /> Select all</label>
+        {/if}
         <label for="sort-key">Sort by</label>
         <select id="sort-key" class="input" value={sort.key} onchange={(e) => sortBy(e.currentTarget.value as ReportSortKey, COLUMNS.find((c) => c.key === e.currentTarget.value)!.first)}>
           {#each COLUMNS as c (c.key)}<option value={c.key}>{c.label}</option>{/each}
@@ -183,6 +227,12 @@
         <caption class="sr-only">Reports, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
         <thead>
           <tr>
+            <th class="pick">
+              {#if pickable.length}
+                <input type="checkbox" checked={allPicked} indeterminate={somePicked} onchange={(e) => toggleAll(e.currentTarget.checked)}
+                  aria-label={show === "cleared" ? "Select every cleared report" : "Select every report that can be cleared"} />
+              {/if}
+            </th>
             {#each COLUMNS as c (c.key)}
               <th aria-sort={ariaSort(c.key)} class:hide-md={c.key === "generated"}>
                 <button type="button" class="sort" class:on={sort.key === c.key} onclick={() => sortBy(c.key)}>
@@ -197,7 +247,12 @@
           {#each sorted as r (r.id)}
             {@const st = reportState(r, now)}
             {@const can = reportActions(r, now)}
-            <tr>
+            <tr class:on={picked.includes(r.id)}>
+              <td class="pick">
+                {#if canPick(r)}
+                  <input type="checkbox" checked={picked.includes(r.id)} onchange={(e) => togglePick(r.id, e.currentTarget.checked)} aria-label="Select {r.client_name}, {periodLabel(r)}{r.is_test ? ' (test)' : ''}" />
+                {/if}
+              </td>
               <td class="who"><a href="#/reports/{r.id}"><strong>{r.client_name}</strong></a></td>
               <td class="rep">{periodLabel(r)}</td>
               <td class="st">
@@ -253,12 +308,20 @@
   .list { margin-bottom: 16px; }
   .flush { padding: 8px 8px 0; }
   .list .table { table-layout: fixed; }
-  .list th:nth-child(1) { width: 17%; }
-  .list th:nth-child(2) { width: 17%; }
-  .list th:nth-child(3) { width: auto; }
-  .list th:nth-child(4) { width: 14%; }
-  .list th:nth-child(5) { width: 13%; }
-  .list th:nth-child(6) { width: 250px; }
+  .list th:nth-child(1) { width: 44px; }
+  .list th:nth-child(2) { width: 16%; }
+  .list th:nth-child(3) { width: 16%; }
+  .list th:nth-child(4) { width: auto; }
+  .list th:nth-child(5) { width: 14%; }
+  .list th:nth-child(6) { width: 13%; }
+  .list th:nth-child(7) { width: 250px; }
+  .pick input { width: 18px; height: 18px; accent-color: var(--lime); cursor: pointer; vertical-align: middle; }
+  .list tbody tr.on { background: color-mix(in srgb, var(--lime) 7%, transparent); }
+  .picked {
+    position: sticky; top: 8px; z-index: 5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+    margin: 4px 4px 8px; padding: 10px 12px; border: 1px solid var(--lime); border-radius: 10px; background: var(--surface-2); font-size: 14px; font-weight: 600;
+  }
+  .picked div { display: flex; gap: 8px; flex-wrap: wrap; }
   th .sort {
     display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; margin: -4px -6px; border: 0; border-radius: 6px;
     background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
@@ -287,7 +350,9 @@
     .flush { padding: 4px; }
     .table thead { display: none; }
     .table, .table tbody { display: block; }
-    .table tbody tr { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px; padding: 14px 12px; border-bottom: 1px solid var(--line); }
+    .table tbody tr { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px 12px; padding: 14px 12px; border-bottom: 1px solid var(--line); }
+    .table td.pick { grid-column: 1; }
+    .table td.who { grid-column: 2; }
     .table tbody tr:last-child { border-bottom: 0; }
     .table td { display: block; padding: 0; border: 0; }
     .table td.hide-md { display: none; }
@@ -295,6 +360,8 @@
     .when-cell .lbl { display: inline; }
     .phone-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 8px 12px; border-bottom: 1px solid var(--line); }
     .phone-sort label { font-size: 13px; color: var(--text-2); }
+    .phone-sort .selall { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; }
+    .phone-sort .selall input { width: 18px; height: 18px; accent-color: var(--lime); }
     .phone-sort .input { height: 36px; width: auto; }
     .acts { grid-column: 1 / -1; white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; }
     .acts .btn { margin-left: 0; }
