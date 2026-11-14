@@ -59,6 +59,7 @@ const NAMES: Record<string, string> = {
   updates_empty_ok: "nothing to install text", updates_empty_failed: "patch run didn't finish text", security_title: "security section title",
   security_text: "security text", apps_intro: "text before the app list", security_note: "security closing note",
   next_label: "next patch window label", next_when: "next patch window time", next_note: "next patch window note",
+  network_title: "router update section title", router_update_title: "router update item title", router_update_text: "router update item text",
 };
 
 /** A field path in plain words: weekly.kpi_labels[1] is "Weekly number label 2". */

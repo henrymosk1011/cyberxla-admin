@@ -1,6 +1,7 @@
 <script lang="ts">
   // Patch reports for one client: their Action1 group, who gets the reports,
-  // whether they are on, computers to always leave off, and recent reports.
+  // whether they are on, computers to always leave off, their UniFi console,
+  // and recent reports.
   import db from "$db";
   import ReportPill from "./ReportPill.svelte";
   import { parseEmails, parseNames, periodLabel, reportState } from "../lib/reports.ts";
@@ -13,7 +14,7 @@
   const cc0 = $derived((client.report_cc ?? []).join(", "));
   const off0 = $derived((client.report_exclude ?? []).join("\n"));
 
-  let form = $state({ group: "", to: "", cc: "", enabled: false, off: "" });
+  let form = $state({ group: "", to: "", cc: "", enabled: false, off: "", unifi: "" });
   let reports = $state<ReportRow[]>([]);
   let error = $state("");
   let saved = $state("");
@@ -21,10 +22,10 @@
 
   // Reset the form only when these saved values change, not every time the
   // client page reloads (saving notes elsewhere shouldn't wipe edits here).
-  const savedKey = $derived(JSON.stringify([client.id, client.action1_group, to0, cc0, client.reports_enabled, off0]));
+  const savedKey = $derived(JSON.stringify([client.id, client.action1_group, to0, cc0, client.reports_enabled, off0, client.unifi_console]));
   $effect(() => {
     void savedKey;
-    form = { group: client.action1_group ?? "", to: to0, cc: cc0, enabled: !!client.reports_enabled, off: off0 };
+    form = { group: client.action1_group ?? "", to: to0, cc: cc0, enabled: !!client.reports_enabled, off: off0, unifi: client.unifi_console ?? "" };
   });
   $effect(() => {
     const id = client.id;
@@ -32,7 +33,7 @@
   });
 
   const dirty = $derived(form.group !== (client.action1_group ?? "") || form.to !== to0 || form.cc !== cc0
-    || form.enabled !== !!client.reports_enabled || parseNames(form.off).join("\n") !== off0);
+    || form.enabled !== !!client.reports_enabled || parseNames(form.off).join("\n") !== off0 || form.unifi.trim() !== (client.unifi_console ?? ""));
 
   async function save(e: SubmitEvent) {
     e.preventDefault();
@@ -43,10 +44,12 @@
     const off = parseNames(form.off);
     if (off.length > 200 || off.some((n) => n.length > 120)) return (error = "Up to 200 computers, each name up to 120 characters.");
     const group = form.group.trim();
+    const unifi = form.unifi.trim();
+    if (unifi.length > 200) return (error = "The UniFi console name can be up to 200 characters.");
     if (form.enabled && (!group || !to.emails.length)) return (error = "To turn reports on, add the Action1 group and at least one recipient.");
     busy = true;
     try {
-      await db.updateClient(client.id, { action1_group: group || null, report_recipients: to.emails, report_cc: cc.emails, reports_enabled: form.enabled, report_exclude: off });
+      await db.updateClient(client.id, { action1_group: group || null, report_recipients: to.emails, report_cc: cc.emails, reports_enabled: form.enabled, report_exclude: off, unifi_console: unifi || null });
       saved = "Saved";
       setTimeout(() => (saved = ""), 2000);
       onsaved();
@@ -71,6 +74,7 @@
       <textarea id="r-off" class="input" rows="3" autocomplete="off" placeholder="One name per line" bind:value={form.off} aria-describedby="r-off-h"></textarea>
       <span id="r-off-h" class="hint">Names as they show on the report, for example Front Desk. They're left out of every future report for this client, numbers included.</span>
     </div>
+    <div class="field"><label for="r-unifi">UniFi console</label><input id="r-unifi" class="input" maxlength="200" autocomplete="off" bind:value={form.unifi} aria-describedby="r-unifi-h" /><span id="r-unifi-h" class="hint">Optional. The router's name as UniFi shows it (the [TAG] can be left off). Its software version goes on your internal report, and a router update goes on the client's report.</span></div>
     <p class="hint">Changes apply to reports made after you save. Reports already made keep their recipients (edit those on the report).</p>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     <div class="row"><button class="btn primary sm" disabled={!dirty || busy}>Save</button></div>

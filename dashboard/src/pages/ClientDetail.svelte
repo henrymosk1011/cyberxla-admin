@@ -94,7 +94,7 @@
       if (a.action === "insert") return n.lead_id ? "Client created from lead" : "Client added";
       if (n.status !== o.status) return `Status ${STATUS_LABEL[String(o.status)]} → ${STATUS_LABEL[String(n.status)]}`;
       if (n.reports_enabled !== o.reports_enabled) return n.reports_enabled ? "Patch reports turned on" : "Patch reports turned off";
-      if (["action1_group", "report_recipients", "report_cc"].some((k) => JSON.stringify(n[k]) !== JSON.stringify(o[k]))) return "Patch report settings updated";
+      if (["action1_group", "report_recipients", "report_cc", "report_exclude", "unifi_console"].some((k) => JSON.stringify(n[k]) !== JSON.stringify(o[k]))) return "Patch report settings updated";
       if (n.notes !== o.notes) return "Notes updated";
       return "Details updated";
     }
