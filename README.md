@@ -207,14 +207,16 @@ Monday, send time        every report still scheduled goes out; held ones don't
 - A client's page can also name its UniFi console (the router's name as UniFi
   Site Manager shows it). The Sunday run then puts its UniFi equipment on the
   internal report. When any of its devices was updated that period, the
-  client's report gets a Network section listing every device, the router
-  first: updated ones say so, the others say No update needed (or No update
-  this week when UniFi shows an update waiting for them; worded by the
-  template's Network updates card).
+  client's report gets a Network section listing every device: the router
+  first, then its UniFi Network app (the software on the router that runs the
+  network), then access points. Updated ones say so; the others say No update
+  needed (or No update this week when UniFi shows an update waiting for them),
+  worded by the template's Network updates card.
   The UniFi key lives only in the private reports repo. A report's UniFi tab
-  shows the router's version, any update waiting and the last update seen;
-  Check now asks the report-action Edge Function to start the reports repo's
-  Check UniFi status workflow for that client (read only, about a minute).
+  shows the router, its Network app and each access point, with the version,
+  any update waiting and the last update seen; Check now asks the
+  report-action Edge Function to start the reports repo's Check UniFi status
+  workflow for that client (read only, about a minute).
 - A report's page is split into tabs (Report text, Computers, Email, UniFi,
   History, Advanced) with the preview beside them; a dot marks a tab with
   unsaved edits.
