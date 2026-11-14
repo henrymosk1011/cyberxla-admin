@@ -222,9 +222,11 @@ export type Client = {
   reports_enabled: boolean;
   /** Computers to always leave off this client's reports, by the name shown on the report. */
   report_exclude: string[];
+  /** The client's UniFi console, as UniFi Site Manager names it (or its host id), for router info on reports. */
+  unifi_console: string | null;
 };
 
-type ReportFields = "action1_group" | "report_recipients" | "report_cc" | "reports_enabled" | "report_exclude";
+type ReportFields = "action1_group" | "report_recipients" | "report_cc" | "reports_enabled" | "report_exclude" | "unifi_console";
 export type ClientInput = Omit<Client, "id" | "created_at" | "updated_at" | ReportFields> & Partial<Pick<Client, ReportFields>>;
 
 /** A priced service on a client or project. */
@@ -329,6 +331,10 @@ export type ReportTemplate = {
   next_label: string;
   next_when: string;
   next_note: string;
+  /** Only on reports for a period when the client's UniFi router was updated. */
+  network_title: string;
+  router_update_title: string;
+  router_update_text: string;
   weekly: ReportTemplatePeriod;
   monthly: ReportTemplatePeriod;
 };

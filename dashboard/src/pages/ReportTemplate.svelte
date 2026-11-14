@@ -190,6 +190,16 @@
       </section>
 
       <section class="card">
+        <div class="card-head"><h2>Router update</h2></div>
+        <p class="hint">Only on a report for a period when the client's UniFi router was updated. It becomes the report's extra section, so it can still be edited per report. Same for weekly and monthly.</p>
+        {@render field("t-net-title", "Section title", draft, "network_title")}
+        <div class="grid">
+          {@render field("t-router-title", "Item title", draft, "router_update_title")}
+          <div class="wide">{@render field("t-router-text", "Item text", draft, "router_update_text", ph("version", "from", "date"), 2)}</div>
+        </div>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2>Email ({word})</h2></div>
         {@render field("t-subj", "Subject", p, "subject", period === "weekly" ? ph("client", "window_short") : ph("client", "month"))}
         {@render field("t-body", "Body", p, "body", `A blank line starts a new paragraph. **Two asterisks** make text bold. ${ph("client", "summary", period === "weekly" ? "window_date" : "month", "next_day")}`, 12)}

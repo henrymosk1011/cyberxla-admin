@@ -51,6 +51,9 @@
     "next_label": "Next patch window",
     "next_when": "{next_day} at 9:00 PM",
     "next_note": "Please leave computers powered on and plugged in Friday night. They restart on their own once updates finish.",
+    "network_title": "Network",
+    "router_update_title": "Updated the router software",
+    "router_update_text": "Your router now runs version {version}, installed {date}.",
     "weekly": {
       "label": "Weekly patch report",
       "subtitle": "Patch window: {window_date}   |   Report date: {report_date}",
@@ -112,6 +115,9 @@
     "next_day": "Next patch window day, like Friday, Nov 13, 2026",
     "critical": "Critical findings on a typical computer",
     "high": "High findings on a typical computer",
-    "summary": "The results sentence: patched, updates installed, and who needs attention (email)"
+    "summary": "The results sentence: patched, updates installed, and who needs attention (email)",
+    "version": "Router software version now (router update only)",
+    "from": "Router software version before (router update only)",
+    "date": "When the router update went in, like Nov 18 (router update only)"
   }
 }

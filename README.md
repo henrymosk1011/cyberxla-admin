@@ -33,6 +33,7 @@ access to any table.
 | `supabase/migrations/0010_reports.sql` | Patch reports: drafts, PDFs, settings, the `report_writer` role and its functions |
 | `supabase/migrations/0011_report_exclude.sql` | Computers to always leave off a client's patch reports |
 | `supabase/migrations/0012_report_template.sql` | The report template every new patch report starts from |
+| `supabase/migrations/0013_unifi.sql` | A client's UniFi console, and the log of UniFi software versions the reports have seen |
 | `supabase/functions/report-action/` | The dashboard's Send now and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
@@ -201,6 +202,11 @@ Monday, send time        every report still scheduled goes out; held ones don't
   along with computers to always leave off. A computer can also be marked to
   leave off future reports from any report; hiding or deleting one on a report
   only changes that report.
+- A client's page can also name its UniFi console (the router's name as UniFi
+  Site Manager shows it). The Sunday run then puts its UniFi equipment on the
+  internal report, and when the router was updated that period, a Network
+  section on the client's report (worded by the template's Router update card).
+  The UniFi key lives only in the private reports repo.
 - Test reports (from a manual run) never block the real Sunday report, never
   send on a schedule, and always go to you only.
 
