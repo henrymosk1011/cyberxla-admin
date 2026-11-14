@@ -186,6 +186,7 @@ export function contentProblem(c: unknown): string | null {
   if (!isObj(c.computers) || !Array.isArray(c.computers.columns) || !Array.isArray(c.computers.list)) return "computers needs columns and list.";
   for (const [i, r] of c.computers.list.entries()) {
     if (!isObj(r) || !isText(r.name)) return `computers.list[${i}].name must be text.`;
+    if (r.host !== undefined && r.host !== null && !isText(r.host)) return `computers.list[${i}].host must be text.`;
     if (!isObj(r.updates) || !Array.isArray(r.updates.items)) return `computers.list[${i}].updates.items must be a list.`;
     if (!TONE_SET.has(r.tone as Tone)) return `computers.list[${i}].tone must be good, warn, bad, info or lime.`;
   }
@@ -196,7 +197,7 @@ export function contentProblem(c: unknown): string | null {
 
 /** A computer row the admin adds by hand. */
 export const blankComputer = (): ReportContent["computers"]["list"][number] => ({
-  name: "New computer", run: "Success", pending: "0", crit: "0", status: "Protected", tone: "good", hidden: false,
+  name: "New computer", host: "", run: "Success", pending: "0", crit: "0", status: "Protected", tone: "good", hidden: false,
   updates: { count: 0, items: [], empty: "Already up to date. Nothing new to install." },
 });
 

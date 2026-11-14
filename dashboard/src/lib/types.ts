@@ -345,6 +345,8 @@ export type Tone = (typeof TONES)[number];
 /** One computer: its row in "Your computers" and its card in "Updates installed". */
 export type ReportComputer = {
   name: string;
+  /** The computer's own (Windows) name, shown smaller after the name. Blank hides it. */
+  host?: string;
   /** Weekly: Success, Failed or No result. Monthly: "4 of 5". */
   run: string;
   pending: string;

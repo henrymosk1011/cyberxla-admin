@@ -502,6 +502,7 @@
                   <div class="pc">
                     <div class="grid">
                       <div class="field"><label for="pc-{i}-n">Name</label><input id="pc-{i}-n" class="input" bind:value={pc.name} /></div>
+                      <div class="field"><label for="pc-{i}-h">Computer name</label><input id="pc-{i}-h" class="input" bind:value={pc.host} aria-describedby="pc-{i}-h-hint" /><span id="pc-{i}-h-hint" class="hint">Shown smaller after the name. Leave blank to hide it.</span></div>
                       <div class="field"><label for="pc-{i}-r">{draft.computers.columns[1]?.label ?? "Run"}</label><input id="pc-{i}-r" class="input" bind:value={pc.run} /></div>
                       <div class="field"><label for="pc-{i}-q">{draft.computers.columns[2]?.label ?? "Updates queued"}</label><input id="pc-{i}-q" class="input" bind:value={pc.pending} /></div>
                       <div class="field"><label for="pc-{i}-c">{draft.computers.columns[3]?.label ?? "Critical risks"}</label><input id="pc-{i}-c" class="input" bind:value={pc.crit} /></div>
