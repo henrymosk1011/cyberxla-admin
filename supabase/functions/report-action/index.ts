@@ -1,4 +1,5 @@
-// report-action: the dashboard's Send now, re-render and Rebuild buttons for patch reports.
+// report-action: the dashboard's Send now, re-render, Rebuild and UniFi Check now
+// buttons for patch reports.
 //
 // 1. POST only, from admin.cyberx.la only, with a small body cap.
 // 2. Every database call runs as the signed-in user (their token plus the
@@ -9,7 +10,8 @@
 //    checks the move) and starts the Send reports workflow for it, which
 //    claims it in one step, so it can't go out twice. Render starts the Render
 //    report workflow when the PDFs are behind the latest edits; Rebuild starts
-//    it with force, so it renders even when they're up to date.
+//    it with force, so it renders even when they're up to date. UniFi starts the
+//    Check UniFi workflow for the report's client (read only), any status.
 // 5. GitHub is called with a fine grained token that can only run Actions on
 //    the reports repo, and it expires.
 //
@@ -19,7 +21,7 @@
 //   PUBLISHABLE_KEY   optional; only if the function reports a missing publishable key
 // Supabase provides SUPABASE_URL.
 
-import { ALLOWED_ORIGINS, BadRequest, MAX_BODY_BYTES, dispatchRequest, parseAction, publishableKey, refusal, renderIsCurrent, type ReportState } from "./lib.ts";
+import { ALLOWED_ORIGINS, BadRequest, MAX_BODY_BYTES, dispatchRequest, parseAction, publishableKey, refusal, renderIsCurrent, type ReportState, type Workflow } from "./lib.ts";
 
 function env(name: string): string {
   const v = Deno.env.get(name);
@@ -76,8 +78,8 @@ function asUser(authorization: string) {
   };
   return {
     isAdmin: async () => (await call("rpc/is_admin", { method: "POST", body: "{}" })) === true,
-    report: async (id: string): Promise<ReportState | null> =>
-      (await call(`reports?id=eq.${id}&select=id,status,content_version,rendered_version`))?.[0] ?? null,
+    report: async (id: string): Promise<(ReportState & { client_id: string }) | null> =>
+      (await call(`reports?id=eq.${id}&select=id,status,content_version,rendered_version,client_id`))?.[0] ?? null,
     // Only if the status is still what we saw, so a Hold clicked meanwhile wins.
     scheduleNow: async (id: string, from: string): Promise<boolean> =>
       ((await call(`reports?id=eq.${id}&status=eq.${from}`, {
@@ -88,8 +90,8 @@ function asUser(authorization: string) {
   };
 }
 
-async function dispatch(workflow: "send.yml" | "render.yml", reportId: string, force = false) {
-  const { url, init } = dispatchRequest(env("REPORTS_REPO"), workflow, reportId, env("GH_ACTIONS_TOKEN"), force);
+async function dispatch(workflow: Workflow, id: string, force = false) {
+  const { url, init } = dispatchRequest(env("REPORTS_REPO"), workflow, id, env("GH_ACTIONS_TOKEN"), force);
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) });
   if (res.status !== 204) {
     const detail = res.status === 401 ? "the GitHub token has expired or was revoked" : `GitHub answered ${res.status}`;
@@ -121,6 +123,11 @@ Deno.serve(async (req) => {
     if (!(await db.isAdmin())) return reply(403, { error: "Only an admin who finished MFA can do this." }, headers);
     const r = await db.report(reportId);
     if (!r) return reply(404, { error: "Report not found." }, headers);
+    // A UniFi check only reads the client's router, so any report's page can start one.
+    if (action === "unifi") {
+      await dispatch("unifi-check.yml", r.client_id);
+      return reply(200, { ok: true, started: "unifi" }, headers);
+    }
     const no = refusal(r);
     if (no) return reply(409, { error: no }, headers);
 
@@ -141,7 +148,7 @@ Deno.serve(async (req) => {
     const err = e as Error & { status?: number; github?: boolean; dbMessage?: string };
     console.error("report-action", action, reportId, err.message);
     if (err.github) {
-      const what = action === "send_now" ? "It's marked to send now, but the send didn't start" : action === "rebuild" ? "The rebuild didn't start" : "The preview didn't start updating";
+      const what = action === "send_now" ? "It's marked to send now, but the send didn't start" : action === "rebuild" ? "The rebuild didn't start" : action === "unifi" ? "The UniFi check didn't start" : "The preview didn't start updating";
       return reply(502, { error: `${what}: ${err.message}. Try again in a minute.` }, headers);
     }
     if (err.status === 401) return reply(401, { error: "Sign in again." }, headers);

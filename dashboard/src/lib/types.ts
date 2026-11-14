@@ -166,8 +166,10 @@ export interface Db {
   /** Move these reports from one status to another (Hold all, Resume all). Returns how many moved. */
   moveReports(ids: string[], from: ReportStatus, to: ReportStatus): Promise<number>;
   deleteReport(id: string): Promise<void>;
-  /** Send now, or re-render the PDFs after an edit (report-action Edge Function). */
-  reportAction(id: string, action: "render" | "rebuild" | "send_now"): Promise<{ started: "render" | "send" | null }>;
+  /** Send now, re-render the PDFs after an edit, or check the client's UniFi now (report-action Edge Function). */
+  reportAction(id: string, action: "render" | "rebuild" | "send_now" | "unifi"): Promise<{ started: "render" | "send" | "unifi" | null }>;
+  /** A client's latest UniFi status (saved by the reports repo), or null if never checked. */
+  unifiStatus(clientId: string): Promise<UnifiStatus | null>;
   reportSettings(): Promise<ReportSettings>;
   saveReportSettings(patch: Partial<Omit<ReportSettings, "updated_at">>): Promise<void>;
   /** Called on any change to reports; refetch what you show. */
@@ -355,6 +357,30 @@ export type ReportComputer = {
   tone: Tone;
   hidden: boolean;
   updates: { count: number; items: { name: string; count: number; severity: string | null }[]; empty: string };
+};
+
+/** One UniFi device as the Check UniFi status job saves it (lib/unifi.js statusData in the reports repo). */
+export type UnifiDevice = {
+  name: string;
+  model: string;
+  isConsole: boolean;
+  status: string;
+  online: boolean;
+  version: string;
+  needsUpdate: boolean;
+  updateAvailable: string | null;
+  startupTime: string | null;
+  /** The last software update the checks have seen. */
+  lastUpdate: { from: string; to: string; at: string } | null;
+  /** When the checks first saw this device: no update before this is known. */
+  trackedSince: string | null;
+};
+
+export type UnifiStatus = {
+  client_id: string;
+  console: string;
+  checked_at: string;
+  data: { v: number; found: boolean; error: string | null; console: string; router: UnifiDevice | null; devices: UnifiDevice[] };
 };
 
 /**
