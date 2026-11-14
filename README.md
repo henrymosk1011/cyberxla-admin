@@ -206,8 +206,10 @@ Monday, send time        every report still scheduled goes out; held ones don't
   only changes that report.
 - A client's page can also name its UniFi console (the router's name as UniFi
   Site Manager shows it). The Sunday run then puts its UniFi equipment on the
-  internal report, and when the router was updated that period, a Network
-  section on the client's report (worded by the template's Router update card).
+  internal report. When any of its devices was updated that period, the
+  client's report gets a Network section listing every device, the router
+  first: updated ones say so, the others say they were checked (worded by the
+  template's Network updates card).
   The UniFi key lives only in the private reports repo. A report's UniFi tab
   shows the router's version, any update waiting and the last update seen;
   Check now asks the report-action Edge Function to start the reports repo's

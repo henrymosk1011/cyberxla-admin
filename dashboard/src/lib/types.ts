@@ -335,12 +335,15 @@ export type ReportTemplate = {
   next_label: string;
   next_when: string;
   next_note: string;
-  /** Only on reports for a period when the client's UniFi router was updated. */
+  /** Only on reports for a period when one of the client's UniFi devices was updated; then every device is listed. */
   network_title: string;
   router_update_title: string;
   router_update_text: string;
   device_update_title: string;
   device_update_text: string;
+  /** A device listed in that section that was not updated this period. */
+  device_checked_title: string;
+  device_checked_text: string;
   weekly: ReportTemplatePeriod;
   monthly: ReportTemplatePeriod;
 };

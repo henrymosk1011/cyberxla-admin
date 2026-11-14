@@ -203,7 +203,7 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
   // The scheduled weekly report caught a UniFi update (made up), so it has a Network section.
   const withNetwork: ReportContent = { ...structuredClone(weeklyContent), network: { title: "Network", items: [
     { title: "Updated the router software", text: "Your router now runs version 4.4.1, installed Nov 4." },
-    { title: "Updated the Wi-Fi access point software", text: "Your Wi-Fi access point now runs version 6.7.10, installed Nov 5." },
+    { title: "Checked the Wi-Fi access point software", text: "Your Wi-Fi access point runs version 6.6.77. No update was installed this week." },
   ] } };
   add({ client: h, period: "weekly", content: withNetwork, email: reportSeed.weekly.email, sendAt: nextMon, status: "scheduled", pages: [weeklyPage1, weeklyPage2] });
   add({ client: h, period: "monthly", content: monthlyContent, email: reportSeed.monthly.email, sendAt: nextMon, status: "held", pages: [monthlyPage1, monthlyPage2] });
