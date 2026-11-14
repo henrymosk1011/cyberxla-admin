@@ -208,7 +208,8 @@ Monday, send time        every report still scheduled goes out; held ones don't
   Site Manager shows it). The Sunday run then puts its UniFi equipment on the
   internal report. When any of its devices was updated that period, the
   client's report gets a Network section listing every device, the router
-  first: updated ones say so, the others say Not updated (worded by the
+  first: updated ones say so, the others say No update needed (or No update
+  this week when UniFi shows an update waiting for them; worded by the
   template's Network updates card).
   The UniFi key lives only in the private reports repo. A report's UniFi tab
   shows the router's version, any update waiting and the last update seen;
