@@ -341,9 +341,12 @@ export type ReportTemplate = {
   router_update_text: string;
   device_update_title: string;
   device_update_text: string;
-  /** A device listed in that section that was not updated this period. */
+  /** A device listed in that section that was not updated this period and is up to date. */
   device_checked_title: string;
   device_checked_text: string;
+  /** The same, when UniFi shows an update waiting for it. */
+  device_waiting_title: string;
+  device_waiting_text: string;
   weekly: ReportTemplatePeriod;
   monthly: ReportTemplatePeriod;
 };
