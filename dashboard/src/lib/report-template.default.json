@@ -56,7 +56,7 @@
     "router_update_text": "Your router now runs version {version}, installed {date}.",
     "device_update_title": "Updated the {device} software",
     "device_update_text": "Your {device} now runs version {version}, installed {date}.",
-    "device_checked_title": "Checked the {device} software",
+    "device_checked_title": "Not updated: the {device} software",
     "device_checked_text": "Your {device} runs version {version}. No update was installed this {period}.",
     "weekly": {
       "label": "Weekly patch report",
