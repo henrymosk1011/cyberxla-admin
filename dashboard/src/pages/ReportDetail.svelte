@@ -321,7 +321,12 @@
   }
   async function remove() {
     if (!report) return;
-    if (!(await confirm.ask({ title: "Delete this report?", body: report.is_test ? "Test reports can be deleted any time." : "It hasn't been sent. A new one is only made by running Generate reports again.", action: "Delete", danger: true }))) return;
+    const body = report.is_test
+      ? "Test reports can be deleted any time."
+      : report.status === "sent"
+        ? "It was sent, so this removes the record of it and its PDFs for good. It can't be brought back."
+        : "It hasn't been sent. A new one is only made by running Generate reports again.";
+    if (!(await confirm.ask({ title: "Delete this report for good?", body, action: "Delete", danger: true }))) return;
     try {
       await db.deleteReport(id);
       base = { content: JSON.stringify(draft), ...mail };

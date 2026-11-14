@@ -70,7 +70,8 @@ export function reportActions(r: StateInput, now = Date.now()) {
     cancel: r.status === "scheduled" || r.status === "held" || r.status === "failed",
     markSent: r.status === "sending",
     markNotSent: r.status === "sending",
-    remove: r.status !== "sending" && (r.status !== "sent" || r.is_test),
+    // A sent client report is the record: clear it first, then it can be deleted for good.
+    remove: r.status !== "sending" && (r.status !== "sent" || r.is_test || !!r.cleared_at),
     // Clear: off the Reports list (kept). Finished reports only, and tests.
     clear: !r.cleared_at && (r.is_test ? r.status !== "sending" : r.status === "sent" || r.status === "failed" || r.status === "cancelled"),
     restore: !!r.cleared_at,

@@ -515,6 +515,13 @@ const db: Db = {
     if (count === 0) throw new Error("Nothing was deleted. Reload and try again.");
   },
 
+  async deleteReports(ids) {
+    if (!ids.length) return 0;
+    const { error, count } = await sb.from("reports").delete({ count: "exact" }).in("id", ids);
+    fail(reportError(error));
+    return count ?? 0;
+  },
+
   async reportAction(id, action) {
     const { data, error } = await sb.functions.invoke("report-action", { body: { action, report_id: id } });
     if (error) {
