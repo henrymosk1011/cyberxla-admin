@@ -200,7 +200,12 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
     if (o.pages && o.status !== "sent") reportPages.set(id, o.pages.map((src, i) => ({ page: i + 1, version: 1, src })));
   };
   const h = clients.find((c) => c.id === harbor)!;
-  add({ client: h, period: "weekly", content: weeklyContent, email: reportSeed.weekly.email, sendAt: nextMon, status: "scheduled", pages: [weeklyPage1, weeklyPage2] });
+  // The scheduled weekly report caught a UniFi update (made up), so it has a Network section.
+  const withNetwork: ReportContent = { ...structuredClone(weeklyContent), network: { title: "Network", items: [
+    { title: "Updated the router software", text: "Your router now runs version 4.4.1, installed Nov 4." },
+    { title: "Updated the Wi-Fi access point software", text: "Your Wi-Fi access point now runs version 6.7.10, installed Nov 5." },
+  ] } };
+  add({ client: h, period: "weekly", content: withNetwork, email: reportSeed.weekly.email, sendAt: nextMon, status: "scheduled", pages: [weeklyPage1, weeklyPage2] });
   add({ client: h, period: "monthly", content: monthlyContent, email: reportSeed.monthly.email, sendAt: nextMon, status: "held", pages: [monthlyPage1, monthlyPage2] });
   add({ client: h, period: "weekly", content: weeklyContent, email: reportSeed.weekly.email, sendAt: nextMon, status: "held", test: true, pages: [weeklyPage1, weeklyPage2] });
   add({ client: h, period: "weekly", content: weeklyContent, email: reportSeed.weekly.email, sendAt: lastMon, status: "sent" });

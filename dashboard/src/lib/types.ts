@@ -339,6 +339,8 @@ export type ReportTemplate = {
   network_title: string;
   router_update_title: string;
   router_update_text: string;
+  device_update_title: string;
+  device_update_text: string;
   weekly: ReportTemplatePeriod;
   monthly: ReportTemplatePeriod;
 };
@@ -403,6 +405,8 @@ export type ReportContent = {
   did: { title: string; items: { title: string; text: string }[] };
   /** Optional one-off section (a router replaced, a new computer set up), added by hand. Prints first on page 2. */
   extra?: { title: string; items: { title: string; text: string }[] } | null;
+  /** UniFi devices updated this period (router first); after the updates, as a dark card. */
+  network?: { title: string; items: { title: string; text: string }[] } | null;
   computers: { title: string; columns: { key: string; label: string }[]; list: ReportComputer[] };
   updates_title: string;
   security: { title: string; text: string; apps_intro: string; apps: { name: string; detail: string }[]; note: string };

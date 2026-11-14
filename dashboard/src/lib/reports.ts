@@ -202,6 +202,10 @@ export function contentProblem(c: unknown): string | null {
     for (const [i, b] of c.weeks.bars.entries()) if (!isObj(b) || !Number.isFinite(b.pct)) return `weeks.bars[${i}].pct must be a number.`;
   }
   if (!isObj(c.did) || !Array.isArray(c.did.items)) return "did.items must be a list.";
+  if (c.network !== null && c.network !== undefined) {
+    if (!isObj(c.network) || !isText(c.network.title) || !Array.isArray(c.network.items)) return "network needs a title and items (or set network to null).";
+    for (const [i, it] of c.network.items.entries()) if (!isObj(it) || !isText(it.title) || !isText(it.text)) return `network.items[${i}] needs a title and text.`;
+  }
   if (c.extra !== null && c.extra !== undefined) {
     if (!isObj(c.extra) || !isText(c.extra.title) || !Array.isArray(c.extra.items)) return "extra needs a title and items (or set extra to null).";
     for (const [i, it] of c.extra.items.entries()) if (!isObj(it) || !isText(it.title) || !isText(it.text)) return `extra.items[${i}] needs a title and text.`;
