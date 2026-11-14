@@ -54,6 +54,8 @@
     "network_title": "Network",
     "router_update_title": "Updated the router software",
     "router_update_text": "Your router now runs version {version}, installed {date}.",
+    "device_update_title": "Updated the {device} software",
+    "device_update_text": "Your {device} now runs version {version}, installed {date}.",
     "weekly": {
       "label": "Weekly patch report",
       "subtitle": "Patch window: {window_date}   |   Report date: {report_date}",
@@ -116,8 +118,9 @@
     "critical": "Critical findings on a typical computer",
     "high": "High findings on a typical computer",
     "summary": "The results sentence: patched, updates installed, and who needs attention (email)",
-    "version": "Router software version now (router update only)",
-    "from": "Router software version before (router update only)",
-    "date": "When the router update went in, like Nov 18 (router update only)"
+    "version": "Software version now (network update only)",
+    "from": "Software version before (network update only)",
+    "date": "When the update went in, like Nov 18 (network update only)",
+    "device": "The kind of device, like Wi-Fi access point (network update only)"
   }
 }

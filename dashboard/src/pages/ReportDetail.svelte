@@ -160,7 +160,16 @@
     await tick();
     document.getElementById(`tab-${TABS[j]!.id}`)?.focus();
   }
-  const unifiOthers = $derived(unifi?.data.devices.filter((d) => !d.isConsole) ?? []);
+  /** What a UniFi device is, in plain words (the same rules as the reports repo). */
+  function deviceKind(d: { isConsole: boolean; name: string; model: string }): string {
+    if (d.isConsole) return "Router";
+    const s = `${d.name} ${d.model}`;
+    if (/access point|\b(U6|U7|UAP|UAL|UWB|AC|nanoHD|FlexHD|BeaconHD)\b|\bU[67][ -]/i.test(s)) return "Wi-Fi access point";
+    if (/switch|\b(USW|US-|USL|USM)/i.test(s)) return "Network switch";
+    if (/NVR|recorder/i.test(s)) return "Video recorder";
+    if (/camera|\bG[3-6]\b|UVC/i.test(s)) return "Camera";
+    return "Network device";
+  }
 
   // Leaving with unsaved edits: ask first (links in the app, and closing the tab).
   $effect(() => {
@@ -255,6 +264,11 @@
         if (!draft.extra.items.length) return bad("Add at least one item to the extra section, or remove the section.");
         const untitled = draft.extra.items.findIndex((i) => !i.title.trim());
         if (untitled >= 0) return bad(`Extra section item ${untitled + 1} needs a title.`);
+      }
+      if (draft.network) {
+        draft.network.items = draft.network.items.filter((i) => i.title.trim() || i.text.trim());
+        if (!draft.network.items.length) draft.network = undefined;
+        else if (!draft.network.title.trim()) return (pick("text"), (error = "The network section needs a title."));
       }
       const problem = contentProblem(draft);
       if (problem) return (error = `The report can't be saved: ${problem}`);
@@ -425,6 +439,12 @@
     await tick();
     document.getElementById("x-0-t")?.focus();
   }
+  async function removeNetwork() {
+    if (!draft) return;
+    draft.network = undefined;
+    await tick();
+    document.getElementById("tab-text")?.focus();
+  }
   async function removeExtra() {
     if (!draft) return;
     draft.extra = undefined;
@@ -570,6 +590,21 @@
               {/if}
             </section>
 
+            {#if draft.network}
+              <section class="card">
+                <div class="card-head">
+                  <h2>Network updates</h2>
+                  <div class="headbtns">
+                    <button type="button" class="btn sm ghost" onclick={removeNetwork}>Remove section</button>
+                    <button type="button" class="btn sm" onclick={() => draft!.network!.items.push({ title: "", text: "" })}>Add item</button>
+                  </div>
+                </div>
+                <p class="hint">From UniFi: the devices updated in this report's period. Prints after Updates installed, as a dark card.</p>
+                <div class="field"><label for="net-title">Section title</label><input id="net-title" class="input" bind:value={draft.network.title} /></div>
+                <DidItems bind:items={draft.network.items} idPrefix="net" />
+              </section>
+            {/if}
+
             <section class="card">
               <div class="card-head"><h2>Open security risks</h2><button type="button" class="btn sm" onclick={() => draft!.security.apps.push({ name: "", detail: "on 1 computer" })}>Add app</button></div>
               <div class="field"><label for="s-title">Section title</label><input id="s-title" class="input" bind:value={draft.security.title} /></div>
@@ -696,42 +731,41 @@
               <p class="error">UniFi couldn't be read: {unifi.data.error}</p>
             {:else if !unifi.data.found}
               <p class="error">UniFi has no console named "{client.unifi_console}". Check the name on <a href="#/clients/{report.client_id}">{report.client_name}'s page</a>.</p>
-            {:else if !unifi.data.router}
-              <p class="muted">UniFi lists no router on this console.</p>
+            {:else if !unifi.data.devices.length}
+              <p class="muted">UniFi lists no devices on this console.</p>
             {:else}
-              {@const r = unifi.data.router}
-              <dl class="facts">
-                <div><dt>Router</dt><dd>{r.name} <span class="muted">{r.model}</span></dd></div>
-                <div><dt>Software version</dt><dd>{r.version || "Unknown"}</dd></div>
-                <div><dt>Update</dt><dd>{#if r.needsUpdate}<ReportPill label={r.updateAvailable ? `Update waiting: ${r.updateAvailable}` : "Update waiting"} tone="warn" />{:else}<ReportPill label="Up to date" tone="good" />{/if}</dd></div>
-                <div>
-                  <dt>Last update</dt>
-                  <dd>
-                    {#if r.lastUpdate}{dateTime(r.lastUpdate.at)} <span class="muted">({r.lastUpdate.from} to {r.lastUpdate.to})</span>
-                    {:else}None seen yet{r.trackedSince ? ` (checks began ${shortDate(r.trackedSince)})` : ""}{/if}
-                  </dd>
-                </div>
-                <div><dt>Last restart</dt><dd>{r.startupTime ? dateTime(r.startupTime) : "Unknown"}</dd></div>
-                <div><dt>Status</dt><dd>{r.online ? "Online" : r.status || "Offline"}</dd></div>
-              </dl>
-              {#if unifiOthers.length}
-                <h3 class="minor">Other UniFi devices</h3>
-                <ul class="devs">
-                  {#each unifiOthers as d, i (i)}
-                    <li>
-                      <span><strong>{d.name}</strong> <span class="muted">{d.model}</span></span>
-                      <span class="muted">{d.version || "Unknown"}{d.lastUpdate ? `, updated ${shortDate(d.lastUpdate.at)}` : ""}</span>
+              <p class="hint">{unifi.data.console}: {unifi.data.devices.length} {unifi.data.devices.length === 1 ? "device" : "devices"}, the router first.</p>
+              <ul class="devcards">
+                {#each [...unifi.data.devices].sort((a, b) => Number(b.isConsole) - Number(a.isConsole)) as d, i (i)}
+                  <li class="devcard" class:router={d.isConsole}>
+                    <div class="devhead">
+                      <div>
+                        <p class="kind">{deviceKind(d)}</p>
+                        <h3>{d.name} <span class="muted">{d.model}</span></h3>
+                      </div>
                       {#if d.needsUpdate}<ReportPill label={d.updateAvailable ? `Update waiting: ${d.updateAvailable}` : "Update waiting"} tone="warn" />{:else if !d.online}<ReportPill label="Offline" tone="bad" />{:else}<ReportPill label="Up to date" tone="good" />{/if}
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
+                    </div>
+                    <dl class="facts">
+                      <div><dt>Software version</dt><dd>{d.version || "Unknown"}</dd></div>
+                      <div>
+                        <dt>Last update</dt>
+                        <dd>
+                          {#if d.lastUpdate}{dateTime(d.lastUpdate.at)} <span class="muted">({d.lastUpdate.from} to {d.lastUpdate.to})</span>
+                          {:else}None seen yet{d.trackedSince ? ` (checks began ${shortDate(d.trackedSince)})` : ""}{/if}
+                        </dd>
+                      </div>
+                      <div><dt>Last restart</dt><dd>{d.startupTime ? dateTime(d.startupTime) : "Unknown"}</dd></div>
+                      <div><dt>Status</dt><dd>{d.online ? "Online" : d.status || "Offline"}</dd></div>
+                    </dl>
+                  </li>
+                {/each}
+              </ul>
             {/if}
             <div class="checknow">
               <button type="button" class="btn sm" disabled={unifiChecking} onclick={checkUnifi}>{unifiChecking ? "Checking…" : "Check now"}</button>
               <span class="hint" role="status">{unifiMsg}</span>
             </div>
-            <p class="hint">Reads the router through UniFi; it changes nothing. It's also checked every morning and when the Sunday reports are made.</p>
+            <p class="hint">Reads the router and every access point through UniFi; it changes nothing. They are also checked every morning and when the Sunday reports are made.</p>
           {/if}
         </section>
       </div>
@@ -864,9 +898,13 @@
   .facts div { min-width: 0; }
   .facts dt { font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
   .facts dd { font-size: 15px; overflow-wrap: anywhere; }
-  .minor { font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 4px; }
-  .devs { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-  .devs li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+  .devcards { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .devcard { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .devcard.router { border-color: var(--line-2); background: var(--surface-2); }
+  .devhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; }
+  .devhead h3 { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+  .devhead h3 .muted { font-size: 13px; font-weight: 500; margin-left: 4px; }
+  .kind { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 2px; }
   .checknow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; border-top: 1px solid var(--line); padding-top: 12px; }
   .side { position: sticky; top: 16px; min-width: 0; }
   fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }

@@ -190,12 +190,14 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>Router update</h2></div>
-        <p class="hint">Only on a report for a period when the client's UniFi router was updated. It becomes the report's extra section, so it can still be edited per report. Same for weekly and monthly.</p>
+        <div class="card-head"><h2>Network updates</h2></div>
+        <p class="hint">Only on a report for a period when one of the client's UniFi devices was updated: a section after the updates with one line per device, the router first. Same for weekly and monthly, and editable on each report.</p>
         {@render field("t-net-title", "Section title", draft, "network_title")}
         <div class="grid">
-          {@render field("t-router-title", "Item title", draft, "router_update_title")}
-          <div class="wide">{@render field("t-router-text", "Item text", draft, "router_update_text", ph("version", "from", "date"), 2)}</div>
+          {@render field("t-router-title", "Router: title", draft, "router_update_title")}
+          <div class="wide">{@render field("t-router-text", "Router: text", draft, "router_update_text", ph("version", "from", "date"), 2)}</div>
+          {@render field("t-dev-title", "Other devices (access points, switches): title", draft, "device_update_title", ph("device"))}
+          <div class="wide">{@render field("t-dev-text", "Other devices: text", draft, "device_update_text", ph("device", "version", "from", "date"), 2)}</div>
         </div>
       </section>
 
