@@ -157,6 +157,7 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
       router: { name: "Harbor Light Gateway", model: "UCG Ultra", isConsole: true, status: "online", online: true, version: "4.4.1", needsUpdate: false, updateAvailable: null, startupTime: iso(10 * day), lastUpdate: { from: "4.3.6", to: "4.4.1", at: iso(10 * day) }, trackedSince: iso(60 * day) },
       devices: [
         { name: "Harbor Light Gateway", model: "UCG Ultra", isConsole: true, status: "online", online: true, version: "4.4.1", needsUpdate: false, updateAvailable: null, startupTime: iso(10 * day), lastUpdate: { from: "4.3.6", to: "4.4.1", at: iso(10 * day) }, trackedSince: iso(60 * day) },
+        { name: "UniFi Network", model: "Network app", isConsole: false, isApp: true, status: "online", online: true, version: "10.6.109", needsUpdate: false, updateAvailable: null, startupTime: null, lastUpdate: { from: "10.6.106", to: "10.6.109", at: iso(10 * day + 900000) }, trackedSince: null },
         { name: "Front Office AP", model: "U6 Lite", isConsole: false, status: "online", online: true, version: "6.6.77", needsUpdate: true, updateAvailable: "6.7.10", startupTime: iso(42 * day), lastUpdate: null, trackedSince: iso(60 * day) },
       ],
     },
@@ -203,6 +204,7 @@ const reportsChanged = () => reportListeners.forEach((cb) => cb());
   // The scheduled weekly report caught a UniFi update (made up), so it has a Network section.
   const withNetwork: ReportContent = { ...structuredClone(weeklyContent), network: { title: "Network", items: [
     { title: "Updated the router software", text: "Your router now runs version 4.4.1, installed Nov 4." },
+    { title: "Updated the UniFi Network software", text: "Your UniFi Network now runs version 10.6.109, installed Nov 4." },
     { title: "No update this week: the Wi-Fi access point software", text: "Your Wi-Fi access point runs version 6.6.77." },
   ] } };
   add({ client: h, period: "weekly", content: withNetwork, email: reportSeed.weekly.email, sendAt: nextMon, status: "scheduled", pages: [weeklyPage1, weeklyPage2] });

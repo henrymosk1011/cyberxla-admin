@@ -161,7 +161,8 @@
     document.getElementById(`tab-${TABS[j]!.id}`)?.focus();
   }
   /** What a UniFi device is, in plain words (the same rules as the reports repo). */
-  function deviceKind(d: { isConsole: boolean; name: string; model: string }): string {
+  function deviceKind(d: { isConsole: boolean; isApp?: boolean; name: string; model: string }): string {
+    if (d.isApp) return "Network app";
     if (d.isConsole) return "Router";
     const s = `${d.name} ${d.model}`;
     if (/access point|\b(U6|U7|UAP|UAL|UWB|AC|nanoHD|FlexHD|BeaconHD)\b|\bU[67][ -]/i.test(s)) return "Wi-Fi access point";
@@ -736,12 +737,12 @@
             {:else}
               <p class="hint">{unifi.data.console}: {unifi.data.devices.length} {unifi.data.devices.length === 1 ? "device" : "devices"}, the router first.</p>
               <ul class="devcards">
-                {#each [...unifi.data.devices].sort((a, b) => Number(b.isConsole) - Number(a.isConsole)) as d, i (i)}
+                {#each [...unifi.data.devices].sort((a, b) => Number(b.isConsole) - Number(a.isConsole) || Number(!!b.isApp) - Number(!!a.isApp)) as d, i (i)}
                   <li class="devcard" class:router={d.isConsole}>
                     <div class="devhead">
                       <div>
                         <p class="kind">{deviceKind(d)}</p>
-                        <h3>{d.name} <span class="muted">{d.model}</span></h3>
+                        <h3>{d.name}{#if !d.isApp} <span class="muted">{d.model}</span>{/if}</h3>
                       </div>
                       {#if d.needsUpdate}<ReportPill label={d.updateAvailable ? `Update waiting: ${d.updateAvailable}` : "Update waiting"} tone="warn" />{:else if !d.online}<ReportPill label="Offline" tone="bad" />{:else}<ReportPill label="Up to date" tone="good" />{/if}
                     </div>
@@ -754,8 +755,8 @@
                           {:else}None seen yet{d.trackedSince ? ` (checks began ${shortDate(d.trackedSince)})` : ""}{/if}
                         </dd>
                       </div>
-                      <div><dt>Last restart</dt><dd>{d.startupTime ? dateTime(d.startupTime) : "Unknown"}</dd></div>
-                      <div><dt>Status</dt><dd>{d.online ? "Online" : d.status || "Offline"}</dd></div>
+                      {#if !d.isApp}<div><dt>Last restart</dt><dd>{d.startupTime ? dateTime(d.startupTime) : "Unknown"}</dd></div>{/if}
+                      <div><dt>Status</dt><dd>{d.isApp ? (d.online ? "Running" : "Stopped") : d.online ? "Online" : d.status || "Offline"}</dd></div>
                     </dl>
                   </li>
                 {/each}
@@ -765,7 +766,7 @@
               <button type="button" class="btn sm" disabled={unifiChecking} onclick={checkUnifi}>{unifiChecking ? "Checking…" : "Check now"}</button>
               <span class="hint" role="status">{unifiMsg}</span>
             </div>
-            <p class="hint">Reads the router and every access point through UniFi; it changes nothing. They are also checked every morning and when the Sunday reports are made.</p>
+            <p class="hint">Reads the router, its Network app and every access point through UniFi; it changes nothing. They are also checked every morning and when the Sunday reports are made.</p>
           {/if}
         </section>
       </div>

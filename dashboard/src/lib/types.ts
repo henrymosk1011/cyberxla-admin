@@ -374,6 +374,8 @@ export type UnifiDevice = {
   name: string;
   model: string;
   isConsole: boolean;
+  /** The UniFi Network app on the router (software, not a device: it has no restart time). */
+  isApp?: boolean;
   status: string;
   online: boolean;
   version: string;
