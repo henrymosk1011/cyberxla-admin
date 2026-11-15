@@ -190,6 +190,9 @@ Monday, send time        every report still scheduled goes out; held ones don't
   it all. The preview is images of the real PDF and refreshes about a minute
   after a save. **Rebuild PDF** builds it again with no changes, for example
   after a layout change in the reports repo.
+- The **internal PDF** follows the same edits: computers hidden or deleted
+  here are left off it, renamed ones take the new name, and its counts and
+  action items match (each computer carries its Action1 id for this).
 - **Hold, Resume, Send now**, one at a time or Hold all and Resume all for the
   week. Send now shows exactly who it goes to first.
 - **Preview mode** (the starting mode) sends every report to you, tagged with

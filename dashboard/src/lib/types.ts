@@ -358,6 +358,8 @@ export type Tone = (typeof TONES)[number];
 
 /** One computer: its row in "Your computers" and its card in "Updates installed". */
 export type ReportComputer = {
+  /** Action1's id for the computer (reports made since Nov 15, 2026): the internal PDF uses it to follow edits here. Absent on computers added by hand. */
+  id?: string;
   name: string;
   /** The computer's own (Windows) name, shown smaller after the name. Blank hides it. */
   host?: string;
