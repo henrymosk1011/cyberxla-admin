@@ -22,19 +22,21 @@
   }
 </script>
 
-<dialog bind:this={dlg} onclose={() => done(false)} aria-labelledby="{uid}-title" aria-describedby="{uid}-body">
-  <h2 id="{uid}-title">{title}</h2>
-  <p id="{uid}-body">{body}</p>
-  <div class="row">
-    <button class="btn ghost" onclick={() => done(false)}>Cancel</button>
-    <button class="btn" class:danger class:primary={!danger} onclick={() => done(true)}>{action}</button>
+<!-- A click outside the dialog is a Cancel, as in the other dialogs. -->
+<dialog bind:this={dlg} onclose={() => done(false)} onclick={(e) => { if (e.target === dlg) done(false); }} aria-labelledby="{uid}-title" aria-describedby="{uid}-body">
+  <div class="inner">
+    <h2 id="{uid}-title">{title}</h2>
+    <p id="{uid}-body">{body}</p>
+    <div class="row">
+      <button class="btn ghost" onclick={() => done(false)}>Cancel</button>
+      <button class="btn" class:danger class:primary={!danger} onclick={() => done(true)}>{action}</button>
+    </div>
   </div>
 </dialog>
 
 <style>
-  dialog { margin: auto; width: min(420px, calc(100% - 32px)); border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface-2); color: var(--text); padding: 24px; box-shadow: var(--shadow-lg); }
-  dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
-  h2 { font-size: var(--fs-lg); letter-spacing: -0.02em; }
+  dialog { width: min(420px, calc(100% - 32px)); }
+  .inner { padding: 24px; }
   p { margin-top: 8px; color: var(--text-2); font-size: var(--fs-md); overflow-wrap: anywhere; }
   .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
   /* The dialog is reused; don't animate the color swap between Archive and Delete. */

@@ -5,6 +5,7 @@
   import ReportPill from "../components/ReportPill.svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ReportsNav from "../components/ReportsNav.svelte";
+  import EmptyState from "../components/EmptyState.svelte";
   import SortTh from "../components/SortTh.svelte";
   import SortSelect from "../components/SortSelect.svelte";
   import LoadState from "../components/LoadState.svelte";
@@ -301,9 +302,15 @@
     </section>
   {:else}
     <section class="card">
-      <p class="empty">
-        {q.trim() && inView.length ? "No reports match that search." : show === "archived" ? "Nothing archived. Archive a finished report (sent, failed, cancelled or a test) to take it off the list." : rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
-      </p>
+      {#if q.trim() && inView.length}
+        <EmptyState title="No reports match that search"><button class="btn sm" onclick={() => (q = "")}>Clear search</button></EmptyState>
+      {:else if show === "archived"}
+        <EmptyState title="Nothing archived" text="Archive a finished report (sent, failed, cancelled or a test) to take it off the list. It stays here until you delete it." />
+      {:else if rows.length}
+        <EmptyState title="Nothing this week"><button class="btn sm" onclick={() => setShow("all")}>Show the last 4 months</button></EmptyState>
+      {:else}
+        <EmptyState title="No reports yet" text="Turn reports on for a client (on the client's page), and drafts arrive on Sunday." />
+      {/if}
     </section>
   {/if}
 {/if}
@@ -336,7 +343,7 @@
   .list :global(th:nth-child(5)) { width: 14%; }
   .list :global(th:nth-child(6)) { width: 13%; }
   .list :global(th:nth-child(7)) { width: 176px; }
-  .pick input { width: 18px; height: 18px; accent-color: var(--lime); cursor: pointer; vertical-align: middle; }
+  .pick input { cursor: pointer; vertical-align: middle; }
   .list tbody tr.on { background: color-mix(in srgb, var(--lime) 7%, transparent); }
   .picked {
     position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px;
@@ -378,7 +385,6 @@
     .acts { grid-area: acts; align-self: center; }
     .phone-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 8px 12px; border-bottom: 1px solid var(--line); }
     .phone-sort .selall { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; font-size: var(--fs-sm); color: var(--text-2); }
-    .phone-sort .selall input { width: 18px; height: 18px; accent-color: var(--lime); }
   }
   @media (max-width: 640px) {
     .table tbody tr { grid-template-columns: 26px minmax(0, 1fr); grid-template-areas: "pick who" "pick rep" "pick st" "pick when" "pick acts"; gap: 6px 12px; }

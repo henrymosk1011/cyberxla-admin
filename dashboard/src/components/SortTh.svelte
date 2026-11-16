@@ -1,6 +1,7 @@
 <script lang="ts" generics="K extends string">
   // A column heading that sorts its table. Press it to sort by the column;
   // press again to flip the direction. The arrow shows which way.
+  import Icon from "./Icon.svelte";
   import type { Sort } from "../lib/sort.ts";
 
   let { key, label, sort, onsort, right = false, hide = "" }: {
@@ -17,7 +18,7 @@
 
 <th aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined} class:r={right} class:hide-sm={hide === "sm"} class:hide-md={hide === "md"}>
   <button type="button" class="sort" class:on={sort.key === key} onclick={() => onsort(key)}>
-    {label}<span class="arrow" aria-hidden="true">{sort.key === key ? (sort.dir === "asc" ? "↑" : "↓") : "↕"}</span>
+    {label}<span class="arrow"><Icon name={sort.key === key ? (sort.dir === "asc" ? "arrow-up" : "arrow-down") : "sort"} size={12} /></span>
   </button>
 </th>
 

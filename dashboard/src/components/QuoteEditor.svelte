@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "./Icon.svelte";
   import { untrack } from "svelte";
   import { priceQuote, unitPrice } from "../lib/catalog.ts";
   import { catalog } from "../lib/store.svelte.ts";
@@ -85,7 +86,7 @@
         <span class="qdot" class:mo={it.kind === "monthly"} class:once={it.kind !== "monthly"} aria-hidden="true"></span>
         <span class="name"><span class="nm">{it.name}{#if added.includes(it.id)}<span class="tag">New</span>{/if}</span><small>{unitPrice(byId.get(it.id))}</small></span>
         <span class="price num">{it.from ? "from " : ""}{money(it.cost)}<small>{it.kind === "monthly" ? "/mo" : "one time"}</small></span>
-        <button type="button" class="iconbtn danger" aria-label="Remove {it.name}" title="Remove" onclick={() => remove(it.id)} disabled={ids.length === 1}>×</button>
+        <button type="button" class="iconbtn danger" aria-label="Remove {it.name}" title="Remove" onclick={() => remove(it.id)} disabled={ids.length === 1}><Icon name="close" /></button>
       </li>
     {/each}
   </ul>
@@ -117,7 +118,7 @@
       {/each}
     </div>
   {:else}
-    <button type="button" class="btn sm addbtn" onclick={() => (picking = true)}>+ Add service</button>
+    <button type="button" class="btn sm addbtn" onclick={() => (picking = true)}><Icon name="plus" size={14} /> Add service</button>
   {/if}
 
   <div class="foot">

@@ -1,6 +1,7 @@
 <script lang="ts">
   // The bar along the bottom of a page you edit and then save. It is always on
   // screen, so the result of Save shows here too: what went wrong, or Saved.
+  import Icon from "./Icon.svelte";
   let { dirty, busy = false, label = "Save", hint = "Unsaved changes", error = "", done = "", onsave, ondiscard }: {
     dirty: boolean;
     busy?: boolean;
@@ -22,7 +23,7 @@
     {#if error}
       <p class="err" role="alert">{error}</p>
     {:else if done && !dirty}
-      <p class="ok" role="status"><span aria-hidden="true">✓</span> {done}</p>
+      <p class="ok" role="status"><Icon name="check" size={14} /> {done}</p>
     {:else}
       <p>{dirty ? hint : "No unsaved changes"}</p>
     {/if}

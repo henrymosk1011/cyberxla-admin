@@ -33,7 +33,7 @@ test("totals and value labels", () => {
   assert.equal(valueLabel(t.get("a")), "$8,000 + $120/mo");
   assert.equal(valueLabel(t.get("b")), "$50/mo");
   assert.equal(valueLabel({ monthly: 0, once: 1200, n: 1 }), "$1,200");
-  assert.equal(valueLabel(undefined), "–");
+  assert.equal(valueLabel(undefined), "Not priced");
 });
 
 test("timeline wording for projects and credentials", () => {

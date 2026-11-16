@@ -143,7 +143,6 @@
   .form :global(textarea.input) { min-height: 76px; }
   .hint { font-size: var(--fs-xs); color: var(--muted); }
   .check { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-md); }
-  .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .row { display: flex; justify-content: flex-end; gap: 8px; }
   .recent { list-style: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-sm); }
   .recent li { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }

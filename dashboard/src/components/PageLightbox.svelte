@@ -4,6 +4,7 @@
   // outside closes it and focus goes back to the page you opened. The arrow
   // keys and Page Up and Page Down scroll; left and right arrows jump a page.
   import { tick } from "svelte";
+  import Icon from "./Icon.svelte";
   import type { ReportPage } from "../lib/types.ts";
 
   let { pages, title }: { pages: ReportPage[]; title: string } = $props();
@@ -67,7 +68,7 @@
   {#if pages.length}
     <header>
       <h2 id="lb-title">{title} <span>Page {shown + 1} of {pages.length}</span></h2>
-      <button type="button" class="btn sm" onclick={close}>Close</button>
+      <button type="button" class="iconbtn close" aria-label="Close" onclick={close}><Icon name="close" size={18} /></button>
     </header>
     <!-- The pages scroll inside this box, so keyboard users need to be able to focus it. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -80,16 +81,12 @@
 </dialog>
 
 <style>
-  dialog {
-    margin: auto; padding: 0; width: min(1000px, calc(100% - 24px)); max-height: calc(100dvh - 24px);
-    border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface); color: var(--text);
-    box-shadow: var(--shadow-lg); overflow: hidden;
-  }
-  dialog[open] { display: flex; flex-direction: column; animation: pop-in 0.25s var(--ease) both; }
-  dialog::backdrop { background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(2px); }
-  @keyframes pop-in { from { opacity: 0; transform: scale(0.98); } }
+  dialog { width: min(1000px, calc(100% - 24px)); overflow: hidden; }
+  dialog[open] { display: flex; flex-direction: column; }
+  .close { width: 32px; height: 32px; }
   header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-  h2 { font-size: var(--fs-base); font-weight: 600; }
+  /* A toolbar title, smaller than a dialog's. */
+  h2 { font-size: var(--fs-base); font-weight: 600; letter-spacing: 0; }
   h2 span { margin-left: 8px; font-weight: 500; color: var(--text-2); }
   /* Scrolling past the first or last page stops here, not on the page behind. */
   .frame {

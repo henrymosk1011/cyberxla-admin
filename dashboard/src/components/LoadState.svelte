@@ -1,6 +1,7 @@
 <script lang="ts">
   // What a page shows before its data is in: loading, or what went wrong with
   // a way to try again.
+  import Skeleton from "./Skeleton.svelte";
   let { error = "", what, onretry }: { error?: string; /** "this lead", "reports" */ what: string; onretry: () => void } = $props();
 </script>
 
@@ -11,7 +12,7 @@
     <button class="btn sm" onclick={onretry}>Try again</button>
   </div>
 {:else}
-  <p class="muted" role="status">Loading…</p>
+  <Skeleton />
 {/if}
 
 <style>
