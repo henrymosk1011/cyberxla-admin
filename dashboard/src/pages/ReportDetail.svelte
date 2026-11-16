@@ -5,6 +5,10 @@
   import DidItems from "../components/DidItems.svelte";
   import PageLightbox from "../components/PageLightbox.svelte";
   import ReportPill from "../components/ReportPill.svelte";
+  import LoadState from "../components/LoadState.svelte";
+  import SaveBar from "../components/SaveBar.svelte";
+  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeReport } from "../lib/activity.ts";
   import { resolveTemplate } from "../lib/template.ts";
   import { dateTime, shortDate } from "../lib/format.ts";
@@ -22,8 +26,10 @@
   // Rebuild pressed: the build time and error it started from, so we can tell when it's done.
   let rebuild = $state<{ at: string | null; err: string | null; started: number } | null>(null);
   let history = $state<AuditEntry[]>([]);
-  let error = $state("");
-  let notice = $state("");
+  let loadError = $state("");
+  // How the last Save went, shown in the save bar (always on screen).
+  let saveError = $state("");
+  let saveDone = $state("");
   let busy = $state(false);
   let now = $state(Date.now());
   let confirm: Confirm;
@@ -101,14 +107,16 @@
       }
       if (rebuild && r.rendered_at !== rebuild.at) {
         rebuild = null;
-        notice = "Rebuilt. The preview and PDF are up to date.";
+        toast.success("Rebuilt. The preview and PDF are up to date.");
       } else if (rebuild && r.render_error && r.render_error !== rebuild.err) {
         rebuild = null;
-        error = `The PDF couldn't be rebuilt: ${r.render_error}`;
+        toast.error(`The PDF couldn't be rebuilt: ${r.render_error}`);
       }
-      error = "";
+      loadError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't load this report.";
+      const m = messageOf(e, "Check your connection and try again.");
+      if (report === undefined) loadError = m;
+      else toast.error(`Couldn't refresh this report. ${m}`);
     }
   }
 
@@ -172,35 +180,20 @@
     return "Network device";
   }
 
-  // Leaving with unsaved edits: ask first (links in the app, and closing the tab).
+  // Leaving with unsaved edits: ask first (moving around the app, and closing the tab).
+  guardUnsaved(() => dirty, () => confirm.ask({ title: "Leave without saving?", body: "Your edits to this report haven't been saved.", action: "Leave", danger: true }));
+  // A new edit clears what the last Save said.
   $effect(() => {
-    if (!dirty) return;
-    const onUnload = (e: BeforeUnloadEvent) => e.preventDefault();
-    const onClick = async (e: MouseEvent) => {
-      const a = (e.target as Element | null)?.closest?.("a[href^='#']");
-      if (!a || e.defaultPrevented) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const href = a.getAttribute("href")!;
-      if (await confirm.ask({ title: "Leave without saving?", body: "Your edits to this report haven't been saved.", action: "Leave", danger: true })) {
-        base = { content: JSON.stringify(draft), ...mail };
-        location.hash = href;
-      }
-    };
-    window.addEventListener("beforeunload", onUnload);
-    window.addEventListener("click", onClick, true);
-    return () => { window.removeEventListener("beforeunload", onUnload); window.removeEventListener("click", onClick, true); };
+    if (dirty) saveDone = "";
   });
 
   async function act(fn: () => Promise<unknown>, ok: string) {
-    error = "";
-    notice = "";
     busy = true;
     try {
       await fn();
-      notice = ok;
+      toast.success(ok);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Something went wrong.";
+      toast.error(messageOf(e, "That didn't go through. Try again."));
     } finally {
       busy = false;
       await load();
@@ -242,67 +235,74 @@
     if (!gone) unifiMsg = "The check is taking longer than usual. Look again in a few minutes.";
   }
 
+  /** Save can't go ahead: say why in the save bar, open the right tab, and put the cursor in the field. */
+  async function bad(tabId: TabId, fieldId: string, message: string) {
+    saveError = message;
+    pick(tabId);
+    await tick();
+    document.getElementById(fieldId)?.focus();
+  }
   async function save() {
     if (!report || !draft) return;
-    error = "";
+    saveError = "";
+    saveDone = "";
     const patch: ReportPatch = {};
     if (mailDirty) {
       const to = parseEmails(mail.to), cc = parseEmails(mail.cc);
-      const bad = (m: string) => (pick("email"), (error = m));
-      if (to.invalid.length || cc.invalid.length) return bad(`These don't look like email addresses: ${[...to.invalid, ...cc.invalid].join(", ")}`);
-      if (!to.emails.length) return bad("Add at least one recipient.");
-      if (to.emails.length > 10 || cc.emails.length > 10) return bad("Up to 10 recipients and 10 cc.");
-      if (!mail.subject.trim()) return bad("The email needs a subject.");
-      if (!mail.body.trim()) return bad("The email needs a body.");
+      if (to.invalid.length || cc.invalid.length) return bad("email", to.invalid.length ? "m-to" : "m-cc", `These don't look like email addresses: ${[...to.invalid, ...cc.invalid].join(", ")}`);
+      if (!to.emails.length) return bad("email", "m-to", "Add at least one recipient.");
+      if (to.emails.length > 10 || cc.emails.length > 10) return bad("email", to.emails.length > 10 ? "m-to" : "m-cc", "Up to 10 recipients and 10 cc.");
+      if (!mail.subject.trim()) return bad("email", "m-subject", "The email needs a subject.");
+      if (!mail.body.trim()) return bad("email", "m-body", "The email needs a body.");
       Object.assign(patch, { recipients: to.emails, cc: cc.emails, subject: mail.subject.trim(), email_body: mail.body.trim() });
     }
     if (contentDirty) {
       if (draft.extra) {
         // Empty rows are dropped; the section needs a title and at least one titled item.
         draft.extra.items = draft.extra.items.filter((i) => i.title.trim() || i.text.trim());
-        const bad = (m: string) => (pick("text"), (error = m));
-        if (!draft.extra.title.trim()) return bad("The extra section needs a title.");
-        if (!draft.extra.items.length) return bad("Add at least one item to the extra section, or remove the section.");
+        if (!draft.extra.title.trim()) return bad("text", "x-title", "The extra section needs a title.");
+        if (!draft.extra.items.length) return bad("text", "x-title", "Add at least one item to the extra section, or remove the section.");
         const untitled = draft.extra.items.findIndex((i) => !i.title.trim());
-        if (untitled >= 0) return bad(`Extra section item ${untitled + 1} needs a title.`);
+        if (untitled >= 0) return bad("text", `x-${untitled}-t`, `Extra section item ${untitled + 1} needs a title.`);
       }
       if (draft.network) {
         draft.network.items = draft.network.items.filter((i) => i.title.trim() || i.text.trim());
         if (!draft.network.items.length) draft.network = undefined;
-        else if (!draft.network.title.trim()) return (pick("text"), (error = "The network section needs a title."));
+        else if (!draft.network.title.trim()) return bad("text", "net-title", "The network section needs a title.");
       }
       const problem = contentProblem(draft);
-      if (problem) return (error = `The report can't be saved: ${problem}`);
+      if (problem) return (saveError = `The report can't be saved: ${problem}`);
       patch.content = $state.snapshot(draft) as ReportContent;
     }
     busy = true;
-    notice = "";
     try {
       await db.updateReport(id, patch);
-      notice = "Saved.";
+      let done = "Saved.";
       if (patch.content) {
         try {
           const res = await db.reportAction(id, "render");
-          if (res.started) notice = "Saved. The PDF is rebuilding with your changes; the preview updates in about a minute.";
+          if (res.started) done = "Saved. The PDF is rebuilding with your changes; the preview updates in about a minute.";
         } catch (e) {
-          error = `Saved, but the preview didn't start updating: ${e instanceof Error ? e.message : "try again"}.`;
+          toast.error(`Saved, but the preview didn't start updating: ${messageOf(e, "try again")}.`);
         }
       }
       await load(true);
+      saveDone = done;
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't save.";
+      saveError = messageOf(e, "Couldn't save. Try again.");
     } finally {
       busy = false;
     }
   }
 
   function discard() {
+    saveError = "";
     if (report) takeDrafts(report);
   }
 
   async function sendNow() {
     if (!report || !settings) return;
-    if (dirty) return (error = "Save or discard your edits before sending.");
+    if (dirty) return toast.error("Save or discard your edits before sending.");
     if (await confirm.ask({ title: `Send ${report.client_name} now?`, body: sendNowText(report, settings.mode), action: "Send now" }))
       await act(() => db.reportAction(id, "send_now"), "Sending. It shows Sent in a minute or two.");
   }
@@ -330,15 +330,16 @@
     try {
       await db.deleteReport(id);
       base = { content: JSON.stringify(draft), ...mail };
+      toast.success("Report deleted.");
       location.hash = "#/reports";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't delete.";
+      toast.error(messageOf(e, "Couldn't delete this report."));
     }
   }
   /** Build the PDF and preview again from what's saved, even with no changes. */
   async function rebuildPdf() {
     if (!report) return;
-    if (dirty) return (error = "You have unsaved changes. Save them (that rebuilds the PDF too) or Discard them first.");
+    if (dirty) return toast.error("You have unsaved changes. Save them (that rebuilds the PDF too) or Discard them first.");
     const from = { at: report.rendered_at, err: report.render_error, started: Date.now() };
     now = from.started;
     await act(async () => {
@@ -353,10 +354,9 @@
 
   async function download(kind: "client" | "internal") {
     if (!report) return;
-    error = "";
     try {
       const b64 = await db.reportPdf(id, kind);
-      if (!b64) return (error = "That PDF hasn't been made yet.");
+      if (!b64) return toast.error("That PDF hasn't been made yet.");
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       const a = document.createElement("a");
@@ -366,7 +366,7 @@
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't download.";
+      toast.error(messageOf(e, "Couldn't download the PDF."));
     }
   }
 
@@ -390,7 +390,7 @@
       if (problem) return (jsonError = problem);
       draft = parsed;
       jsonError = "";
-      notice = "JSON applied. Press Save to keep it.";
+      toast.success("JSON applied. Press Save to keep it.");
     } catch (e) {
       jsonError = `That isn't valid JSON: ${e instanceof Error ? e.message : ""}`;
     }
@@ -403,17 +403,16 @@
   async function leaveOff(pc: ReportContent["computers"]["list"][number], on: boolean) {
     if (!client || !report) return;
     const name = pc.name.trim();
-    if (!name) return (error = "Give the computer a name first.");
-    error = "";
+    if (!name) return toast.error("Give the computer a name first.");
     try {
       await db.updateClient(client.id, { report_exclude: withName(client.report_exclude ?? [], name, on) });
       client = await db.client(client.id);
       if (on) pc.hidden = true;
-      notice = on
+      toast.success(on
         ? `${name} will be left off ${report.client_name}'s future reports. It's hidden here too: Save to rebuild this one.`
-        : `${name} will be included in ${report.client_name}'s future reports again.`;
+        : `${name} will be included in ${report.client_name}'s future reports again.`);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't update the list.";
+      toast.error(messageOf(e, "Couldn't update the list."));
     }
   }
 
@@ -421,20 +420,19 @@
   async function useListForFuture() {
     if (!draft || !settings) return;
     const list = ($state.snapshot(draft.did.items) as ReportContent["did"]["items"]).filter((i) => i.title.trim());
-    if (!list.length) return (error = "Add at least one item first.");
+    if (!list.length) return toast.error("Add at least one item first.");
     const ok = await confirm.ask({
       title: "Use this list for future reports?",
       body: `Every report generated from now on, for every client, starts with these ${list.length} items in this order. Reports already made don't change. You can change it again in the report template.`,
       action: "Use for future reports",
     });
     if (!ok) return;
-    error = "";
     try {
       await db.saveReportSettings({ template: { ...resolveTemplate(settings.template), did_items: list } });
       settings = await db.reportSettings();
-      notice = "Saved to the report template. New reports will use this list.";
+      toast.success("Saved to the report template. New reports will use this list.");
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't update the template.";
+      toast.error(messageOf(e, "Couldn't update the template."));
     }
   }
 
@@ -469,9 +467,9 @@
 <a class="back" href="#/reports">← All reports</a>
 
 {#if report === undefined}
-  <p class="muted">Loading…</p>
+  <LoadState error={loadError} what="this report" onretry={() => { loadError = ""; load(true); }} />
 {:else if report === null || !draft || !st || !can}
-  <p class="empty">{error || "This report doesn't exist or was deleted."}</p>
+  <p class="empty">This report doesn't exist or was deleted.</p>
 {:else}
   <header class="head">
     <div class="title">
@@ -492,10 +490,6 @@
       {#if can.remove}<button class="btn ghost del" disabled={busy} onclick={remove}>Delete</button>{/if}
     </div>
   </header>
-
-  {#if error}<p class="error banner" role="alert">{error}</p>{/if}
-  <p class="sr-only" role="status">{notice}</p>
-  {#if notice}<p class="notice" aria-hidden="true">{notice}</p>{/if}
 
   {#if report.warnings.length}
     <div class="callout warn" role="note"><strong>Check before sending</strong>{#each report.warnings as w (w)}<p>{w}</p>{/each}</div>
@@ -857,13 +851,9 @@
 
   {#if !locked}
     <!-- Always on screen while the report can be edited, so Save is easy to find. -->
-    <div class="savebar" class:clean={!dirty} role="region" aria-label="Save">
-      <span>{dirty ? `Unsaved changes${contentDirty ? ". Saving rebuilds the PDF (about a minute)." : ""}` : "No unsaved changes"}</span>
-      <div>
-        {#if dirty}<button class="btn ghost" disabled={busy} onclick={discard}>Discard</button>{/if}
-        <button class="btn primary" disabled={busy || !dirty} onclick={save}>{busy ? "Saving…" : contentDirty ? "Save and rebuild PDF" : "Save"}</button>
-      </div>
-    </div>
+    <SaveBar {dirty} {busy} error={saveError} done={saveDone} onsave={save} ondiscard={discard}
+      label={contentDirty ? "Save and rebuild PDF" : "Save"}
+      hint={`Unsaved changes${contentDirty ? ". Saving rebuilds the PDF (about a minute)." : ""}`} />
   {/if}
 {/if}
 
@@ -880,8 +870,6 @@
   .state .muted { color: var(--text-2); }
   .acts { display: flex; flex-wrap: wrap; gap: 8px; }
   .del { color: var(--critical); }
-  .banner { margin-bottom: 12px; }
-  .notice { margin-bottom: 12px; font-size: 14px; color: var(--good-text); }
   .callout { border: 1px solid var(--line-2); border-left: 3px solid var(--text-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; background: var(--surface); }
   .callout.warn { border-left-color: var(--warning); }
   .callout p { margin-top: 2px; color: var(--text-2); }
@@ -957,9 +945,6 @@
   .pagebtn:hover { transform: translateY(-2px); }
   .pages img { display: block; width: 100%; height: auto; border-radius: 6px; background: #fff; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
   .dl { display: flex; gap: 8px; flex-wrap: wrap; }
-  .savebar { position: sticky; bottom: 12px; z-index: 10; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--lime); border-radius: 14px; background: var(--surface-2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); font-size: 14px; font-weight: 600; }
-  .savebar div { display: flex; gap: 8px; }
-  .savebar.clean { border-color: var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); font-weight: 500; color: var(--text-2); }
   .headbtns { display: flex; flex-wrap: wrap; gap: 8px; }
   .leaveoff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   @media (max-width: 1100px) {

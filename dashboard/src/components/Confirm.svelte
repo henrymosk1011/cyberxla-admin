@@ -1,6 +1,6 @@
 <script lang="ts">
   // One reusable "are you sure?" dialog. Call ask() and await the answer.
-  let dlg: HTMLDialogElement;
+  let dlg = $state<HTMLDialogElement | null>(null);
   let title = $state("");
   let body = $state("");
   let action = $state("Confirm");
@@ -9,13 +9,14 @@
 
   export function ask(opts: { title: string; body: string; action: string; danger?: boolean }): Promise<boolean> {
     title = opts.title; body = opts.body; action = opts.action; danger = !!opts.danger;
-    dlg.showModal();
+    dlg?.showModal();
     return new Promise((r) => (resolve = r));
   }
   function done(ok: boolean) {
     resolve?.(ok);
     resolve = null;
-    dlg.close();
+    // The page may already be gone (the answer was "Leave").
+    dlg?.close();
   }
 </script>
 

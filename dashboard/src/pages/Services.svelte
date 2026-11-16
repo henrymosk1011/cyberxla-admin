@@ -6,10 +6,10 @@
   import { tick } from "svelte";
   import { catalog } from "../lib/store.svelte.ts";
   import { slugify, UNIT_OPTIONS, UNIT_LABEL, unitPrice } from "../lib/catalog.ts";
+  import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { RATE_TIERS, type PackageRow, type ServiceCategory, type ServiceRow } from "../lib/types.ts";
 
   let q = $state("");
-  let error = $state("");
   let busy = $state(false);
   let confirm: Confirm;
 
@@ -37,13 +37,13 @@
   async function reload() {
     [catalog.categories, catalog.services] = await Promise.all([db.categories(), db.services()]);
   }
+  /** Run a change and reload the catalog; a failure is said in a message that shows wherever you are on the page. */
   async function run(fn: () => Promise<void>) {
-    error = "";
     busy = true;
     try {
       await fn();
     } catch (e) {
-      error = e instanceof Error ? e.message : "Something went wrong.";
+      toast.error(messageOf(e, "That didn't go through. Try again."));
     } finally {
       busy = false;
       await reload().catch(() => {});
@@ -106,17 +106,16 @@
   let packages = $state<PackageRow[]>([]);
   let pkgSaved = $state("");
   let pkgTimer: ReturnType<typeof setTimeout> | undefined;
-  const loadPackages = () => db.packages().then((p) => (packages = p)).catch((e) => (error = e instanceof Error ? e.message : "Couldn't load packages."));
+  const loadPackages = () => db.packages().then((p) => (packages = p)).catch((e) => toast.error(`Couldn't load the homepage packages. ${messageOf(e, "Try again.")}`));
   loadPackages();
   async function saveRate(p: PackageRow, i: number, input: HTMLInputElement) {
     const v = Math.round(input.valueAsNumber * 100) / 100;
     if (!Number.isFinite(v) || v < 0 || v > 10000) {
-      error = "Enter a package rate from 0 to 10,000.";
+      toast.error("Enter a package rate from 0 to 10,000.");
       input.value = String(p.rates[i]);
       return;
     }
     if (v === p.rates[i]) return;
-    error = "";
     const rates = p.rates.map((x, k) => (k === i ? v : x));
     try {
       await db.savePackageRates(p.id, rates);
@@ -125,7 +124,7 @@
       clearTimeout(pkgTimer);
       pkgTimer = setTimeout(() => (pkgSaved = ""), 1600);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't save the rate.";
+      toast.error(messageOf(e, "Couldn't save the rate."));
       input.value = String(p.rates[i]);
     }
     await loadPackages();
@@ -138,12 +137,11 @@
   async function savePrice(s: ServiceRow, input: HTMLInputElement) {
     const v = Math.round(input.valueAsNumber * 100) / 100;
     if (!Number.isFinite(v) || v < 0 || v > 1000000) {
-      error = "Enter a price from 0 to 1,000,000.";
+      toast.error("Enter a price from 0 to 1,000,000.");
       input.value = String(s.price);
       return;
     }
     if (v === s.price) return;
-    error = "";
     try {
       await db.saveService({ ...s, price: v }, false);
       s.price = v;
@@ -151,7 +149,7 @@
       clearTimeout(savedTimer);
       savedTimer = setTimeout(() => (savedId = ""), 1600);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't save the price.";
+      toast.error(messageOf(e, "Couldn't save the price."));
       input.value = String(s.price);
     }
     await reload().catch(() => {});
@@ -339,7 +337,7 @@
   }
   async function deleteCategory(c: ServiceCategory, n: number) {
     if (n) {
-      error = `${c.name} still has ${n} service${n === 1 ? "" : "s"}. Move or delete them first.`;
+      toast.error(`${c.name} still has ${n} service${n === 1 ? "" : "s"}. Move or delete them first.`);
       return;
     }
     if (!(await confirm.ask({ title: `Delete ${c.name}?`, body: "This empty category will be removed.", action: "Delete", danger: true }))) return;
@@ -361,8 +359,6 @@
     <button class="btn primary" onclick={() => newService()}>+ Service</button>
   </div>
 </header>
-
-{#if error}<p class="error banner" role="alert">{error} <button class="btn ghost sm" onclick={() => (error = "")}>Dismiss</button></p>{/if}
 
 <svelte:window onpointermove={onMove} onpointerup={endDrag} onpointercancel={endDrag} />
 
@@ -548,7 +544,6 @@
   .sub { font-size: 14px; margin-top: 6px; }
   .tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .search { width: 240px; height: 38px; }
-  .banner { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .cats { display: flex; flex-direction: column; gap: 16px; transition: opacity 0.2s; }
   .cats.busy { opacity: 0.7; }
   .cat-head { display: flex; align-items: flex-start; gap: 8px 12px; margin-bottom: 8px; flex-wrap: wrap; }

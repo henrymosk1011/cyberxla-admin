@@ -4,6 +4,9 @@
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
   import ClientReportsCard from "../components/ClientReportsCard.svelte";
+  import LoadState from "../components/LoadState.svelte";
+  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeLine, describeProject, describeReport } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { CLIENT_STATUSES, type AuditEntry, type Client, type ClientService, type ClientStatus, type Project, type ProjectService } from "../lib/types.ts";
@@ -13,12 +16,15 @@
   let client = $state<Client | null | undefined>(undefined);
   let lines = $state<ClientService[]>([]);
   let activity = $state<AuditEntry[]>([]);
-  let error = $state("");
-  let saved = $state("");
+  let loadError = $state("");
+  let detailsError = $state("");
+  let saving = $state<"" | "details" | "notes">("");
+  let reportsDirty = $state(false);
   let confirm: Confirm;
   let showHidden = $state(false);
 
   // Editable copies
+  const detailsOf = (c: Client) => ({ company: c.company ?? "", contact_name: c.contact_name ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", workstations: c.workstations, servers: c.servers, started_on: c.started_on ?? "" });
   let details = $state({ company: "", contact_name: "", email: "", phone: "", address: "", workstations: 0, servers: 0, started_on: "" });
   let notes = $state("");
 
@@ -26,14 +32,23 @@
     try {
       const [c, l, a] = await Promise.all([db.client(id), db.clientServices(id), db.clientActivity(id)]);
       client = c; lines = l; activity = a;
-      if (c) {
-        details = { company: c.company ?? "", contact_name: c.contact_name ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", workstations: c.workstations, servers: c.servers, started_on: c.started_on ?? "" };
-        notes = c.notes ?? "";
-      }
+      loadError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't load this client.";
+      const m = messageOf(e, "Check your connection and try again.");
+      if (client === undefined) loadError = m;
+      else toast.error(`Couldn't refresh this client. ${m}`);
     }
   }
+  // The forms fill in when the saved values change (the first load, or after
+  // a save), never on a plain reload, so a reload can't wipe what is being typed.
+  const savedDetails = $derived(client ? JSON.stringify(detailsOf(client)) : "");
+  $effect(() => {
+    if (savedDetails) details = JSON.parse(savedDetails);
+  });
+  const savedNotes = $derived(client ? client.notes ?? "" : null);
+  $effect(() => {
+    if (savedNotes !== null) notes = savedNotes;
+  });
   $effect(() => {
     void id; void version;
     load();
@@ -51,28 +66,39 @@
   const hiddenCount = $derived(activity.filter((a) => a.hidden).length);
   const title = $derived(client ? client.company || client.contact_name || "Unnamed client" : "");
 
-  async function run(fn: () => Promise<void>, ok = "") {
-    error = "";
+  /** Run an action, say how it went (the message shows wherever you are on the page), and reload. True when it worked. */
+  async function run(fn: () => Promise<void>, ok = ""): Promise<boolean> {
+    let worked = true;
     try {
       await fn();
-      if (ok) { saved = ok; setTimeout(() => (saved = ""), 2000); }
+      if (ok) toast.success(ok);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Something went wrong.";
+      worked = false;
+      toast.error(messageOf(e, "That didn't go through. Try again."));
     }
     await load();
+    return worked;
   }
   const nn = (s: string) => s.trim() || null;
   async function saveDetails(e: SubmitEvent) {
     e.preventDefault();
-    if (!details.company.trim() && !details.contact_name.trim()) { error = "Add a company or a contact name."; return; }
+    detailsError = "";
+    if (!details.company.trim() && !details.contact_name.trim()) { detailsError = "Add a company or a contact name."; return; }
+    saving = "details";
     await run(() => db.updateClient(id, {
       company: nn(details.company), contact_name: nn(details.contact_name), email: nn(details.email.toLowerCase()), phone: nn(details.phone),
       address: nn(details.address), workstations: Math.max(0, Math.round(details.workstations || 0)), servers: Math.max(0, Math.round(details.servers || 0)),
       started_on: details.started_on || null,
-    }), "Details saved");
+    }), "Details saved.");
+    saving = "";
   }
   const setStatus = (s: ClientStatus) => client && client.status !== s && run(() => db.updateClient(id, { status: s }));
-  const saveNotes = () => run(() => db.updateClient(id, { notes: nn(notes) }), "Notes saved");
+  async function saveNotes() {
+    saving = "notes";
+    await run(() => db.updateClient(id, { notes: nn(notes) }), "Notes saved.");
+    saving = "";
+  }
+  guardUnsaved(() => detailsDirty || notesDirty || reportsDirty, () => confirm.ask({ title: "Leave without saving?", body: "Your changes to this client haven't been saved.", action: "Leave", danger: true }));
   const devices = $derived(client ? client.workstations + client.servers : 0);
 
   async function deleteClient() {
@@ -80,9 +106,10 @@
     if (!(await confirm.ask({ title: `Delete ${title}?`, body: `This permanently deletes the client${also}. To keep the history, set their status to Former instead.`, action: "Delete permanently", danger: true }))) return;
     try {
       await db.deleteClient(id);
+      toast.success(`${title} was deleted.`);
       location.hash = "#/clients";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't delete.";
+      toast.error(messageOf(e, "Couldn't delete this client."));
     }
   }
   const toggleHidden = (a: AuditEntry) => run(() => db.hideActivity(a.id, !a.hidden));
@@ -107,9 +134,9 @@
 <a class="back" href="#/clients">← All clients</a>
 
 {#if client === undefined}
-  <p class="muted">Loading…</p>
+  <LoadState error={loadError} what="this client" onretry={() => { loadError = ""; load(); }} />
 {:else if client === null}
-  <p class="empty">{error || "This client doesn't exist or was deleted."}</p>
+  <p class="empty">This client doesn't exist or was deleted.</p>
 {:else}
   <header class="head">
     <div>
@@ -133,9 +160,7 @@
     {#each CLIENT_STATUSES as s (s)}
       <button class="stage st-{s}" aria-pressed={client.status === s} onclick={() => setStatus(s)}><i aria-hidden="true"></i>{STATUS_LABEL[s]}</button>
     {/each}
-    {#if saved}<span class="saved">✓ {saved}</span>{/if}
   </div>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
 
   <div class="cols">
     <div class="main">
@@ -145,21 +170,20 @@
         empty="No services yet. Add what this client pays for below."
         hint="Per-device services start at list price × this client's {devices} {devices === 1 ? 'device' : 'devices'}. You can change the price and quantity after adding."
         onadd={(l) => run(() => db.addClientService({ ...l, client_id: id }))}
-        onupdate={(l, patch) => run(() => db.updateClientService(l.id, patch), "Saved")}
-        onremove={(l) => run(() => db.deleteClientService(l.id))}
-        onerror={(m) => (error = m)} />
+        onupdate={(l, patch) => run(() => db.updateClientService(l.id, patch))}
+        onremove={(l) => run(() => db.deleteClientService(l.id))} />
 
       <ProjectsCard {projects} lines={projectLines} owner={{ lead_id: null, client_id: id }} noun="client" />
 
       <section class="card">
         <div class="card-head"><h2>Notes</h2></div>
         <textarea class="input" rows="4" maxlength="10000" placeholder="Contract terms, renewal dates, quirks…" bind:value={notes}></textarea>
-        <div class="row"><button class="btn primary sm" disabled={!notesDirty} onclick={saveNotes}>Save notes</button></div>
+        <div class="row"><button class="btn primary sm" disabled={!notesDirty || saving === "notes"} onclick={saveNotes}>{saving === "notes" ? "Saving…" : "Save notes"}</button></div>
       </section>
     </div>
 
     <aside class="side">
-      <ClientReportsCard {client} onsaved={load} />
+      <ClientReportsCard {client} onsaved={load} bind:dirty={reportsDirty} />
 
       <section class="card">
         <div class="card-head"><h2>Details</h2></div>
@@ -174,7 +198,8 @@
             <div class="field"><label for="d-sv">Servers</label><input id="d-sv" class="input num" type="number" min="0" bind:value={details.servers} /></div>
           </div>
           <div class="field"><label for="d-st">Client since</label><input id="d-st" class="input" type="date" bind:value={details.started_on} /></div>
-          <div class="row"><button class="btn primary sm" disabled={!detailsDirty}>Save details</button></div>
+          {#if detailsError}<p class="error" role="alert">{detailsError}</p>{/if}
+          <div class="row"><button class="btn primary sm" disabled={!detailsDirty || saving === "details"}>{saving === "details" ? "Saving…" : "Save details"}</button></div>
         </form>
       </section>
 
@@ -219,7 +244,6 @@
   .stage[aria-pressed="true"] { background: var(--surface-3); color: var(--text); border-color: var(--text-2); }
   .stage i { width: 8px; height: 8px; border-radius: 50%; }
   .st-active i { background: var(--good); } .st-paused i { background: var(--warning); } .st-former i { background: var(--st-lost); }
-  .saved { font-size: 13px; color: var(--good-text); animation: rise 0.3s var(--ease) both; }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
   .main, .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 6px; padding: 2px 6px; transition: color 0.15s, background 0.15s; }

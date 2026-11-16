@@ -2,17 +2,24 @@
   // The report template: the wording and order every new report starts from.
   // Saved in report_settings.template; the Sunday run fills in the
   // {placeholders}. Reports already made don't change.
+  import { tick } from "svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import DidItems from "../components/DidItems.svelte";
+  import LoadState from "../components/LoadState.svelte";
+  import SaveBar from "../components/SaveBar.svelte";
+  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { messageOf } from "../lib/toast.svelte.ts";
   import { blankFields, DEFAULT_TEMPLATE, fieldLabel, PLACEHOLDERS, resolveTemplate, templateDashes, unknownPlaceholders } from "../lib/template.ts";
   import type { ReportTemplate } from "../lib/types.ts";
 
   let draft = $state<ReportTemplate | null>(null);
   let saved = $state("");
   let period = $state<"weekly" | "monthly">("weekly");
-  let error = $state("");
-  let notice = $state("");
+  let loadError = $state("");
+  // How the last Save went, shown in the save bar (always on screen).
+  let saveError = $state("");
+  let saveDone = $state("");
   let busy = $state(false);
   let confirm: Confirm;
 
@@ -21,8 +28,9 @@
       const s = await db.reportSettings();
       draft = resolveTemplate(s.template);
       saved = JSON.stringify(draft);
+      loadError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't load the template.";
+      loadError = messageOf(e, "Check your connection and try again.");
     }
   }
   $effect(() => {
@@ -38,21 +46,34 @@
 
   async function save() {
     if (!draft) return;
-    error = "";
-    notice = "";
+    saveError = "";
+    saveDone = "";
     const blanks = blankFields(draft);
-    if (blanks.length) return (error = `Some fields are empty: ${blanks.map(fieldLabel).join(", ")}. Type something, or use Reset to defaults.`);
+    if (blanks.length) {
+      saveError = `Some fields are empty: ${blanks.map(fieldLabel).join(", ")}. Type something, or use Reset to defaults.`;
+      // Show the weekly or monthly wording the first empty field is in, and put the cursor in it.
+      const per = /^(weekly|monthly)\./.exec(blanks[0]!);
+      if (per) period = per[1] as "weekly" | "monthly";
+      await tick();
+      [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(".layout .main .field .input")].find((el) => !el.value.trim())?.focus();
+      return;
+    }
     // Drop What we did items left completely empty; one with words but no title can't be saved.
     draft.did_items = draft.did_items.filter((i) => i.title.trim() || i.text.trim());
     const untitled = draft.did_items.findIndex((i) => !i.title.trim());
-    if (untitled >= 0) return (error = `What we did item ${untitled + 1} needs a title.`);
+    if (untitled >= 0) {
+      saveError = `What we did item ${untitled + 1} needs a title.`;
+      await tick();
+      document.getElementById(`d-${untitled}-t`)?.focus();
+      return;
+    }
     busy = true;
     try {
       await db.saveReportSettings({ template: $state.snapshot(draft) as ReportTemplate });
       saved = JSON.stringify(draft);
-      notice = "Template saved. Reports generated from now on use it; reports already made don't change.";
+      saveDone = "Template saved. Reports generated from now on use it; reports already made don't change.";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't save the template.";
+      saveError = messageOf(e, "Couldn't save the template. Try again.");
     } finally {
       busy = false;
     }
@@ -61,26 +82,13 @@
     if (!(await confirm.ask({ title: "Reset to the original wording?", body: "Every field goes back to the wording reports started with, including What we did. Nothing is saved until you press Save template.", action: "Reset" }))) return;
     draft = structuredClone(DEFAULT_TEMPLATE);
   }
-  const discard = () => { draft = JSON.parse(saved); };
+  const discard = () => { saveError = ""; draft = JSON.parse(saved); };
 
   // Leaving with unsaved changes: ask first.
+  guardUnsaved(() => dirty, () => confirm.ask({ title: "Leave without saving?", body: "Your changes to the template haven't been saved.", action: "Leave", danger: true }));
+  // A new edit clears what the last Save said.
   $effect(() => {
-    if (!dirty) return;
-    const onUnload = (e: BeforeUnloadEvent) => e.preventDefault();
-    const onClick = async (e: MouseEvent) => {
-      const a = (e.target as Element | null)?.closest?.("a[href^='#']");
-      if (!a || e.defaultPrevented) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const href = a.getAttribute("href")!;
-      if (await confirm.ask({ title: "Leave without saving?", body: "Your changes to the template haven't been saved.", action: "Leave", danger: true })) {
-        saved = JSON.stringify(draft);
-        location.hash = href;
-      }
-    };
-    window.addEventListener("beforeunload", onUnload);
-    window.addEventListener("click", onClick, true);
-    return () => { window.removeEventListener("beforeunload", onUnload); window.removeEventListener("click", onClick, true); };
+    if (dirty) saveDone = "";
   });
 
   const ph = (...names: string[]) => `Placeholders: ${names.map((n) => `{${n}}`).join(", ")}`;
@@ -106,12 +114,8 @@
   <p class="lead">Every new report starts from this wording and order. Changes apply to reports generated after you save; reports already made don't change. Words in curly brackets, like <code>{"{computers}"}</code>, are filled in with each report's numbers and dates.</p>
 </header>
 
-{#if error}<p class="error banner" role="alert">{error}</p>{/if}
-<p class="sr-only" role="status">{notice}</p>
-{#if notice}<p class="notice" aria-hidden="true">{notice}</p>{/if}
-
 {#if !draft || !p}
-  <p class="muted">Loading…</p>
+  <LoadState error={loadError} what="the template" onretry={() => { loadError = ""; load(); }} />
 {:else}
   {#if unknown.length}
     <div class="callout warn" role="note"><strong>Check these placeholders</strong><p>{unknown.map((u) => `${u.name} (${fieldLabel(u.path)})`).join(", ")} {unknown.length === 1 ? "isn't" : "aren't"} on the placeholder list, so {unknown.length === 1 ? "it" : "they"} would show as typed.</p></div>
@@ -228,13 +232,7 @@
     </aside>
   </div>
 
-  <div class="savebar" class:clean={!dirty} role="region" aria-label="Save">
-    <span>{dirty ? "Unsaved changes to the template." : "No unsaved changes"}</span>
-    <div>
-      {#if dirty}<button class="btn ghost" disabled={busy} onclick={discard}>Discard</button>{/if}
-      <button class="btn primary" disabled={busy || !dirty} onclick={save}>{busy ? "Saving…" : "Save template"}</button>
-    </div>
-  </div>
+  <SaveBar {dirty} {busy} error={saveError} done={saveDone} onsave={save} ondiscard={discard} label="Save template" hint="Unsaved changes to the template." />
 {/if}
 
 <Confirm bind:this={confirm} />
@@ -246,8 +244,6 @@
   h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin: 4px 0 10px; }
   .lead { color: var(--text-2); font-size: 14px; }
   code { font-family: var(--mono); font-size: 0.92em; color: var(--lime); }
-  .banner, .notice { margin-bottom: 16px; }
-  .notice { font-size: 14px; color: var(--good-text); }
   .callout { border: 1px solid var(--line-2); border-left: 3px solid var(--warning); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; background: var(--surface); }
   .callout p { margin-top: 2px; color: var(--text-2); }
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
@@ -270,9 +266,6 @@
   .phs { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .phs div { display: flex; flex-direction: column; gap: 1px; }
   .phs dd { color: var(--text-2); }
-  .savebar { position: sticky; bottom: 12px; z-index: 10; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--lime); border-radius: 14px; background: var(--surface-2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); font-size: 14px; font-weight: 600; }
-  .savebar div { display: flex; gap: 8px; }
-  .savebar.clean { border-color: var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); font-weight: 500; color: var(--text-2); }
   @media (max-width: 1100px) {
     .layout { grid-template-columns: 1fr; }
     .side { position: static; }

@@ -2,6 +2,8 @@
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import ReportPill from "../components/ReportPill.svelte";
+  import LoadState from "../components/LoadState.svelte";
+  import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { dateTime } from "../lib/format.ts";
   import { countdown, periodLabel, reportActions, reportState, sendNowText, sortReports, thisWeek, type ReportSortKey, type SortDir } from "../lib/reports.ts";
   import type { ReportRow, ReportSettings } from "../lib/types.ts";
@@ -9,8 +11,7 @@
   let rows = $state<ReportRow[]>([]);
   let settings = $state<ReportSettings | null>(null);
   let loaded = $state(false);
-  let error = $state("");
-  let notice = $state("");
+  let loadError = $state("");
   let busy = $state(false);
   let now = $state(Date.now());
   let show = $state<"current" | "all" | "cleared">("current");
@@ -45,9 +46,11 @@
     try {
       [rows, settings] = await Promise.all([db.reports(), db.reportSettings()]);
       loaded = true;
-      error = "";
+      loadError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't load reports.";
+      const m = messageOf(e, "Check your connection and try again.");
+      if (!loaded) loadError = m;
+      else toast.error(`Couldn't refresh reports. ${m}`);
     }
   }
 
@@ -98,14 +101,12 @@
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
   async function act(fn: () => Promise<unknown>, ok: string) {
-    error = "";
-    notice = "";
     busy = true;
     try {
       await fn();
-      notice = ok;
+      toast.success(ok);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Something went wrong.";
+      toast.error(messageOf(e, "That didn't go through. Try again."));
     } finally {
       busy = false;
       await load();
@@ -181,12 +182,8 @@
   </div>
 </header>
 
-{#if error}<p class="error banner" role="alert">{error}</p>{/if}
-<p class="sr-only" role="status">{notice}</p>
-{#if notice}<p class="notice" aria-hidden="true">{notice}</p>{/if}
-
 {#if !loaded}
-  <p class="muted">Loading…</p>
+  <LoadState error={loadError} what="reports" onretry={() => { loadError = ""; load(); }} />
 {:else}
   <section class="card summary rise">
     <div class="next">
@@ -312,8 +309,6 @@
   .mode { font-size: 13px; font-weight: 600; text-decoration: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-2); }
   .mode.live { border-color: var(--lime); color: var(--lime); }
   .mode:hover { color: var(--text); }
-  .banner { margin-bottom: 16px; }
-  .notice { margin-bottom: 16px; font-size: 14px; color: var(--good-text); }
   /* A little lighter than --critical so it stays readable on a ticked row's tint (4.5:1). */
   .del { color: color-mix(in srgb, var(--critical) 85%, white); }
   .summary { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }

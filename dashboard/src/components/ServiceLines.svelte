@@ -7,7 +7,7 @@
   import { money } from "../lib/format.ts";
   import type { ServiceLine, ServiceRow } from "../lib/types.ts";
 
-  let { lines, devices, noun, sub, empty, hint, onadd, onupdate, onremove, onerror }: {
+  let { lines, devices, noun, sub, empty, hint, onadd, onupdate, onremove }: {
     lines: ServiceLine[];
     /** Per-device catalog services start at this quantity. */
     devices: number;
@@ -16,11 +16,23 @@
     sub: string;
     empty: string;
     hint: string;
-    onadd: (l: Omit<ServiceLine, "id">) => Promise<void>;
-    onupdate: (l: ServiceLine, patch: Partial<ServiceLine>) => Promise<void>;
-    onremove: (l: ServiceLine) => Promise<void>;
-    onerror: (message: string) => void;
+    /** Each resolves to false when the change didn't go through (the page says why). */
+    onadd: (l: Omit<ServiceLine, "id">) => Promise<unknown>;
+    onupdate: (l: ServiceLine, patch: Partial<ServiceLine>) => Promise<unknown>;
+    onremove: (l: ServiceLine) => Promise<unknown>;
   } = $props();
+
+  // A price or quantity that can't be saved: said here, next to the lines.
+  let problem = $state("");
+  // Changes save as you make them; a short "Saved" in the card head confirms each one.
+  let saved = $state(false);
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+  function flashSaved() {
+    saved = true;
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => (saved = false), 2000);
+  }
+  const onerror = (message: string) => (problem = message);
 
   let picking = $state(false);
   let search = $state("");
@@ -75,7 +87,8 @@
       if (patch.quantity === l.quantity) return;
     }
     if (patch.notes !== undefined && (patch.notes ?? "") === (l.notes ?? "")) return;
-    await onupdate(l, patch);
+    problem = "";
+    if ((await onupdate(l, patch)) !== false) flashSaved();
   }
   async function removeLine(l: ServiceLine) {
     if (!(await confirm.ask({ title: `Remove ${l.name}?`, body: `${money(l.amount)}${l.billing === "monthly" ? "/mo" : " one time"} will come off this ${noun}.`, action: "Remove", danger: true }))) return;
@@ -84,7 +97,7 @@
 </script>
 
 <section class="card">
-  <div class="card-head"><div><h2>Services</h2><p class="sub">{sub}</p></div></div>
+  <div class="card-head"><div><h2>Services</h2><p class="sub">{sub}</p></div><span class="saved" role="status">{#if saved}<span aria-hidden="true">✓</span> Saved{/if}</span></div>
   {#if lines.length}
     <ul class="lines">
       {#each lines as l (l.id)}
@@ -122,6 +135,7 @@
   {:else}
     <p class="empty">{empty}</p>
   {/if}
+  {#if problem}<p class="error problem" role="alert">{problem}</p>{/if}
 
   {#if picking}
     <div class="picker">
@@ -195,6 +209,8 @@
   .x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 6px; padding: 2px 6px; transition: color 0.15s, background 0.15s; }
   .x:hover { color: var(--critical); background: var(--surface-2); }
   .addbtn { margin-top: 12px; }
+  .saved { font-size: 13px; color: var(--good-text); white-space: nowrap; }
+  .problem { margin-top: 10px; }
   .picker { margin-top: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--ink); padding: 12px; max-height: 420px; overflow-y: auto; animation: rise 0.3s var(--ease) both; }
   .phead { display: flex; gap: 8px; position: sticky; top: -12px; background: var(--ink); padding-bottom: 8px; z-index: 1; }
   .phead .input { flex: 1; height: 36px; }
