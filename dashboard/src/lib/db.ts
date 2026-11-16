@@ -535,7 +535,7 @@ const db: Db = {
       }
       throw new Error(message);
     }
-    return { started: (data as { started: "render" | "send" | "unifi" | null }).started };
+    return { started: (data as { started: "render" | "send" | "unifi" | "copy" | null }).started };
   },
 
   async unifiStatus(clientId) {

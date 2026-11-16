@@ -615,6 +615,8 @@ const db: Db = {
       if (s) setTimeout(() => { s.checked_at = new Date().toISOString(); }, 2500);
       return { started: "unifi" };
     }
+    // The real copy is a GitHub run that emails Henry; nothing about the report changes.
+    if (action === "copy") return { started: "copy" };
     if (r.status === "sending") throw new Error("This report is already sending.");
     if (r.status === "sent") throw new Error("This report was already sent.");
     if (action === "render" || action === "rebuild") {
