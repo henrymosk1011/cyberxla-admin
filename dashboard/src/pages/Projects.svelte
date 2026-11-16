@@ -2,6 +2,8 @@
   import { tick } from "svelte";
   import db from "$db";
   import Field from "../components/Field.svelte";
+  import Kpi from "../components/Kpi.svelte";
+  import StatusPill from "../components/StatusPill.svelte";
   import Modal from "../components/Modal.svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import SortTh from "../components/SortTh.svelte";
@@ -120,13 +122,9 @@
 </PageHeader>
 
 <div class="kpis rise">
-  <section class="card kpi hero">
-    <p class="eyebrow">Project pipeline</p>
-    <p class="big num">{money(pipeline.once)}<small>one time</small></p>
-    <p class="muted">{pipeline.monthly ? `+ ${money(pipeline.monthly)}/mo · ` : ""}{pipeline.n} potential and proposed</p>
-  </section>
-  <section class="card kpi"><p class="eyebrow">In progress</p><p class="mid num">{working.n}</p><p class="muted">{working.n ? valueLabel(working) : "Nothing underway"}</p></section>
-  <section class="card kpi"><p class="eyebrow">Due in 2 weeks</p><p class="mid num">{dueSoon.length}</p><p class="muted" class:late={overdue > 0}>{overdue ? `${overdue} overdue` : "None overdue"}</p></section>
+  <section class="card hero"><Kpi hero label="Project pipeline" value={money(pipeline.once)} hint="one time{pipeline.monthly ? `, plus ${money(pipeline.monthly)}/mo` : ''} · {pipeline.n} potential and proposed" /></section>
+  <section class="card"><Kpi label="In progress" value={String(working.n)} hint={working.n ? valueLabel(working) : "Nothing underway"} /></section>
+  <section class="card"><Kpi label="Due in 2 weeks" value={String(dueSoon.length)} hint={overdue ? `${overdue} overdue` : "None overdue"} hintTone={overdue ? "bad" : undefined} /></section>
 </div>
 
 <div class="filters">
@@ -143,7 +141,7 @@
 
 <section class="card flush" class:stale>
   {#if rows.length}
-    <table class="table">
+    <table class="table cards">
       <caption class="sr-only">Projects, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
       <thead><tr>{#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={sortBy} right={c.right} hide={c.hide ?? ""} />{/each}</tr></thead>
       <tbody>
@@ -151,15 +149,15 @@
           {@const o = ownerOf(p)}
           {@const late = isOpen(p) && !!p.due_on && p.due_on < today}
           <tr class="link" onclick={() => open(p.id)}>
-            <td class="p-name">
+            <td class="p-name c-main">
               <a class="who" href="#/projects/{p.id}" onclick={(e) => e.stopPropagation()}>
                 <strong>{p.name}</strong>
                 <span class="muted">{o ? `${o.kind} · ${o.label}` : ""}</span>
               </a>
             </td>
-            <td class="p-status"><span class="pstatus ps-{p.status}"><i aria-hidden="true"></i>{STATUS_LABEL[p.status]}</span></td>
-            <td class="r num p-val">{valueLabel(totals.get(p.id))}</td>
-            <td class="r hide-sm" class:late class:muted={!late}>{p.due_on ? shortDate(p.due_on + "T12:00:00") : "–"}</td>
+            <td class="p-status"><StatusPill status={p.status} /></td>
+            <td class="r num p-val c-strong">{valueLabel(totals.get(p.id))}</td>
+            <td class="r hide-sm" class:late class:muted={!late}>{p.due_on ? shortDate(p.due_on + "T12:00:00") : "No date"}</td>
           </tr>
         {/each}
       </tbody>
@@ -202,53 +200,18 @@
 </Modal>
 
 <style>
-  .kpis { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-  .kpi { display: flex; flex-direction: column; gap: 6px; justify-content: flex-end; }
-  .kpi.hero { background: linear-gradient(160deg, rgba(214, 255, 63, 0.08), transparent 55%), var(--surface); }
-  .big { font-size: 44px; font-weight: 650; letter-spacing: -0.04em; color: var(--lime); line-height: 1.05; }
-  .mid { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; }
-  .big small { font-size: 0.4em; color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 8px; }
-  .kpi .muted { font-size: 13px; }
   .late { color: var(--critical); }
-  .filters { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .filters { display: flex; flex-direction: column; gap: 10px; }
   .phonesort { display: none; }
-  .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
-  .flush { padding: 8px 8px 0; }
-  .stale { opacity: 0.6; }
-  .who { display: flex; flex-direction: column; text-decoration: none; min-width: 0; }
-  .who strong { font-weight: 600; }
-  .who span { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
-  .pstatus { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--text-2); white-space: nowrap; }
-  .pstatus i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .ps-potential i { background: var(--st-new); } .ps-proposed i { background: var(--st-proposal); } .ps-in_progress i { background: var(--st-contacted); }
-  .ps-on_hold i { background: var(--warning); } .ps-done i { background: var(--good); } .ps-cancelled i { background: var(--st-lost); }
   .p-val { white-space: nowrap; }
   .form { display: flex; flex-direction: column; gap: 14px; }
   .form .input { width: 100%; min-width: 0; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .hint { font-size: 13px; }
+  .hint { font-size: var(--fs-sm); }
   .req { color: var(--lime); font-weight: 700; }
   .row { display: flex; justify-content: flex-end; gap: 8px; }
-  @media (max-width: 720px) { .hide-sm { display: none; } }
-  @media (max-width: 860px) {
-    .kpis { grid-template-columns: 1fr 1fr; }
-    .kpi.hero { grid-column: 1 / -1; }
-    .filters .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
-    .filters .seg::-webkit-scrollbar { display: none; }
-    .filters .seg button { flex: none; }
-  }
   @media (max-width: 640px) {
     .phonesort { display: block; }
     .grid2 { grid-template-columns: 1fr; }
-    .flush { padding: 4px; }
-    .table thead { display: none; }
-    .table, .table tbody { display: block; }
-    .table tbody tr.link { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 12px; padding: 14px 12px; border-bottom: 1px solid var(--line); border-radius: 10px; }
-    .table tbody tr.link:last-child { border-bottom: 0; }
-    .table td { display: block; padding: 0; border: 0; }
-    .table td.hide-sm { display: none; }
-    .p-name { grid-column: 1 / -1; }
-    .who span { max-width: none; }
-    .p-val { font-weight: 600; }
   }
 </style>

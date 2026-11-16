@@ -34,7 +34,7 @@
   .field { min-width: 0; }
   .wide { grid-column: 1 / -1; }
   .req { color: var(--lime); font-weight: 700; }
-  .hint { font-size: 12.5px; color: var(--muted); }
-  .err { font-size: 13px; color: var(--critical); }
+  .hint { font-size: var(--fs-xs); color: var(--muted); }
+  .err { font-size: var(--fs-sm); color: var(--critical); }
   .invalid :global(.input) { border-color: var(--critical); }
 </style>

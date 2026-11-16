@@ -24,7 +24,7 @@
 
 <style>
   .sortselect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  label { font-size: 13px; color: var(--text-2); }
-  .input { height: 36px; width: auto; padding: 0 36px 0 12px; background-position: right 12px center; font-size: 14px; }
-  .btn { height: 36px; }
+  label { font-size: var(--fs-sm); color: var(--text-2); }
+  .input { height: var(--control-md); width: auto; padding: 0 36px 0 12px; background-position: right 12px center; font-size: var(--fs-md); }
+  .btn { height: var(--control-md); }
 </style>

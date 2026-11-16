@@ -98,7 +98,7 @@
   <section class="card flush" class:stale>
     {#if rows.length}
       <div class="scroll">
-        <table class="table">
+        <table class="table cards">
           <caption class="sr-only">Leads, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
           <thead>
             <tr>{#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={sortBy} right={c.right} hide={c.hide ?? ""} />{/each}</tr>
@@ -106,14 +106,14 @@
           <tbody>
             {#each rows as l (l.id)}
               <tr class="link" onclick={() => open(l.id)}>
-                <td class="c-lead">
+                <td class="c-lead c-main">
                   <a class="who" href="#/leads/{l.id}" onclick={(e) => e.stopPropagation()}>
                     <strong>{l.company || l.name}</strong>
                     <span class="muted">{l.company ? l.name + " · " : ""}{l.email}</span>
                   </a>
                 </td>
                 <td class="c-status"><StatusPill status={l.status} /></td>
-                <td class="r num c-mo">{money(l.value_monthly)}<span class="u">/mo</span></td>
+                <td class="r num c-mo c-strong">{money(l.value_monthly)}<span class="u">/mo</span></td>
                 <td class="r num c-once">{money(l.value_one_time)}<span class="u"> one time</span></td>
                 <td class="r num hide-sm c-quotes">{quoteCount.get(l.id) ?? 0}</td>
                 <td class="r muted hide-sm c-ago">{ago(l.updated_at)}</td>
@@ -165,50 +165,25 @@
 <ExportDialog open={exporting} onclose={() => (exporting = false)} {leads} shown={view === "board" ? searched : rows} {quotes} {clients} />
 
 <style>
-  .export { display: inline-flex; align-items: center; gap: 7px; height: 38px; }
-  .filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-  .filters .seg { flex-wrap: wrap; border-radius: 14px; }
-  .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .export { display: inline-flex; align-items: center; gap: 7px; }
+  .filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .filters .seg { flex-wrap: wrap; border-radius: var(--radius); }
   .phonesort { display: none; }
-  .flush { padding: 8px 8px 0; }
-  .stale { opacity: 0.6; }
   .scroll { overflow-x: auto; }
-  .who { display: flex; flex-direction: column; text-decoration: none; min-width: 0; }
-  .who strong { font-weight: 600; }
-  .who span { font-size: 13px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  @media (max-width: 720px) { .hide-sm { display: none; } }
-  .u { display: none; }
 
-  /* Tablets and phones: stack the header, swipeable filter chips. */
+  /* Tablets and phones: the filter chips swipe sideways. */
   @media (max-width: 860px) {
     .filters { flex-direction: column; align-items: stretch; }
-    .filters .seg {
-      flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
-      border-radius: 999px; max-width: 100%;
-    }
-    .filters .seg::-webkit-scrollbar { display: none; }
-    .filters .seg button { flex: none; scroll-snap-align: start; }
+    .filters .seg { flex-wrap: nowrap; border-radius: var(--radius-pill); scroll-snap-type: x proximity; }
+    .filters .seg button { scroll-snap-align: start; }
   }
 
-  /* Phones: each lead becomes a compact card. */
+  /* Phones: each lead is a compact card (app.css); the one time value and the last activity sit on its last line. */
   @media (max-width: 640px) {
     .phonesort { display: block; }
-    .flush { padding: 4px; }
-    .table thead { display: none; }
-    .table, .table tbody { display: block; }
-    .table tbody tr.link {
-      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 12px;
-      padding: 14px 12px; border-bottom: 1px solid var(--line); border-radius: 10px;
-    }
-    .table tbody tr.link:last-child { border-bottom: 0; }
-    .table td { display: block; padding: 0; border: 0; }
-    .c-lead { grid-column: 1 / -1; }
-    .who span { max-width: none; }
-    .c-mo { font-weight: 600; }
-    .c-once { grid-column: 2; grid-row: 3; font-size: 12px; color: var(--muted); }
+    .c-once { grid-column: 2; grid-row: 3; font-size: var(--fs-xs); color: var(--muted); }
     .table td.c-quotes { display: none; }
-    .table td.c-ago { display: block; grid-column: 1; grid-row: 3; text-align: left; font-size: 12px; }
-    .u { display: inline; margin-left: 3px; color: var(--muted); font-weight: 500; font-size: 0.85em; }
+    .table td.c-ago { display: block; grid-column: 1; grid-row: 3; text-align: left; font-size: var(--fs-xs); }
   }
 
   /* Board on smaller screens: swipe column by column, with a peek of the next. */
@@ -229,18 +204,18 @@
   .board { display: grid; grid-template-columns: repeat(5, minmax(196px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
   .col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-height: 240px; transition: border-color 0.15s, background 0.15s; }
   .col.over { border-color: var(--lime); background: color-mix(in srgb, var(--lime) 5%, var(--surface)); }
-  .col > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 4px 12px; font-size: 12px; }
+  .col > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 4px 12px; font-size: var(--fs-xs); }
   .col > header > :last-child { white-space: nowrap; }
   .cards { display: flex; flex-direction: column; gap: 8px; }
-  .lead { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; cursor: grab; transition: transform 0.25s var(--ease), border-color 0.2s, box-shadow 0.25s var(--ease); animation: rise 0.4s var(--ease) both; }
-  .lead:hover { border-color: var(--line-2); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
+  .lead { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 4px; cursor: grab; transition: transform 0.25s var(--ease), border-color 0.2s, box-shadow 0.25s var(--ease); animation: rise 0.4s var(--ease) both; }
+  .lead:hover { border-color: var(--line-2); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
   .lead.dragging { opacity: 0.4; }
   .lead a { text-decoration: none; }
-  .lead strong { font-weight: 600; font-size: 14px; }
-  .small { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lead strong { font-weight: 600; font-size: var(--fs-md); }
+  .small { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
-  .amt { font-weight: 600; font-size: 14px; }
+  .amt { font-weight: 600; font-size: var(--fs-md); }
   .amt small { color: var(--muted); font-weight: 500; }
-  .move { margin-top: 6px; background-color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; padding: 5px 32px 5px 8px; background-position: right 10px center; color: var(--text-2); }
-  .drop { font-size: 13px; text-align: center; padding: 24px 8px; border: 1px dashed var(--line-2); border-radius: 10px; }
+  .move { margin-top: 6px; background-color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--fs-xs); padding: 5px 32px 5px 8px; background-position: right 10px center; color: var(--text-2); }
+  .drop { font-size: var(--fs-sm); text-align: center; padding: 24px 8px; border: 1px dashed var(--line-2); border-radius: var(--radius-md); }
 </style>

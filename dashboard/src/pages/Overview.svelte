@@ -123,25 +123,24 @@
 <style>
   .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; transition: opacity 0.2s; }
   .grid.stale { opacity: 0.6; }
-  .hero { grid-column: span 2; display: flex; flex-direction: column; justify-content: flex-end; background: linear-gradient(160deg, rgba(214,255,63,0.08), transparent 55%), var(--surface); }
-  .hero { gap: 16px; }
+  .hero { grid-column: span 2; display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; }
   .hero-link { text-decoration: none; color: inherit; }
-  .pipe { display: flex; flex-direction: column; gap: 2px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; }
-  .pv { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
-  .pv small { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .pipe { display: flex; flex-direction: column; gap: 2px; padding-top: 14px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+  .pv { font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.02em; }
+  .pv small { font-size: var(--fs-sm); color: var(--muted); font-weight: 500; }
   .wide { grid-column: span 4; }
   .side { grid-column: span 2; display: flex; flex-direction: column; }
   .half { grid-column: span 3; }
-  .more { margin-top: auto; padding-top: 16px; font-size: 13px; font-weight: 600; color: var(--lime); text-decoration: none; }
+  .more { margin-top: auto; padding-top: 16px; font-size: var(--fs-sm); font-weight: 600; color: var(--lime); text-decoration: none; }
   .card-head .more { margin: 0; padding: 0; }
   .scroll { overflow-x: auto; max-height: 240px; }
   .latest { list-style: none; }
-  .latest a { display: grid; grid-template-columns: 1fr auto 110px; align-items: center; gap: 12px; padding: 10px 8px; margin: 0 -8px; border-radius: 10px; text-decoration: none; }
+  .latest a { display: grid; grid-template-columns: 1fr auto 110px; align-items: center; gap: 12px; padding: 10px 8px; margin: 0 -8px; border-radius: var(--radius-md); text-decoration: none; }
   .latest a:hover { background: var(--surface-2); }
   .latest li + li a { border-top: 1px solid var(--line); border-radius: 0; }
   .who { display: flex; flex-direction: column; min-width: 0; }
   .who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .who span { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who span { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .amt { font-weight: 600; }
   .amt small { color: var(--muted); font-weight: 500; }
   @media (max-width: 1180px) {

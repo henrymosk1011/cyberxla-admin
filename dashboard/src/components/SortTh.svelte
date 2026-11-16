@@ -23,12 +23,12 @@
 
 <style>
   .sort {
-    display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; margin: -4px -6px; border: 0; border-radius: 6px;
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; margin: -4px -6px; border: 0; border-radius: var(--radius-sm);
     background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
   }
   .sort:hover { color: var(--text); background: var(--surface-2); }
   .sort.on { color: var(--text); }
-  .arrow { font-size: 12px; color: var(--muted); }
+  .arrow { font-size: var(--fs-xs); color: var(--muted); }
   .sort.on .arrow { color: var(--lime); }
   @media (max-width: 720px) { .hide-sm { display: none; } }
   @media (max-width: 1100px) { .hide-md { display: none; } }

@@ -240,7 +240,7 @@
                   {#if s.password || s.notes}<button class="btn ghost sm" aria-pressed={!!revealed[c.id]} onclick={() => (revealed[c.id] = !revealed[c.id])}>{revealed[c.id] ? "Hide" : "Show"}</button>{/if}
                   <button class="btn ghost sm" onclick={() => edit(c)}>Edit</button>
                 {/if}
-                <button class="x" aria-label="Delete {c.label}" title="Delete" onclick={() => remove(c)}>×</button>
+                <button class="iconbtn danger" aria-label="Delete {c.label}" title="Delete" onclick={() => remove(c)}>×</button>
               </div>
             </div>
             {#if s === "error"}
@@ -321,9 +321,9 @@
 <style>
   .title { display: flex; align-items: center; gap: 8px; }
   .title svg { color: var(--lime); }
-  .lead { font-size: 14px; color: var(--text-2); }
+  .lead { font-size: var(--fs-md); color: var(--text-2); }
   .vform, .cform { display: flex; flex-direction: column; gap: 12px; }
-  .vform .input, .cform .input { width: 100%; min-width: 0; height: 38px; }
+  .vform .input, .cform .input { width: 100%; min-width: 0; height: var(--control-md); }
   .cform textarea.input { height: auto; min-height: 76px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .grid2 .field { min-width: 0; }
@@ -333,33 +333,31 @@
   .row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
   .row.start { justify-content: space-between; margin-top: 4px; }
   .unlock { display: flex; gap: 8px; }
-  .unlock .input { flex: 1; min-width: 0; height: 36px; }
-  .unlock .btn { height: 36px; }
-  .link { border: 0; background: none; color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 4px 0; margin-top: 8px; }
+  .unlock .input { flex: 1; min-width: 0; height: var(--control-md); }
+  .unlock .btn { height: var(--control-md); }
+  .link { border: 0; background: none; color: var(--muted); font-size: var(--fs-sm); text-decoration: underline; text-underline-offset: 3px; padding: 4px 0; margin-top: 8px; }
   .row .link { margin-top: 0; }
   .link:hover { color: var(--text); }
   .locked { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-  .locked li { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 13px; color: var(--text-2); }
-  .locked span { color: var(--muted); letter-spacing: -0.1em; font-size: 11px; }
+  .locked li { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--line-2); border-radius: var(--radius-pill); font-size: var(--fs-sm); color: var(--text-2); }
+  .locked span { color: var(--muted); letter-spacing: -0.1em; font-size: var(--fs-xs); }
   .list { list-style: none; margin-bottom: 12px; }
   .list > li { padding: 12px 0; border-top: 1px solid var(--line); animation: rise 0.3s var(--ease) both; }
   .list > li:first-child { border-top: 0; padding-top: 0; }
   .ch { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .label { font-weight: 600; overflow-wrap: anywhere; }
   .acts { display: flex; align-items: center; gap: 2px; flex: none; }
-  dl { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 6px 12px; margin-top: 8px; font-size: 14px; }
-  dt { color: var(--muted); font-size: 13px; padding-top: 1px; }
+  dl { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 6px 12px; margin-top: 8px; font-size: var(--fs-md); }
+  dt { color: var(--muted); font-size: var(--fs-sm); padding-top: 1px; }
   dd { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
   .val { overflow-wrap: anywhere; min-width: 0; }
   a.val { color: var(--lime); text-decoration: none; }
   a.val:hover { text-decoration: underline; }
   .pre { white-space: pre-wrap; }
-  .copy { flex: none; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text-2); font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 9px; transition: background 0.15s, color 0.15s; }
+  .copy { flex: none; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; border-radius: var(--radius-pill); padding: 1px 9px; transition: background 0.15s, color 0.15s; }
   .copy:hover { background: var(--surface-3); color: var(--text); }
-  .x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 6px; padding: 2px 6px; transition: color 0.15s, background 0.15s; }
-  .x:hover { color: var(--critical); background: var(--surface-2); }
-  .none { font-size: 14px; margin-bottom: 12px; }
-  .small { font-size: 12px; }
+  .none { font-size: var(--fs-md); margin-bottom: 12px; }
+  .small { font-size: var(--fs-xs); }
   .error { margin-top: 10px; }
   .error.small { margin-top: 6px; }
   @media (max-width: 640px) {

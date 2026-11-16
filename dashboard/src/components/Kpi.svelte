@@ -1,7 +1,7 @@
 <script lang="ts">
   let {
-    label, value, hint = "", delta = null, deltaLabel = "", hero = false, spark = [],
-  }: { label: string; value: string; hint?: string; delta?: number | null; deltaLabel?: string; hero?: boolean; spark?: number[] } = $props();
+    label, value, hint = "", hintTone, delta = null, deltaLabel = "", hero = false, spark = [],
+  }: { label: string; value: string; hint?: string; /** "bad" turns the hint red: something overdue. */ hintTone?: "bad"; delta?: number | null; deltaLabel?: string; hero?: boolean; spark?: number[] } = $props();
 
   const W = 120, H = 32;
   const points = $derived.by(() => {
@@ -23,7 +23,7 @@
         {delta > 0 ? "+" : ""}{delta}{deltaLabel ? " " + deltaLabel : ""}
       </span>
     {/if}
-    {#if hint}<span class="hint">{hint}</span>{/if}
+    {#if hint}<span class="hint" class:bad={hintTone === "bad"}>{hint}</span>{/if}
   </div>
   {#if points.length}
     <svg class="spark" viewBox="0 0 {W} {H}" width={W} height={H} aria-hidden="true">
@@ -35,12 +35,12 @@
 
 <style>
   .kpi { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .value { font-size: 30px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; }
-  .hero .value { font-size: 52px; letter-spacing: -0.045em; color: var(--lime); }
-  .foot { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
+  .value { font-size: var(--fs-2xl); font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; }
+  .hero .value { font-size: var(--fs-display); letter-spacing: -0.045em; color: var(--lime); }
+  .foot { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: var(--fs-sm); color: var(--muted); }
   .delta { font-weight: 600; color: var(--text-2); }
   .delta.up { color: var(--good-text); }
-  .delta.down { color: var(--critical); }
+  .delta.down, .hint.bad { color: var(--critical); }
   .delta span { font-size: 9px; vertical-align: 1px; }
   .spark { display: block; margin-top: 6px; max-width: 100%; }
 </style>

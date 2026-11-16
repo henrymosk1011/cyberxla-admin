@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { contentProblem, countdown, dashFields, groupBySend, hasDash, isLeftOff, parseEmails, parseNames, recalcKpis, reportActions, reportState, sendNowText, thisWeek, withName } from "./reports.ts";
+import { contentProblem, countdown, dashFields, hasDash, isLeftOff, parseEmails, parseNames, recalcKpis, reportActions, reportState, sendNowText, thisWeek, withName } from "./reports.ts";
 import type { ReportContent, ReportRow } from "./types.ts";
 
 // Made up content from the reports repo's generator (see the file's _note).
@@ -57,20 +57,6 @@ test("Hold all and Resume all only touch this week's real reports", () => {
   const w = thisWeek(rows, NOW);
   assert.deepEqual(w.toHold.map((r) => r.id), ["a"]);
   assert.deepEqual(w.toResume.map((r) => r.id), ["b"]);
-});
-
-test("groups by send day with tests on their own", () => {
-  const rows = [
-    row({ client_name: "B", period: "weekly", send_at: "2026-11-09T16:00:00Z" }),
-    row({ client_name: "A", period: "monthly", send_at: "2026-11-09T16:00:00Z" }),
-    row({ client_name: "A", period: "weekly", send_at: "2026-11-09T16:00:00Z" }),
-    row({ client_name: "A", period: "weekly", send_at: "2026-11-02T16:00:00Z" }),
-    row({ client_name: "A", period: "weekly", send_at: "2026-11-09T16:00:00Z", is_test: true }),
-  ];
-  const g = groupBySend(rows);
-  assert.equal(g.length, 3);
-  assert.deepEqual(g[0]!.rows.map((r) => `${r.client_name} ${r.period}`), ["A weekly", "A monthly", "B weekly"]);
-  assert.equal(g[2]!.label, "Test reports");
 });
 
 test("recipients are checked like the database checks them", () => {

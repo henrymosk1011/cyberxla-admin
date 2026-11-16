@@ -34,8 +34,8 @@
 </div>
 
 <style>
-  .savebar { position: sticky; bottom: 12px; z-index: 10; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--lime); border-radius: 14px; background: var(--surface-2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); font-size: 14px; font-weight: 600; }
-  .savebar.clean { border-color: var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); font-weight: 500; color: var(--text-2); }
+  .savebar { position: sticky; bottom: 12px; z-index: 10; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--lime); border-radius: var(--radius); background: var(--surface-2); box-shadow: var(--shadow-md); font-size: var(--fs-md); font-weight: 600; }
+  .savebar.clean { border-color: var(--line-2); box-shadow: var(--shadow-sm); font-weight: 500; color: var(--text-2); }
   .savebar.bad { border-color: var(--critical); }
   .msg { flex: 1 1 240px; min-width: 0; }
   .err { color: var(--critical); overflow-wrap: anywhere; }

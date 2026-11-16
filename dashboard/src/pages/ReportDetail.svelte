@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from "svelte";
   import db from "$db";
+  import ActivityCard from "../components/ActivityCard.svelte";
   import Confirm from "../components/Confirm.svelte";
   import Menu, { type MenuItem } from "../components/Menu.svelte";
   import DidItems from "../components/DidItems.svelte";
@@ -145,7 +146,6 @@
   // A rebuild takes about a minute; after 12 with no news, offer the button again.
   const rebuilding = $derived(!!rebuild && now - rebuild.started < 12 * 60_000);
   const dashes = $derived(draft ? dashFields({ report: draft, email: { subject: mail.subject, body: mail.body } }) : []);
-  const entries = $derived(history.map((a) => ({ a, text: describeReport(a) })).filter((e) => e.text));
   const shown = $derived(draft ? draft.computers.list.filter((c) => !c.hidden).length : 0);
   // Which tabs have unsaved edits (a dot on the tab).
   const baseDraft = $derived(base.content ? (JSON.parse(base.content) as ReportContent) : null);
@@ -505,10 +505,10 @@
     <div class="callout warn" role="note"><strong>Sending.</strong> <p>It can't be edited while it goes out. If it doesn't finish, look in Sent Items of reports@cyberx.la for the subject below, then Mark as sent or Mark as not sent.</p></div>
   {/if}
   {#if report.cleared_at}
-    <div class="callout" role="note"><strong>Archived</strong> <p>It's kept; it just doesn't show in the Reports list. <button class="link" disabled={busy} onclick={() => act(() => db.clearReports([id], false), "Restored. It's back on the Reports list.")}>Restore it</button></p></div>
+    <div class="callout" role="note"><strong>Archived</strong> <p>It's kept; it just doesn't show in the Reports list. <button class="linkbtn" disabled={busy} onclick={() => act(() => db.clearReports([id], false), "Restored. It's back on the Reports list.")}>Restore it</button></p></div>
   {/if}
   {#if changedElsewhere}
-    <div class="callout warn" role="alert"><strong>This report changed somewhere else</strong> <p>Saving now replaces that change with yours. <button class="link" onclick={() => report && takeDrafts(report)}>Load the latest instead</button></p></div>
+    <div class="callout warn" role="alert"><strong>This report changed somewhere else</strong> <p>Saving now replaces that change with yours. <button class="linkbtn" onclick={() => report && takeDrafts(report)}>Load the latest instead</button></p></div>
   {/if}
   {#if dashes.length}
     <div class="callout warn" role="note"><strong>Dashes found</strong> <p>House rule: no dashes as punctuation. Check {dashes.map(pretty).join(", ")}.</p></div>
@@ -695,7 +695,7 @@
                         <div class="pcacts">
                           <button type="button" class="btn sm ghost" disabled={i === 0} onclick={() => move(draft!.computers.list, i, -1)}>Move up<span class="sr-only"> {pc.name}</span></button>
                           <button type="button" class="btn sm ghost" disabled={i === draft.computers.list.length - 1} onclick={() => move(draft!.computers.list, i, 1)}>Move down<span class="sr-only"> {pc.name}</span></button>
-                          <button type="button" class="btn sm ghost del" onclick={() => draft!.computers.list.splice(i, 1)}>Delete computer<span class="sr-only"> {pc.name}</span></button>
+                          <button type="button" class="btn sm ghost danger" onclick={() => draft!.computers.list.splice(i, 1)}>Delete computer<span class="sr-only"> {pc.name}</span></button>
                         </div>
                       </div>
                     </details>
@@ -776,16 +776,7 @@
       </div>
 
       <div role="tabpanel" id="panel-history" aria-labelledby="tab-history" class="panel" hidden={tab !== "history"}>
-        <section class="card">
-          <div class="card-head"><h2>History</h2></div>
-          {#if entries.length}
-            <ol class="timeline">
-              {#each entries as e (e.a.id)}<li><span class="dot" aria-hidden="true"></span><div><p>{e.text}</p><span class="muted small">{dateTime(e.a.at)}{e.a.actor_role === "report_writer" ? " · automatic" : ""}</span></div></li>{/each}
-            </ol>
-          {:else}
-            <p class="muted">Nothing yet.</p>
-          {/if}
-        </section>
+        <ActivityCard title="History" activity={history} describe={describeReport} empty="Nothing yet." note={(a) => (a.actor_role === "report_writer" ? " · automatic" : "")} />
       </div>
 
       <div role="tabpanel" id="panel-advanced" aria-labelledby="tab-advanced" class="panel" hidden={tab !== "advanced"}>
@@ -866,26 +857,21 @@
 {#if report}<PageLightbox bind:this={lightbox} {pages} title={`${report.client_name}, ${report.period === "weekly" ? "weekly" : "monthly"} report`} />{/if}
 
 <style>
-  .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
+  .back { display: inline-block; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; margin-bottom: 16px; }
   .back:hover { color: var(--text); }
   .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
   .title { min-width: 0; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin: 4px 0 10px; overflow-wrap: anywhere; }
-  .state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 14px; }
+  h1 { font-size: var(--fs-2xl); letter-spacing: -0.035em; line-height: 1.1; margin: 4px 0 10px; overflow-wrap: anywhere; }
+  .state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: var(--fs-md); }
   .state .muted { color: var(--text-2); }
   .acts { display: flex; flex-wrap: wrap; gap: 8px; }
-  .del { color: var(--critical); }
-  .callout { border: 1px solid var(--line-2); border-left: 3px solid var(--text-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; background: var(--surface); }
-  .callout.warn { border-left-color: var(--warning); }
-  .callout p { margin-top: 2px; color: var(--text-2); }
-  .link { background: none; border: 0; padding: 0; color: var(--lime); font-weight: 600; text-decoration: underline; }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 16px; align-items: start; }
   .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   /* Tabs: one row that scrolls sideways on a phone rather than wrapping. */
-  .tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow-x: auto; scrollbar-width: thin; }
+  .tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); overflow-x: auto; scrollbar-width: thin; }
   .tabs [role="tab"] {
-    position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 0; border-radius: 8px;
-    background: none; color: var(--text-2); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 0; border-radius: var(--radius-sm);
+    background: none; color: var(--text-2); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; white-space: nowrap;
   }
   .tabs [role="tab"]:hover { color: var(--text); background: var(--surface-2); }
   .tabs [role="tab"][aria-selected="true"] { color: var(--ink); background: var(--lime); }
@@ -895,15 +881,15 @@
   .panel[hidden] { display: none; }
   .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
   .facts div { min-width: 0; }
-  .facts dt { font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
-  .facts dd { font-size: 15px; overflow-wrap: anywhere; }
+  .facts dt { font-size: var(--fs-xs); color: var(--muted); margin-bottom: 2px; }
+  .facts dd { font-size: var(--fs-base); overflow-wrap: anywhere; }
   .devcards { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-  .devcard { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .devcard { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
   .devcard.router { border-color: var(--line-2); background: var(--surface-2); }
   .devhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; }
-  .devhead h3 { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
-  .devhead h3 .muted { font-size: 13px; font-weight: 500; margin-left: 4px; }
-  .kind { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 2px; }
+  .devhead h3 { font-size: var(--fs-base); font-weight: 650; overflow-wrap: anywhere; }
+  .devhead h3 .muted { font-size: var(--fs-sm); font-weight: 500; margin-left: 4px; }
+  .kind { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 2px; }
   .checknow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; border-top: 1px solid var(--line); padding-top: 12px; }
   .side { position: sticky; top: 16px; min-width: 0; }
   fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
@@ -915,40 +901,36 @@
   .field { min-width: 0; }
   .input { width: 100%; min-width: 0; }
   .num { font-variant-numeric: tabular-nums; }
-  .mono { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
-  .hint { font-size: 12.5px; color: var(--muted); }
+  .mono { font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.5; }
+  .hint { font-size: var(--fs-xs); color: var(--muted); }
   .hint.top { margin-top: -4px; }
   .row3 { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 12px; align-items: end; }
-  .check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-2); min-height: 42px; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-md); color: var(--text-2); min-height: 42px; }
   .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: end; }
   fieldset.cols5 { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-  fieldset legend { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+  fieldset legend { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
   .pcs { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-  .pcs li { border: 1px solid var(--line); border-radius: 10px; }
+  .pcs li { border: 1px solid var(--line); border-radius: var(--radius-md); }
   .pcs li.hiddenpc summary strong { text-decoration: line-through; color: var(--muted); }
   summary { cursor: pointer; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
-  summary .muted { font-size: 13px; }
+  summary .muted { font-size: var(--fs-sm); }
   .pc { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 12px; }
-  fieldset.updates { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  fieldset.updates { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .upd { display: grid; grid-template-columns: minmax(0, 1fr) 80px 150px auto; gap: 10px; align-items: end; }
   .pcacts { display: flex; flex-wrap: wrap; gap: 6px; }
-  .inline { display: inline; font-size: 15px; font-weight: 600; }
+  .inline { display: inline; font-size: var(--fs-base); font-weight: 600; }
   details > summary h2 { margin: 0; }
   .rowbtns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
   .reset { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; flex-wrap: wrap; }
-  .timeline { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-  .timeline li { display: flex; gap: 12px; font-size: 13px; }
-  .timeline .dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--axis); flex: none; }
-  .small { font-size: 12px; }
   .preview .sub { font-size: 13px; color: var(--text-2); }
   .pages { display: flex; flex-direction: column; gap: 10px; transition: opacity 0.3s; }
   .pages.stale { opacity: 0.55; }
   .rebuild { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; }
   /* position: relative keeps the hidden "open larger" text inside the scrolling strip on phones. */
-  .pagebtn { position: relative; display: block; padding: 0; border: 0; background: none; border-radius: 6px; cursor: zoom-in; transition: transform 0.2s var(--ease); }
+  .pagebtn { position: relative; display: block; padding: 0; border: 0; background: none; border-radius: var(--radius-sm); cursor: zoom-in; transition: transform 0.2s var(--ease); }
   .pagebtn:hover { transform: translateY(-2px); }
-  .pages img { display: block; width: 100%; height: auto; border-radius: 6px; background: #fff; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+  .pages img { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); background: #fff; box-shadow: var(--shadow-sm); }
   .dl { display: flex; gap: 8px; flex-wrap: wrap; }
   .headbtns { display: flex; flex-wrap: wrap; gap: 8px; }
   .leaveoff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
@@ -960,7 +942,7 @@
     .pages img { width: min(340px, 80vw); }
   }
   @media (max-width: 640px) {
-    h1 { font-size: 26px; }
+    h1 { font-size: var(--fs-xl); }
     .grid, .row3, .item, .upd, .facts { grid-template-columns: 1fr; }
     fieldset.cols5 { grid-template-columns: 1fr 1fr; }
     .check { min-height: 0; }

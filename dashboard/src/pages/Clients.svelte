@@ -2,6 +2,8 @@
   import { tick } from "svelte";
   import db from "$db";
   import Field from "../components/Field.svelte";
+  import Kpi from "../components/Kpi.svelte";
+  import StatusPill from "../components/StatusPill.svelte";
   import Modal from "../components/Modal.svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import SortTh from "../components/SortTh.svelte";
@@ -116,9 +118,9 @@
 </PageHeader>
 
 <div class="kpis rise">
-  <section class="card kpi hero"><p class="eyebrow">Monthly recurring revenue</p><p class="big num">{money(mrr)}<small>/mo</small></p><p class="muted">from {active.length} active {active.length === 1 ? "client" : "clients"}</p></section>
-  <section class="card kpi"><p class="eyebrow">Average per client</p><p class="mid num">{active.length ? money(mrr / active.length) : "–"}<small>/mo</small></p></section>
-  <section class="card kpi"><p class="eyebrow">Per year</p><p class="mid num">{money(mrr * 12)}<small>/yr</small></p></section>
+  <section class="card hero"><Kpi hero label="Monthly recurring revenue" value="{money(mrr)}/mo" hint="from {active.length} active {active.length === 1 ? 'client' : 'clients'}" /></section>
+  <section class="card"><Kpi label="Average per client" value={active.length ? `${money(mrr / active.length)}/mo` : "None yet"} /></section>
+  <section class="card"><Kpi label="Per year" value="{money(mrr * 12)}/yr" /></section>
 </div>
 
 <div class="filters">
@@ -134,23 +136,23 @@
 
 <section class="card flush" class:stale>
   {#if rows.length}
-    <table class="table">
+    <table class="table cards">
       <caption class="sr-only">Clients, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
       <thead><tr>{#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={sortBy} right={c.right} hide={c.hide ?? ""} />{/each}</tr></thead>
       <tbody>
         {#each rows as c (c.id)}
           {@const t = totals.get(c.id)}
           <tr class="link" onclick={() => open(c.id)}>
-            <td class="c-name">
+            <td class="c-name c-main">
               <a class="who" href="#/clients/{c.id}" onclick={(e) => e.stopPropagation()}>
                 <strong>{label(c)}</strong>
                 <span class="muted">{[c.company ? c.contact_name : null, c.email].filter(Boolean).join(" · ")}</span>
               </a>
             </td>
-            <td class="c-status"><span class="cstatus st-{c.status}"><i aria-hidden="true"></i>{STATUS_LABEL[c.status]}</span></td>
-            <td class="r num c-mo">{money(t?.monthly ?? 0)}<span class="u">/mo</span></td>
+            <td class="c-status"><StatusPill status={c.status} /></td>
+            <td class="r num c-mo c-strong">{money(t?.monthly ?? 0)}<span class="u">/mo</span></td>
             <td class="r num hide-sm">{t?.n ?? 0}</td>
-            <td class="r muted hide-sm">{c.started_on ? shortDate(c.started_on + "T12:00:00") : "–"}</td>
+            <td class="r muted hide-sm">{c.started_on ? shortDate(c.started_on + "T12:00:00") : "Not set"}</td>
           </tr>
         {/each}
       </tbody>
@@ -183,53 +185,15 @@
 </Modal>
 
 <style>
-  .kpis { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-  .kpi { display: flex; flex-direction: column; gap: 6px; justify-content: flex-end; }
-  .kpi.hero { background: linear-gradient(160deg, rgba(214, 255, 63, 0.08), transparent 55%), var(--surface); }
-  .big { font-size: 44px; font-weight: 650; letter-spacing: -0.04em; color: var(--lime); line-height: 1.05; }
-  .mid { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; }
-  .big small, .mid small { font-size: 0.45em; color: var(--muted); font-weight: 500; letter-spacing: 0; }
-  .kpi .muted { font-size: 13px; }
-  .filters { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .filters { display: flex; flex-direction: column; gap: 10px; }
   .phonesort { display: none; }
-  .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
-  .flush { padding: 8px 8px 0; }
-  .stale { opacity: 0.6; }
-  .who { display: flex; flex-direction: column; text-decoration: none; min-width: 0; }
-  .who strong { font-weight: 600; }
-  .who span { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px; }
-  .cstatus { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--text-2); }
-  .cstatus i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .st-active i { background: var(--good); box-shadow: 0 0 6px rgba(12, 163, 12, 0.5); }
-  .st-paused i { background: var(--warning); }
-  .st-former i { background: var(--st-lost); }
-  .u { display: none; }
   .form { display: flex; flex-direction: column; gap: 14px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .grid2 .input { width: 100%; min-width: 0; }
-  .hint { font-size: 13px; }
+  .hint { font-size: var(--fs-sm); }
   .row { display: flex; justify-content: flex-end; gap: 8px; }
-  @media (max-width: 720px) { .hide-sm { display: none; } }
-  @media (max-width: 860px) {
-    .kpis { grid-template-columns: 1fr 1fr; }
-    .kpi.hero { grid-column: 1 / -1; }
-    .filters .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
-    .filters .seg::-webkit-scrollbar { display: none; }
-    .filters .seg button { flex: none; }
-  }
   @media (max-width: 640px) {
     .phonesort { display: block; }
     .grid2 { grid-template-columns: 1fr; }
-    .flush { padding: 4px; }
-    .table thead { display: none; }
-    .table, .table tbody { display: block; }
-    .table tbody tr.link { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 12px; padding: 14px 12px; border-bottom: 1px solid var(--line); border-radius: 10px; }
-    .table tbody tr.link:last-child { border-bottom: 0; }
-    .table td { display: block; padding: 0; border: 0; }
-    .table td.hide-sm { display: none; }
-    .c-name { grid-column: 1 / -1; }
-    .who span { max-width: none; }
-    .c-mo { font-weight: 600; }
-    .u { display: inline; margin-left: 3px; color: var(--muted); font-weight: 500; font-size: 0.85em; }
   }
 </style>

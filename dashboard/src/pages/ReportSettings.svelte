@@ -143,11 +143,11 @@
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .form { display: flex; flex-direction: column; gap: 20px; }
   fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  legend { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
-  .hint { font-size: 13px; color: var(--muted); }
-  .now { font-size: 13px; color: var(--text-2); }
-  .pending { font-size: 13px; color: var(--text); padding: 8px 12px; border: 1px solid var(--warning); border-radius: 10px; background: color-mix(in srgb, var(--warning) 8%, transparent); }
-  .check { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; }
+  legend { font-size: var(--fs-base); font-weight: 600; margin-bottom: 8px; }
+  .hint { font-size: var(--fs-sm); color: var(--muted); }
+  .now { font-size: var(--fs-sm); color: var(--text-2); }
+  .pending { font-size: var(--fs-sm); color: var(--text); padding: 8px 12px; border: 1px solid var(--warning); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warning) 8%, transparent); }
+  .check { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-md); }
   .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .field { min-width: 0; }
@@ -155,10 +155,10 @@
   .row { display: flex; justify-content: flex-end; }
   .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .clients { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-  .clients li { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+  .clients li { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-md); }
   .clients a { text-decoration: none; }
   .clients a:hover strong { text-decoration: underline; }
-  .clients .muted { font-size: 13px; overflow-wrap: anywhere; }
+  .clients .muted { font-size: var(--fs-sm); overflow-wrap: anywhere; }
   @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
   @media (max-width: 480px) { .two { grid-template-columns: 1fr; } }
 </style>
