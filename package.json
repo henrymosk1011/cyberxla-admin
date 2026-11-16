@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "bundle-function": "node scripts/bundle-function.mjs",
-    "bundle-report-action": "node scripts/bundle-function.mjs report-action"
+    "bundle-report-action": "node scripts/bundle-function.mjs report-action",
+    "bundle-report-cron": "node scripts/bundle-function.mjs report-cron"
   }
 }

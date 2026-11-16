@@ -2,9 +2,10 @@
 // supabase/functions/<name>/{lib.ts,index.ts}.
 // Usage: npm run bundle-function                    ->  dist/submit-quote.ts
 //        npm run bundle-report-action               ->  dist/report-action.ts
+//        npm run bundle-report-cron                 ->  dist/report-cron.ts
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
-const LABELS = { "submit-quote": "validation and pricing", "report-action": "request checks and rules" };
+const LABELS = { "submit-quote": "validation and pricing", "report-action": "request checks and rules", "report-cron": "request checks and rules" };
 const name = process.argv[2] ?? "submit-quote";
 if (!LABELS[name]) throw new Error(`unknown function ${name} (one of: ${Object.keys(LABELS).join(", ")})`);
 
