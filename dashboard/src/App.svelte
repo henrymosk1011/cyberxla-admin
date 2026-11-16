@@ -13,11 +13,13 @@
   import { lock } from "./lib/vault.svelte.ts";
   import Toast from "./components/Toast.svelte";
   import Brand from "./components/Brand.svelte";
+  import { tick } from "svelte";
   import { fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { watchIdle } from "./lib/idle.ts";
   import { money } from "./lib/format.ts";
-  import { leave } from "./lib/nav.svelte.ts";
+  import { arrival, leave, pageHeading } from "./lib/nav.svelte.ts";
+  import { ms } from "./lib/motion.ts";
   import { messageOf, toast } from "./lib/toast.svelte.ts";
   import type { AuthState, Client, ClientService, Lead, LeadStatus, Project, ProjectService, Quote } from "./lib/types.ts";
 
@@ -94,7 +96,12 @@
         leave.guard = null;
       }
       at = step() ?? at;
+      // The new page's heading takes focus. Switching between the leads list
+      // and board is the same page, so focus stays on the switch.
+      const from = route.page;
       hash = location.hash; navOpen = false; window.scrollTo(0, 0);
+      const sameLeadsPage = ["leads", "board"].includes(from) && ["leads", "board"].includes(route.page);
+      arrival.pending = !sameLeadsPage;
       // Lists are cheap to reload; keeps clients and totals current after edits on detail pages.
       if (auth?.step === "ready" && loaded) refresh();
     };
@@ -144,8 +151,28 @@
     return () => { unsub(); stopIdle(); clearTimeout(pending); live = false; };
   });
 
+  // The browser tab names the page you are on.
+  const pageTitle = $derived.by(() => {
+    switch (route.page) {
+      case "overview": return "Overview";
+      case "leads": return "Leads";
+      case "board": return "Leads board";
+      case "lead": { const l = leads.find((x) => x.id === route.id); return l ? l.company || l.name : "Lead"; }
+      case "clients": return "Clients";
+      case "client": { const c = clients.find((x) => x.id === route.id); return c ? c.company || c.contact_name || "Client" : "Client"; }
+      case "projects": return "Projects";
+      case "project": return projects.find((x) => x.id === route.id)?.name ?? "Project";
+      case "services": return "Services";
+      case "reports": return "Reports";
+      case "report": return "Report";
+      case "report-settings": return "Report settings";
+      case "report-template": return "Report template";
+      default: return "Page not found";
+    }
+  });
   $effect(() => {
-    document.title = unseen ? `(${unseen}) cyberxLA Admin` : "cyberxLA Admin";
+    const page = auth?.step === "ready" ? pageTitle : auth ? "Sign in" : "";
+    document.title = `${unseen ? `(${unseen}) ` : ""}${page ? `${page} · ` : ""}cyberxLA Admin`;
   });
   $effect(() => {
     const clear = () => { if (document.visibilityState === "visible") setTimeout(() => (unseen = 0), 1500); };
@@ -189,7 +216,35 @@
       pillH = a.offsetHeight;
     }
   });
-  const pageKey = $derived(route.page + ("id" in route ? route.id : ""));
+  // The leads list and board are one page with a switch, so it keeps its search when you flip it.
+  const pageKey = $derived((route.page === "board" ? "leads" : route.page) + ("id" in route ? route.id : ""));
+
+  // The menu on narrow screens: a drawer. Closed, nothing in it can be reached
+  // by keyboard; open, the page behind it can't, and Escape or a tap outside closes it.
+  let narrow = $state(matchMedia("(max-width: 860px)").matches);
+  let menuBtn = $state<HTMLButtonElement | null>(null);
+  let railEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const mq = matchMedia("(max-width: 860px)");
+    const on = () => {
+      narrow = mq.matches;
+      if (!mq.matches) navOpen = false;
+    };
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  });
+  async function openNav() {
+    navOpen = true;
+    await tick();
+    (railEl?.querySelector<HTMLElement>('nav a[aria-current="page"]') ?? railEl?.querySelector<HTMLElement>("nav a"))?.focus();
+  }
+  async function closeNav() {
+    if (!navOpen) return;
+    navOpen = false;
+    // The Menu button can take focus again once the page behind is live.
+    await tick();
+    menuBtn?.focus();
+  }
 </script>
 
 {#if auth === null}
@@ -198,9 +253,12 @@
   <Login {auth} onauth={(s) => (auth = s)} />
 {:else}
   <div class="shell">
-    <aside class="rail" class:open={navOpen}>
-      <a class="brand" href="#/" aria-label="cyberxLA Admin, overview"><Brand admin size={22} /></a>
-      <nav bind:this={navEl}>
+    <aside class="rail" id="main-menu" class:open={navOpen} bind:this={railEl} inert={narrow && !navOpen}>
+      <div class="railtop">
+        <a class="brand" href="#/" aria-label="cyberxLA Admin, overview"><Brand admin size={22} /></a>
+        <button class="closenav" aria-label="Close menu" onclick={closeNav}><span aria-hidden="true">×</span></button>
+      </div>
+      <nav bind:this={navEl} aria-label="Main">
         <span class="pill" class:show={pillShow} aria-hidden="true" style:transform="translateY({pillY}px)" style:height="{pillH}px"></span>
         {#each nav as n (n.href)}
           <a href={n.href} aria-current={n.match.includes(route.page) ? "page" : undefined}>
@@ -218,13 +276,15 @@
       </div>
     </aside>
 
-    <div class="topbar">
-      <button class="btn ghost sm" aria-expanded={navOpen} onclick={() => (navOpen = !navOpen)}>Menu</button>
-      <a class="brand" href="#/"><Brand size={19} /></a>
-      <span class="live" class:on={live}><i aria-hidden="true"></i></span>
+    {#if navOpen}<button class="scrim" tabindex="-1" aria-label="Close menu" onclick={closeNav}></button>{/if}
+
+    <div class="topbar" inert={narrow && navOpen}>
+      <button class="btn ghost sm" bind:this={menuBtn} aria-expanded={navOpen} aria-controls="main-menu" onclick={openNav}>Menu</button>
+      <a class="brand" href="#/" aria-label="cyberxLA Admin, overview"><Brand size={19} /></a>
+      <span class="live" class:on={live}><i aria-hidden="true"></i><span class="sr-only">{live ? "Live" : "Offline"}</span></span>
     </div>
 
-    <main class="content">
+    <main class="content" inert={narrow && navOpen}>
       {#if loadError}
         <p class="error banner" role="alert">{loadError} <button class="btn sm" onclick={refresh}>Retry</button></p>
       {/if}
@@ -232,7 +292,7 @@
         <p class="muted">Loading…</p>
       {:else}
       {#key pageKey}
-      <div class="page" in:fly={{ y: 12, duration: 380, easing: cubicOut }}>
+      <div class="page" in:fly={{ y: 12, duration: ms(380), easing: cubicOut }}>
       {#if route.page === "overview"}
         <Overview leads={activeLeads} quotes={activeQuotes} {clients} {clientLines} {stale} />
       {:else if route.page === "leads" || route.page === "board"}
@@ -260,7 +320,7 @@
       {:else if route.page === "report-template"}
         {#await import("./pages/ReportTemplate.svelte")}{@render pageLoading()}{:then { default: ReportTemplate }}<ReportTemplate />{:catch}{@render pageFailed()}{/await}
       {:else}
-        <p class="empty">Page not found. <a href="#/">Go to overview</a></p>
+        <div class="empty"><h1 class="nf" use:pageHeading>Page not found</h1><p>That address doesn't match a page. <a href="#/">Go to the overview</a></p></div>
       {/if}
       </div>
       {/key}
@@ -269,6 +329,8 @@
   </div>
   <Toast />
 {/if}
+
+<svelte:window onkeydown={(e) => { if (e.key === "Escape" && navOpen) closeNav(); }} />
 
 {#snippet pageLoading()}<p class="muted" role="status">Loading…</p>{/snippet}
 <!-- The page's code didn't arrive: offline, or a new version went live while this tab was open. -->
@@ -284,6 +346,9 @@
   .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100dvh; }
   .rail { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: 28px; padding: 22px 16px; border-right: 1px solid var(--line); background: var(--ink); }
   .brand { display: inline-flex; padding: 4px 10px; text-decoration: none; border-radius: 8px; }
+  .railtop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .closenav, .scrim { display: none; }
+  .nf { font-size: 22px; letter-spacing: -0.02em; color: var(--text); margin-bottom: 6px; }
   nav { position: relative; display: flex; flex-direction: column; gap: 4px; }
   .pill {
     position: absolute; left: 0; right: 0; top: 0; z-index: 0; border-radius: 12px; pointer-events: none; opacity: 0;
@@ -319,6 +384,9 @@
     .topbar { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 20; padding: 10px 12px; background: var(--ink); border-bottom: 1px solid var(--line); }
     .rail { position: fixed; z-index: 30; inset: 0 auto 0 0; width: 260px; transform: translateX(-100%); transition: transform 0.35s var(--ease); }
     .rail.open { transform: none; box-shadow: 20px 0 60px rgba(0,0,0,0.6); }
+    .closenav { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: none; color: var(--text-2); font-size: 26px; line-height: 1; }
+    .closenav:hover { color: var(--text); background: var(--surface-2); }
+    .scrim { display: block; position: fixed; inset: 0; z-index: 25; border: 0; padding: 0; background: rgba(0, 0, 0, 0.6); cursor: default; }
   }
   @media (prefers-reduced-motion: reduce) { .live.on i { animation: none; } }
 </style>

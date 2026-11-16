@@ -138,6 +138,9 @@
   .devices { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; padding: 14px; border-radius: 12px; background: var(--ink); border: 1px solid var(--line); }
   .dev { display: flex; flex-direction: column; gap: 6px; }
   .stepper { display: flex; align-items: center; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+  /* The number field has no outline of its own; the whole stepper lights up instead. */
+  .stepper:has(input:focus-visible) { border-color: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
+  .stepper button:focus-visible { outline-offset: -2px; }
   .stepper button { width: 34px; height: 34px; border: 0; background: var(--surface-2); font-size: 16px; transition: background 0.15s; }
   .stepper button:hover { background: var(--lime); color: var(--on-lime); }
   .stepper input { width: 64px; height: 34px; border: 0; background: transparent; text-align: center; font-variant-numeric: tabular-nums; outline: none; -moz-appearance: textfield; appearance: textfield; }

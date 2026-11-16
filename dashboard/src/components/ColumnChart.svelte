@@ -9,6 +9,20 @@
   let width = $state(600);
   let hover = $state<number | null>(null);
 
+  // Keyboard: the chart is one tab stop (the newest bar to start with), and
+  // the left and right arrow keys, Home and End move between bars.
+  let hits = $state<SVGRectElement[]>([]);
+  let picked = $state<number | null>(null);
+  const tabStop = $derived(Math.max(0, Math.min(picked ?? data.length - 1, data.length - 1)));
+  function onkey(e: KeyboardEvent, i: number) {
+    const j = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? data.length - 1 : null;
+    if (j === null) return;
+    e.preventDefault();
+    if (j < 0 || j >= data.length) return;
+    picked = j;
+    hits[j]?.focus();
+  }
+
   const pad = { top: 12, right: 8, bottom: 28, left: 44 };
   const innerW = $derived(Math.max(10, width - pad.left - pad.right));
   const innerH = $derived(height - pad.top - pad.bottom);
@@ -31,7 +45,7 @@
 </script>
 
 <div class="chart" bind:clientWidth={width}>
-  <svg {width} {height} role="img" aria-label={label}>
+  <svg {width} {height} role="group" aria-label="{label}. The left and right arrow keys move between bars.">
     {#each yTicks as t (t)}
       <line x1={pad.left} x2={width - pad.right} y1={y(t)} y2={y(t)} class:base={t === 0} />
       <text x={pad.left - 10} y={y(t)} dy="0.32em" text-anchor="end" class="tick">{format(t)}</text>
@@ -41,11 +55,15 @@
       {#if i % every === (data.length - 1) % every}
         <text x={x(i)} y={height - 8} text-anchor="middle" class="tick">{d.label}</text>
       {/if}
+      <!-- A bar is a value to read, not a control. One bar is in the tab order; the arrow keys reach the rest. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <rect
+        bind:this={hits[i]}
         x={pad.left + band * i} y={pad.top} width={band} height={innerH} class="hit"
-        role="button" tabindex="0" aria-label="{d.label}: {format(d.value)}{d.detail ? ', ' + d.detail : ''}"
+        role="img" tabindex={i === tabStop ? 0 : -1} aria-label="{d.label}: {format(d.value)}{d.detail ? ', ' + d.detail : ''}"
         onpointerenter={() => (hover = i)} onpointerleave={() => (hover = null)}
         onfocus={() => (hover = i)} onblur={() => (hover = null)}
+        onkeydown={(e) => onkey(e, i)}
       />
     {/each}
   </svg>
@@ -68,7 +86,9 @@
   .bar { fill: var(--lime); transition: opacity 0.2s; transform-box: fill-box; transform-origin: 50% 100%; animation: grow 0.7s var(--ease) both; }
   @keyframes grow { from { transform: scaleY(0); } }
   .bar.dim { opacity: 0.35; }
-  .hit { fill: transparent; outline: none; cursor: default; }
+  .hit { fill: transparent; cursor: default; }
+  .hit:focus { outline: none; }
+  .hit:focus-visible { outline: 2px solid var(--lime); outline-offset: -1px; }
   .tip {
     position: absolute; transform: translate(-50%, -100%); pointer-events: none; z-index: 2;
     display: flex; flex-direction: column; gap: 1px; white-space: nowrap;

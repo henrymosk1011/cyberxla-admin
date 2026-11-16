@@ -4,6 +4,7 @@
   import PageHeader from "../components/PageHeader.svelte";
   import Confirm from "../components/Confirm.svelte";
   import { flip } from "svelte/animate";
+  import { ms } from "../lib/motion.ts";
   import { tick } from "svelte";
   import { catalog } from "../lib/store.svelte.ts";
   import { slugify, UNIT_OPTIONS, UNIT_LABEL, unitPrice } from "../lib/catalog.ts";
@@ -389,7 +390,7 @@
 
 <div class="cats" class:busy bind:this={cats} class:dragging={!!drag} class:catdrag={drag?.kind === "cat"}>
   {#each groups as g (g.cat.id)}
-    <section class="card cat" data-cat={g.cat.id} class:placeholder={drag?.kind === "cat" && drag.id === g.cat.id} animate:flip={{ duration: 220 }}>
+    <section class="card cat" data-cat={g.cat.id} class:placeholder={drag?.kind === "cat" && drag.id === g.cat.id} animate:flip={{ duration: ms(220) }}>
       <div class="cat-head">
         {#if !q}
           <button class="grip" data-handle="cat:{g.cat.id}" aria-label="Reorder {g.cat.name}. Drag, or use the up and down arrow keys." title="Drag to reorder"
@@ -407,7 +408,7 @@
 
       <ul class="svcs" class:searching={!!q}>
         {#each g.shown as s (s.id)}
-          <li class:hidden={!s.active} data-id={s.id} class:placeholder={drag?.kind === "svc" && drag.id === s.id} animate:flip={{ duration: 200 }}>
+          <li class:hidden={!s.active} data-id={s.id} class:placeholder={drag?.kind === "svc" && drag.id === s.id} animate:flip={{ duration: ms(200) }}>
             {#if !q}
               <button class="grip" data-handle="svc:{s.id}" aria-label="Reorder {s.name}. Drag, or use the up and down arrow keys." title="Drag to reorder or move to another category"
                 onpointerdown={(e) => startDrag(e, "svc", s.id)} onkeydown={(e) => keyMove(e, "svc", s.id)}>⠿</button>
@@ -577,13 +578,15 @@
   .svcs.searching li { grid-template-columns: minmax(0, 1fr) auto auto; }
   .dragging .svcs li { animation: none; }
   .svcs li > .grip { margin-left: -4px; }
-  .svcs li.hidden .info, .svcs li.hidden .price .amount, .svcs li.hidden .unit { opacity: 0.5; }
+  /* A hidden service is marked by its Hidden badge and a quieter name, not by fading text below readable contrast. */
+  .svcs li.hidden .name { color: var(--text-2); font-weight: 500; }
+  .svcs li.hidden .price .amount { opacity: 0.75; }
   .name { font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
   .desc { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .price { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 13px; }
   .amount { display: flex; align-items: center; gap: 3px; width: 104px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; background: var(--surface-2); cursor: text; transition: border-color 0.15s, background 0.15s; }
   .amount:hover { border-color: var(--line-2); }
-  .amount:focus-within { border-color: var(--lime); background: var(--ink); }
+  .amount:focus-within { border-color: var(--lime); background: var(--ink); box-shadow: 0 0 0 1px var(--lime); }
   .amount span { color: var(--muted); }
   .amount input { width: 100%; min-width: 0; border: 0; background: transparent; outline: none; text-align: right; font-weight: 600; font-size: 14px; -moz-appearance: textfield; appearance: textfield; }
   .amount input::-webkit-inner-spin-button, .amount input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -592,7 +595,7 @@
   .ok.show { opacity: 1; }
   .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; }
   .badge.inc { background: var(--lime); color: var(--on-lime); }
-  .badge.off { background: var(--surface-3); color: var(--muted); }
+  .badge.off { background: var(--surface-3); color: var(--text-2); }
   .badge.lock { border: 1px solid var(--line-2); color: var(--text-2); }
   .empty-row { padding: 14px 4px; border-top: 1px solid var(--line); font-size: 14px; }
   .add { margin-top: 8px; }

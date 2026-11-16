@@ -1,5 +1,7 @@
 <script lang="ts">
   // One reusable "are you sure?" dialog. Call ask() and await the answer.
+  // Each dialog on a page gets its own id, so it is announced by its own title.
+  const uid = $props.id();
   let dlg = $state<HTMLDialogElement | null>(null);
   let title = $state("");
   let body = $state("");
@@ -20,9 +22,9 @@
   }
 </script>
 
-<dialog bind:this={dlg} onclose={() => done(false)} aria-labelledby="confirm-title">
-  <h2 id="confirm-title">{title}</h2>
-  <p>{body}</p>
+<dialog bind:this={dlg} onclose={() => done(false)} aria-labelledby="{uid}-title" aria-describedby="{uid}-body">
+  <h2 id="{uid}-title">{title}</h2>
+  <p id="{uid}-body">{body}</p>
   <div class="row">
     <button class="btn ghost" onclick={() => done(false)}>Cancel</button>
     <button class="btn" class:danger class:primary={!danger} onclick={() => done(true)}>{action}</button>
@@ -37,6 +39,7 @@
   .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
   /* The dialog is reused; don't animate the color swap between Archive and Delete. */
   .row .btn { transition: none; }
-  .danger { background: var(--critical); border-color: var(--critical); color: #fff; }
-  .danger:hover { background: #ef7f7f; }
+  /* White on this red passes 4.5:1; the lighter text red (--critical) did not. */
+  .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .danger:hover { background: var(--danger-hover); }
 </style>

@@ -3,6 +3,7 @@
   // right. The tools keep to one row on a desktop and drop under the title on
   // narrow screens.
   import type { Snippet } from "svelte";
+  import { pageHeading } from "../lib/nav.svelte.ts";
 
   let { title, eyebrow = "", sub = "", back, meta, children }: {
     title: string;
@@ -23,7 +24,7 @@
 <header class="head">
   <div class="titles">
     {#if eyebrow}<p class="eyebrow">{eyebrow}</p>{/if}
-    <h1>{title}</h1>
+    <h1 use:pageHeading>{title}</h1>
     {#if sub}<p class="sub">{sub}</p>{/if}
     {#if meta}{@render meta()}{/if}
   </div>

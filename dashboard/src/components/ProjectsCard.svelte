@@ -68,7 +68,8 @@
   .plist li:first-child { border-top: 0; }
   .plist a { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 92px; gap: 12px; align-items: center; padding: 10px 6px; border-radius: 8px; text-decoration: none; transition: background 0.12s; }
   .plist a:hover { background: var(--surface-2); }
-  .plist li.closed a { opacity: 0.6; }
+  /* Finished and cancelled projects step back by weight and color, staying readable. */
+  .plist li.closed .pname, .plist li.closed .pval { font-weight: 500; color: var(--text-2); }
   .pname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pval { font-weight: 600; text-align: right; }
   .pdue { font-size: 12px; text-align: right; }
