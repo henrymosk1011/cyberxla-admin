@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import Field from "../components/Field.svelte";
+  import Modal from "../components/Modal.svelte";
   import Menu from "../components/Menu.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
@@ -9,7 +12,8 @@
   import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeLine, describeProject, describeReport } from "../lib/activity.ts";
-  import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
+  import { dateTime, money, num, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
+  import { EMAIL } from "../lib/reports.ts";
   import { CLIENT_STATUSES, type AuditEntry, type Client, type ClientService, type ClientStatus, type Project, type ProjectService } from "../lib/types.ts";
 
   let { id, version, projects, projectLines }: { id: string; version: number; projects: Project[]; projectLines: ProjectService[] } = $props();
@@ -18,7 +22,10 @@
   let lines = $state<ClientService[]>([]);
   let activity = $state<AuditEntry[]>([]);
   let loadError = $state("");
-  let detailsError = $state("");
+  // What is wrong with each field of the details form, shown under it.
+  let errors = $state<{ company?: string; email?: string }>({});
+  // The card shows the details; Edit opens the form.
+  let editingDetails = $state(false);
   let saving = $state<"" | "details" | "notes">("");
   let reportsDirty = $state(false);
   let confirm: Confirm;
@@ -83,15 +90,27 @@
   const nn = (s: string) => s.trim() || null;
   async function saveDetails(e: SubmitEvent) {
     e.preventDefault();
-    detailsError = "";
-    if (!details.company.trim() && !details.contact_name.trim()) { detailsError = "Add a company or a contact name."; return; }
+    errors = {};
+    if (!details.company.trim() && !details.contact_name.trim()) errors.company = "Add a company or a contact name.";
+    if (details.email.trim() && !EMAIL.test(details.email.trim())) errors.email = "That doesn't look like an email address.";
+    if (errors.company || errors.email) {
+      await tick();
+      document.getElementById(errors.company ? "d-co" : "d-em")?.focus();
+      return;
+    }
     saving = "details";
-    await run(() => db.updateClient(id, {
+    const ok = await run(() => db.updateClient(id, {
       company: nn(details.company), contact_name: nn(details.contact_name), email: nn(details.email.toLowerCase()), phone: nn(details.phone),
       address: nn(details.address), workstations: Math.max(0, Math.round(details.workstations || 0)), servers: Math.max(0, Math.round(details.servers || 0)),
       started_on: details.started_on || null,
     }), "Details saved.");
     saving = "";
+    if (ok) editingDetails = false;
+  }
+  function cancelDetails() {
+    editingDetails = false;
+    errors = {};
+    if (savedDetails) details = JSON.parse(savedDetails);
   }
   const setStatus = (s: ClientStatus) => client && client.status !== s && run(() => db.updateClient(id, { status: s }));
   async function saveNotes() {
@@ -184,25 +203,21 @@
     </div>
 
     <aside class="side">
-      <ClientReportsCard {client} onsaved={load} bind:dirty={reportsDirty} />
-
       <section class="card">
-        <div class="card-head"><h2>Details</h2></div>
-        <form class="form" onsubmit={saveDetails}>
-          <div class="field"><label for="d-co">Company</label><input id="d-co" class="input" maxlength="160" bind:value={details.company} /></div>
-          <div class="field"><label for="d-ct">Contact name</label><input id="d-ct" class="input" maxlength="120" bind:value={details.contact_name} /></div>
-          <div class="field"><label for="d-em">Email</label><input id="d-em" class="input" type="email" maxlength="254" bind:value={details.email} /></div>
-          <div class="field"><label for="d-ph">Phone</label><input id="d-ph" class="input" type="tel" maxlength="40" bind:value={details.phone} /></div>
-          <div class="field"><label for="d-ad">Address</label><input id="d-ad" class="input" maxlength="300" bind:value={details.address} /></div>
-          <div class="two">
-            <div class="field"><label for="d-ws">Workstations</label><input id="d-ws" class="input num" type="number" min="0" bind:value={details.workstations} /></div>
-            <div class="field"><label for="d-sv">Servers</label><input id="d-sv" class="input num" type="number" min="0" bind:value={details.servers} /></div>
-          </div>
-          <div class="field"><label for="d-st">Client since</label><input id="d-st" class="input" type="date" bind:value={details.started_on} /></div>
-          {#if detailsError}<p class="error" role="alert">{detailsError}</p>{/if}
-          <div class="row"><button class="btn primary sm" disabled={!detailsDirty || saving === "details"}>{saving === "details" ? "Saving…" : "Save details"}</button></div>
-        </form>
+        <div class="card-head"><h2>Details</h2><button class="btn sm" onclick={() => (editingDetails = true)}>Edit<span class="sr-only"> details</span></button></div>
+        <dl class="facts">
+          <div><dt>Company</dt><dd class:unset={!client.company}>{client.company || "Not set"}</dd></div>
+          <div><dt>Contact name</dt><dd class:unset={!client.contact_name}>{client.contact_name || "Not set"}</dd></div>
+          <div><dt>Email</dt><dd class:unset={!client.email}>{#if client.email}<a href="mailto:{client.email}">{client.email}</a>{:else}Not set{/if}</dd></div>
+          <div><dt>Phone</dt><dd class:unset={!client.phone}>{#if client.phone}<a href={tel(client.phone)}>{phone(client.phone)}</a>{:else}Not set{/if}</dd></div>
+          <div><dt>Address</dt><dd class:unset={!client.address}>{client.address || "Not set"}</dd></div>
+          <div><dt>Devices</dt><dd>{num(client.workstations)} {client.workstations === 1 ? "workstation" : "workstations"}, {num(client.servers)} {client.servers === 1 ? "server" : "servers"}</dd></div>
+          <div><dt>Client since</dt><dd class:unset={!client.started_on}>{client.started_on ? shortDate(client.started_on + "T12:00:00") : "Not set"}</dd></div>
+        </dl>
+        {#if detailsDirty && !editingDetails}<p class="draft">You have unsaved changes here. <button class="link" onclick={() => (editingDetails = true)}>Keep editing</button></p>{/if}
       </section>
+
+      <ClientReportsCard {client} onsaved={load} bind:dirty={reportsDirty} />
 
       <section class="card">
         <div class="card-head">
@@ -224,6 +239,26 @@
     </aside>
   </div>
 {/if}
+
+<Modal open={editingDetails} title="Edit details" onclose={() => (editingDetails = false)} persistent={detailsDirty}>
+  <form class="form" onsubmit={saveDetails} novalidate>
+    <p class="hint">A company or a contact name is required.</p>
+    <div class="grid2">
+      <Field id="d-co" label="Company" error={errors.company}>{#snippet children(a)}<input {...a} class="input" maxlength="160" bind:value={details.company} />{/snippet}</Field>
+      <Field id="d-ct" label="Contact name">{#snippet children(a)}<input {...a} class="input" maxlength="120" bind:value={details.contact_name} />{/snippet}</Field>
+      <Field id="d-em" label="Email" error={errors.email}>{#snippet children(a)}<input {...a} class="input" type="email" maxlength="254" bind:value={details.email} />{/snippet}</Field>
+      <Field id="d-ph" label="Phone">{#snippet children(a)}<input {...a} class="input" type="tel" maxlength="40" bind:value={details.phone} />{/snippet}</Field>
+      <Field id="d-ad" label="Address" wide>{#snippet children(a)}<input {...a} class="input" maxlength="300" bind:value={details.address} />{/snippet}</Field>
+      <Field id="d-ws" label="Workstations">{#snippet children(a)}<input {...a} class="input num" type="number" min="0" bind:value={details.workstations} />{/snippet}</Field>
+      <Field id="d-sv" label="Servers">{#snippet children(a)}<input {...a} class="input num" type="number" min="0" bind:value={details.servers} />{/snippet}</Field>
+      <Field id="d-st" label="Client since">{#snippet children(a)}<input {...a} class="input" type="date" bind:value={details.started_on} />{/snippet}</Field>
+    </div>
+    <div class="row">
+      <button type="button" class="btn ghost" onclick={cancelDetails}>Cancel</button>
+      <button class="btn primary" disabled={!detailsDirty || saving === "details"}>{saving === "details" ? "Saving…" : "Save details"}</button>
+    </div>
+  </form>
+</Modal>
 
 <Confirm bind:this={confirm} />
 
@@ -251,10 +286,21 @@
   .x:hover { color: var(--critical); background: var(--surface-2); }
   textarea.input { width: 100%; }
   .row { display: flex; justify-content: flex-end; margin-top: 10px; }
-  .form { display: flex; flex-direction: column; gap: 10px; }
-  .form .input { height: 38px; width: 100%; min-width: 0; }
-  .form .field { min-width: 0; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form { display: flex; flex-direction: column; gap: 14px; }
+  .form :global(.input) { width: 100%; min-width: 0; }
+  .form .row { gap: 8px; margin-top: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hint { font-size: 13px; color: var(--muted); }
+  .facts { display: flex; flex-direction: column; gap: 10px; }
+  .facts div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: baseline; font-size: 14px; }
+  .facts dt { color: var(--muted); font-size: 13px; }
+  .facts dd { overflow-wrap: anywhere; }
+  .facts a { color: var(--lime); text-decoration: none; }
+  .facts a:hover { text-decoration: underline; }
+  .unset { color: var(--text-2); }
+  .draft { margin-top: 12px; font-size: 13px; color: var(--warning); }
+  .link { border: 0; background: none; padding: 0; color: var(--lime); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+  @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
   .timeline { list-style: none; display: flex; flex-direction: column; gap: 14px; }
   .timeline li { display: flex; gap: 12px; font-size: 13px; align-items: flex-start; }
   .timeline li > div { flex: 1; min-width: 0; }
