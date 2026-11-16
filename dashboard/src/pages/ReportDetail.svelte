@@ -500,7 +500,7 @@
     <div class="callout warn" role="note"><strong>Sending.</strong> <p>It can't be edited while it goes out. If it doesn't finish, look in Sent Items of reports@cyberx.la for the subject below, then Mark as sent or Mark as not sent.</p></div>
   {/if}
   {#if report.cleared_at}
-    <div class="callout" role="note"><strong>Cleared from the Reports list</strong> <p>It's kept; it just doesn't show in the list. <button class="link" disabled={busy} onclick={() => act(() => db.clearReports([id], false), "Back on the Reports list.")}>Put it back on the list</button></p></div>
+    <div class="callout" role="note"><strong>Archived</strong> <p>It's kept; it just doesn't show in the Reports list. <button class="link" disabled={busy} onclick={() => act(() => db.clearReports([id], false), "Restored. It's back on the Reports list.")}>Restore it</button></p></div>
   {/if}
   {#if changedElsewhere}
     <div class="callout warn" role="alert"><strong>This report changed somewhere else</strong> <p>Saving now replaces that change with yours. <button class="link" onclick={() => report && takeDrafts(report)}>Load the latest instead</button></p></div>
@@ -721,7 +721,7 @@
         <section class="card">
           <div class="card-head"><h2>UniFi</h2>{#if unifi}<span class="sub">Last checked {dateTime(unifi.checked_at)}</span>{/if}</div>
           {#if !client?.unifi_console}
-            <p class="muted">No UniFi console is set for {report.client_name}. Add it on <a href="#/clients/{report.client_id}">{report.client_name}'s page</a>, in the Patch reports card.</p>
+            <p class="muted">No UniFi console is set for {report.client_name}. Add it on <a href="#/clients/{report.client_id}">{report.client_name}'s page</a>, in the Reports card.</p>
           {:else}
             {#if !unifiLoaded}
               <p class="muted">Loading…</p>

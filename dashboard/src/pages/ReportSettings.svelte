@@ -3,6 +3,7 @@
   import Confirm from "../components/Confirm.svelte";
   import LoadState from "../components/LoadState.svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import ReportsNav from "../components/ReportsNav.svelte";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { thisWeek } from "../lib/reports.ts";
   import type { Client, ReportRow, ReportSettings } from "../lib/types.ts";
@@ -70,7 +71,8 @@
   }
 </script>
 
-<PageHeader back={{ href: "#/reports", label: "All reports" }} eyebrow="Patch reports" title="Report settings" />
+<PageHeader title="Report settings" />
+<ReportsNav current="settings" />
 
 {#if !saved}
   <LoadState error={loadError} what="the settings" onretry={() => { loadError = ""; load(); }} />
@@ -110,12 +112,6 @@
 
     <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>Report template</h2></div>
-      <p class="hint">The wording and order every new report starts from: What we did, titles, labels and the email. Reports already made don't change.</p>
-      <div class="row"><a class="btn" href="#/reports/template">Edit the template</a></div>
-    </section>
-
-    <section class="card">
       <div class="card-head"><h2>Clients getting reports</h2><span class="sub">Set on each client's page</span></div>
       {#if on.length}
         <ul class="clients">
@@ -127,7 +123,7 @@
           {/each}
         </ul>
       {:else}
-        <p class="muted">No clients yet. Open a client and fill in its Patch reports card.</p>
+        <p class="muted">No clients yet. Open a client and fill in its Reports card.</p>
       {/if}
       {#if off}<p class="hint">{off} other {off === 1 ? "client doesn't" : "clients don't"} get reports.</p>{/if}
     </section>

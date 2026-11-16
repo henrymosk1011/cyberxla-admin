@@ -66,15 +66,15 @@
   }
 </script>
 
-<PageHeader eyebrow="Clients" title="Clients">
-  <input class="input search" type="search" placeholder="Search company, contact, email, phone" aria-label="Search clients" bind:value={q} />
+<PageHeader title="Clients">
+  <input class="input search" type="search" placeholder="Search clients" aria-label="Search clients by company, contact, email or phone" bind:value={q} />
   <button class="btn primary" onclick={() => { form = blank(); formError = ""; creating = true; }}>+ New client</button>
 </PageHeader>
 
 <div class="kpis rise">
   <section class="card kpi hero"><p class="eyebrow">Monthly recurring revenue</p><p class="big num">{money(mrr)}<small>/mo</small></p><p class="muted">from {active.length} active {active.length === 1 ? "client" : "clients"}</p></section>
   <section class="card kpi"><p class="eyebrow">Average per client</p><p class="mid num">{active.length ? money(mrr / active.length) : "–"}<small>/mo</small></p></section>
-  <section class="card kpi"><p class="eyebrow">Annualized</p><p class="mid num">{money(mrr * 12)}<small>/yr</small></p></section>
+  <section class="card kpi"><p class="eyebrow">Per year</p><p class="mid num">{money(mrr * 12)}<small>/yr</small></p></section>
 </div>
 
 <div class="filters">

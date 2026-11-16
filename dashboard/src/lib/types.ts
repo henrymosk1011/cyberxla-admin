@@ -165,7 +165,7 @@ export interface Db {
   updateReport(id: string, patch: ReportPatch): Promise<void>;
   /** Move these reports from one status to another (Hold all, Resume all). Returns how many moved. */
   moveReports(ids: string[], from: ReportStatus, to: ReportStatus): Promise<number>;
-  /** Clear finished reports from the Reports list, or bring them back. Returns how many changed. */
+  /** Archive finished reports (take them off the Reports list), or restore them. Returns how many changed. */
   clearReports(ids: string[], cleared: boolean): Promise<number>;
   deleteReport(id: string): Promise<void>;
   /** Delete reports for good (with their PDFs). Returns how many were deleted. */
@@ -453,7 +453,7 @@ export type ReportRow = {
   attempts: number;
   sent_at: string | null;
   error: string | null;
-  /** Cleared from the Reports list (still kept); null when on the list. */
+  /** When it was archived (off the Reports list, still kept); null when on the list. */
   cleared_at: string | null;
 };
 

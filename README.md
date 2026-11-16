@@ -35,8 +35,8 @@ access to any table.
 | `supabase/migrations/0012_report_template.sql` | The report template every new patch report starts from |
 | `supabase/migrations/0013_unifi.sql` | A client's UniFi console, and the log of UniFi software versions the reports have seen |
 | `supabase/migrations/0014_unifi_status.sql` | Each client's latest UniFi status for the UniFi tab on a report |
-| `supabase/migrations/0015_report_clear.sql` | Clearing finished reports from the Reports list; test reports delete themselves after a week |
-| `supabase/migrations/0016_report_delete.sql` | Deleting cleared reports for good (a sent client report must be cleared first) |
+| `supabase/migrations/0015_report_clear.sql` | Archiving finished reports (taking them off the Reports list; called Clear when it was added); test reports delete themselves after a week |
+| `supabase/migrations/0016_report_delete.sql` | Deleting archived reports for good (a sent client report must be archived first) |
 | `supabase/functions/report-action/` | The dashboard's Send now and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
@@ -204,7 +204,7 @@ Monday, send time        every report still scheduled goes out; held ones don't
   generated from then on; reports already made don't change. On a report,
   **Use this list for future reports** copies its What we did list into the
   template.
-- Who gets a client's reports is set on the client's page (Patch reports card),
+- Who gets a client's reports is set on the client's page (Reports card),
   along with computers to always leave off. A computer can also be marked to
   leave off future reports from any report; hiding or deleting one on a report
   only changes that report.
@@ -226,15 +226,17 @@ Monday, send time        every report still scheduled goes out; held ones don't
   unsaved edits.
 - Test reports (from a manual run) never block the real Sunday report, never
   send on a schedule, and always go to you only.
-- Clear takes a finished report (sent, failed, cancelled) or a test report off
-  the Reports list; it's kept, under Cleared, where Restore brings it back.
-  Clear test reports does every test at once. Test reports delete themselves
-  a week after they're made (each Sunday run calls
-  reporting.purge_test_reports()).
-- Under Cleared, Delete (on a row, or Delete selected for ticked rows) removes
-  reports for good, with their PDFs; the record in Activity stays. A sent
-  client report can only be deleted once it's cleared, and a report that is
-  sending never can (enforced in the database too).
+- Archive takes a finished report (sent, failed, cancelled) or a test report
+  off the Reports list; it's kept, under Archived, where Restore brings it
+  back. Archive test reports does every test at once. Test reports delete
+  themselves a week after they're made (each Sunday run calls
+  reporting.purge_test_reports()). In the database this is still the
+  `cleared_at` column (it was called Clear when it was added); only the
+  wording in the dashboard changed.
+- Under Archived, Delete (on a row, or Delete selected for ticked rows)
+  removes reports for good, with their PDFs; the record in Activity stays. A
+  sent client report can only be deleted once it's archived, and a report
+  that is sending never can (enforced in the database too).
 
 How it's kept safe:
 

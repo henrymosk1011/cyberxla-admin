@@ -31,7 +31,7 @@
   const rangeLabel = $derived(RANGES.find((r) => r.weeks === weeks)!.label);
 </script>
 
-<PageHeader eyebrow="Overview" title="Pipeline">
+<PageHeader title="Overview">
   <div class="seg" role="group" aria-label="Time range">
     {#each RANGES as r (r.weeks)}
       <button aria-pressed={weeks === r.weeks} onclick={() => (weeks = r.weeks)}>{r.label}</button>
@@ -41,7 +41,7 @@
 
 <div class="grid rise" class:stale>
   <section class="card hero">
-    <a class="hero-link" href="#/clients"><Kpi hero label="Recurring revenue" value="{money(mrr)}/mo" hint="{num(activeClients.size)} active {activeClients.size === 1 ? 'client' : 'clients'} · {moneyCompact(mrr * 12)}/yr" /></a>
+    <a class="hero-link" href="#/clients"><Kpi hero label="Monthly recurring revenue" value="{money(mrr)}/mo" hint="{num(activeClients.size)} active {activeClients.size === 1 ? 'client' : 'clients'} · {moneyCompact(mrr * 12)}/yr" /></a>
     <div class="pipe">
       <span class="eyebrow">Open pipeline</span>
       <span class="pv num">{money(k.openMonthly)}<small>/mo</small></span>

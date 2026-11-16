@@ -120,8 +120,8 @@
     if (a.table_name === "clients") {
       if (a.action === "insert") return n.lead_id ? "Client created from lead" : "Client added";
       if (n.status !== o.status) return `Status ${STATUS_LABEL[String(o.status)]} → ${STATUS_LABEL[String(n.status)]}`;
-      if (n.reports_enabled !== o.reports_enabled) return n.reports_enabled ? "Patch reports turned on" : "Patch reports turned off";
-      if (["action1_group", "report_recipients", "report_cc", "report_exclude", "unifi_console"].some((k) => JSON.stringify(n[k]) !== JSON.stringify(o[k]))) return "Patch report settings updated";
+      if (n.reports_enabled !== o.reports_enabled) return n.reports_enabled ? "Reports turned on" : "Reports turned off";
+      if (["action1_group", "report_recipients", "report_cc", "report_exclude", "unifi_console"].some((k) => JSON.stringify(n[k]) !== JSON.stringify(o[k]))) return "Report settings updated";
       if (n.notes !== o.notes) return "Notes updated";
       return "Details updated";
     }
@@ -189,7 +189,7 @@
         <div class="card-head"><h2>Details</h2></div>
         <form class="form" onsubmit={saveDetails}>
           <div class="field"><label for="d-co">Company</label><input id="d-co" class="input" maxlength="160" bind:value={details.company} /></div>
-          <div class="field"><label for="d-ct">Contact</label><input id="d-ct" class="input" maxlength="120" bind:value={details.contact_name} /></div>
+          <div class="field"><label for="d-ct">Contact name</label><input id="d-ct" class="input" maxlength="120" bind:value={details.contact_name} /></div>
           <div class="field"><label for="d-em">Email</label><input id="d-em" class="input" type="email" maxlength="254" bind:value={details.email} /></div>
           <div class="field"><label for="d-ph">Phone</label><input id="d-ph" class="input" type="tel" maxlength="40" bind:value={details.phone} /></div>
           <div class="field"><label for="d-ad">Address</label><input id="d-ad" class="input" maxlength="300" bind:value={details.address} /></div>

@@ -577,6 +577,8 @@ function reportError(e: { message: string; code?: string } | null) {
   if (!e) return null;
   if (e.code === "23514") return { message: "Something isn't valid: check the recipients (1 to 10 real addresses), the subject, and the body." };
   if (e.code === "42501") return { message: "That change isn't allowed here." };
+  // The database's guard says "cleared" (its name when it was added); the dashboard calls it Archive.
+  if (e.code === "P0403") return { ...e, message: e.message.replace("Clear it first, then delete it from Cleared.", "Archive it first, then delete it from Archived.").replace("can be cleared", "can be archived") };
   return e;
 }
 

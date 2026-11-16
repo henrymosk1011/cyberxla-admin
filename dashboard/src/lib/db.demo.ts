@@ -568,7 +568,7 @@ const db: Db = {
   async clearReports(ids, cleared) {
     let n = 0;
     for (const r of reports.filter((x) => ids.includes(x.id))) {
-      if (cleared && !(r.is_test ? r.status !== "sending" : ["sent", "failed", "cancelled"].includes(r.status))) throw new Error("Only sent, failed, cancelled or test reports can be cleared");
+      if (cleared && !(r.is_test ? r.status !== "sending" : ["sent", "failed", "cancelled"].includes(r.status))) throw new Error("Only sent, failed, cancelled or test reports can be archived");
       const before = structuredClone(r);
       r.cleared_at = cleared ? new Date().toISOString() : null;
       logReport("update", before, r);

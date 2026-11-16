@@ -156,7 +156,7 @@
     switch (route.page) {
       case "overview": return "Overview";
       case "leads": return "Leads";
-      case "board": return "Leads board";
+      case "board": return "Leads";
       case "lead": { const l = leads.find((x) => x.id === route.id); return l ? l.company || l.name : "Lead"; }
       case "clients": return "Clients";
       case "client": { const c = clients.find((x) => x.id === route.id); return c ? c.company || c.contact_name || "Client" : "Client"; }
@@ -192,14 +192,23 @@
     }
   }
 
+  // The menu, grouped by what the pages are for. The leads board is a view of
+  // Leads (the page has a List and Board switch), so it has no item of its own.
   const nav = [
-    { href: "#/", label: "Overview", match: ["overview"], icon: "M4 13h6V4H4zM14 20h6v-9h-6zM14 4v4h6V4zM4 20h6v-3H4z" },
-    { href: "#/leads", label: "Leads", match: ["leads", "lead"], icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19v-1a4 4 0 0 0-3-3.87M15.5 4.13a3 3 0 0 1 0 5.74" },
-    { href: "#/board", label: "Board", match: ["board"], icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
-    { href: "#/clients", label: "Clients", match: ["clients", "client"], icon: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01" },
-    { href: "#/projects", label: "Projects", match: ["projects", "project"], icon: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18" },
-    { href: "#/reports", label: "Reports", match: ["reports", "report", "report-settings", "report-template"], icon: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6M10 9h2" },
-    { href: "#/services", label: "Services", match: ["services"], icon: "M12 2 3 7l9 5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5" },
+    { group: "", items: [
+      { href: "#/", label: "Overview", match: ["overview"], icon: "M4 13h6V4H4zM14 20h6v-9h-6zM14 4v4h6V4zM4 20h6v-3H4z" },
+    ] },
+    { group: "Sales", items: [
+      { href: "#/leads", label: "Leads", match: ["leads", "lead", "board"], icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19v-1a4 4 0 0 0-3-3.87M15.5 4.13a3 3 0 0 1 0 5.74" },
+    ] },
+    { group: "Client work", items: [
+      { href: "#/clients", label: "Clients", match: ["clients", "client"], icon: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01" },
+      { href: "#/projects", label: "Projects", match: ["projects", "project"], icon: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18" },
+      { href: "#/reports", label: "Reports", match: ["reports", "report", "report-settings", "report-template"], icon: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6M10 9h2" },
+    ] },
+    { group: "Catalog", items: [
+      { href: "#/services", label: "Services", match: ["services"], icon: "M12 2 3 7l9 5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5" },
+    ] },
   ];
 
   // The highlight glides to whichever item is active.
@@ -260,12 +269,17 @@
       </div>
       <nav bind:this={navEl} aria-label="Main">
         <span class="pill" class:show={pillShow} aria-hidden="true" style:transform="translateY({pillY}px)" style:height="{pillH}px"></span>
-        {#each nav as n (n.href)}
-          <a href={n.href} aria-current={n.match.includes(route.page) ? "page" : undefined}>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={n.icon} /></svg>
-            <span class="label">{n.label}</span>
-            {#if n.label === "Leads" && newCount}<span class="badge num">{newCount}</span>{/if}
-          </a>
+        {#each nav as g (g.group)}
+          <div class="navgroup" role="group" aria-label={g.group || undefined}>
+            {#if g.group}<p class="grouplabel" aria-hidden="true">{g.group}</p>{/if}
+            {#each g.items as n (n.href)}
+              <a href={n.href} aria-current={n.match.includes(route.page) ? "page" : undefined}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={n.icon} /></svg>
+                <span class="label">{n.label}</span>
+                {#if n.label === "Leads" && newCount}<span class="badge num">{newCount}</span>{/if}
+              </a>
+            {/each}
+          </div>
         {/each}
       </nav>
       <div class="me">
@@ -349,7 +363,9 @@
   .railtop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .closenav, .scrim { display: none; }
   .nf { font-size: 22px; letter-spacing: -0.02em; color: var(--text); margin-bottom: 6px; }
-  nav { position: relative; display: flex; flex-direction: column; gap: 4px; }
+  nav { position: relative; display: flex; flex-direction: column; gap: 14px; }
+  .navgroup { display: flex; flex-direction: column; gap: 4px; }
+  .grouplabel { padding: 0 12px 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .pill {
     position: absolute; left: 0; right: 0; top: 0; z-index: 0; border-radius: 12px; pointer-events: none; opacity: 0;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), var(--surface-2);
