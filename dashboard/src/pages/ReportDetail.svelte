@@ -307,6 +307,12 @@
     if (await confirm.ask({ title: `Send ${report.client_name} now?`, body: sendNowText(report, settings.mode), action: "Send now" }))
       await act(() => db.reportAction(id, "send_now"), "Sending. It shows Sent in a minute or two.");
   }
+  /** A copy to Henry, as the client would get it (or got it). It never goes to the client and doesn't change the report. */
+  async function sendCopy() {
+    if (!report) return;
+    if (dirty) return toast.error("Save or discard your edits first, so the copy matches the report.");
+    await act(() => db.reportAction(id, "copy"), "A copy is on its way to henry@cyberx.la. It arrives in a minute or two.");
+  }
   const setStatus = (status: Report["status"], ok: string) => act(() => db.updateReport(id, { status }), ok);
   // The less common actions, behind the More button in the header.
   const moreItems = $derived<MenuItem[]>([
@@ -489,6 +495,7 @@
     <div class="acts">
       {#if can.hold}<button class="btn" disabled={busy} onclick={() => setStatus("held", "On hold. It won't send until you resume it.")}>Hold</button>{/if}
       {#if can.resume}<button class="btn" disabled={busy} onclick={() => setStatus("scheduled", "Scheduled.")}>Resume</button>{/if}
+      <button class="btn" disabled={busy || dirty} onclick={sendCopy}>Send me a copy</button>
       {#if can.sendNow}<button class="btn primary" disabled={busy || dirty} onclick={sendNow}>Send now</button>{/if}
       {#if can.markSent}<button class="btn" disabled={busy} onclick={markSent}>Mark as sent</button>{/if}
       {#if can.markNotSent}<button class="btn" disabled={busy} onclick={markNotSent}>Mark as not sent</button>{/if}

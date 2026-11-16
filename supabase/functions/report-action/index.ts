@@ -1,4 +1,4 @@
-// report-action: the dashboard's Send now, re-render, Rebuild and UniFi Check now
+// report-action: the dashboard's Send now, Send me a copy, re-render, Rebuild and UniFi Check now
 // buttons for patch reports.
 //
 // 1. POST only, from admin.cyberx.la only, with a small body cap.
@@ -12,6 +12,8 @@
 //    report workflow when the PDFs are behind the latest edits; Rebuild starts
 //    it with force, so it renders even when they're up to date. UniFi starts the
 //    Check UniFi workflow for the report's client (read only), any status.
+//    Copy (Send me a copy) starts Send reports with copy on: the report goes to
+//    Henry only and nothing about it changes, so it works at any status.
 // 5. GitHub is called with a fine grained token that can only run Actions on
 //    the reports repo, and it expires.
 //
@@ -90,8 +92,8 @@ function asUser(authorization: string) {
   };
 }
 
-async function dispatch(workflow: Workflow, id: string, force = false) {
-  const { url, init } = dispatchRequest(env("REPORTS_REPO"), workflow, id, env("GH_ACTIONS_TOKEN"), force);
+async function dispatch(workflow: Workflow, id: string, force = false, copy = false) {
+  const { url, init } = dispatchRequest(env("REPORTS_REPO"), workflow, id, env("GH_ACTIONS_TOKEN"), force, copy);
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) });
   if (res.status !== 204) {
     const detail = res.status === 401 ? "the GitHub token has expired or was revoked" : `GitHub answered ${res.status}`;
@@ -128,6 +130,11 @@ Deno.serve(async (req) => {
       await dispatch("unifi-check.yml", r.client_id);
       return reply(200, { ok: true, started: "unifi" }, headers);
     }
+    // A copy only goes to Henry and changes nothing, so it works on any report, sent ones included.
+    if (action === "copy") {
+      await dispatch("send.yml", reportId, false, true);
+      return reply(200, { ok: true, started: "copy" }, headers);
+    }
     const no = refusal(r);
     if (no) return reply(409, { error: no }, headers);
 
@@ -148,7 +155,7 @@ Deno.serve(async (req) => {
     const err = e as Error & { status?: number; github?: boolean; dbMessage?: string };
     console.error("report-action", action, reportId, err.message);
     if (err.github) {
-      const what = action === "send_now" ? "It's marked to send now, but the send didn't start" : action === "rebuild" ? "The rebuild didn't start" : action === "unifi" ? "The UniFi check didn't start" : "The preview didn't start updating";
+      const what = action === "send_now" ? "It's marked to send now, but the send didn't start" : action === "rebuild" ? "The rebuild didn't start" : action === "unifi" ? "The UniFi check didn't start" : action === "copy" ? "The copy didn't start" : "The preview didn't start updating";
       return reply(502, { error: `${what}: ${err.message}. Try again in a minute.` }, headers);
     }
     if (err.status === 401) return reply(401, { error: "Sign in again." }, headers);

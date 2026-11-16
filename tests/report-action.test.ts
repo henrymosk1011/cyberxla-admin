@@ -7,6 +7,7 @@ const rejects = (body: unknown, field: string) => assert.throws(() => parseActio
 
 test("accepts render, rebuild, send_now and unifi for a report id", () => {
   assert.deepEqual(parseAction({ action: "unifi", report_id: ID }), { action: "unifi", reportId: ID });
+  assert.deepEqual(parseAction({ action: "copy", report_id: ID }), { action: "copy", reportId: ID });
   assert.deepEqual(parseAction({ action: "render", report_id: ID }), { action: "render", reportId: ID });
   assert.deepEqual(parseAction({ action: "rebuild", report_id: ID }), { action: "rebuild", reportId: ID });
   assert.deepEqual(parseAction({ action: "send_now", report_id: ID.toUpperCase() }), { action: "send_now", reportId: ID });
@@ -66,4 +67,12 @@ test("Check now starts the UniFi check for the client, and only that", () => {
   assert.deepEqual(JSON.parse(init.body), { ref: "main", inputs: { client_id: CLIENT } });
   assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "unifi-check.yml", CLIENT, "tok", true).init.body).inputs, { client_id: CLIENT });
   assert.throws(() => dispatchRequest("a/b", "unifi-check.yml", "x", "tok"), /client id/);
+});
+
+test("Send me a copy asks send.yml for a copy of that report; nothing else gets copy", () => {
+  const copy = dispatchRequest("acme/reports", "send.yml", ID, "tok", false, true);
+  assert.equal(copy.url, "https://api.github.com/repos/acme/reports/actions/workflows/send.yml/dispatches");
+  assert.deepEqual(JSON.parse(copy.init.body), { ref: "main", inputs: { report_id: ID, copy: "true" } });
+  assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "render.yml", ID, "tok", false, true).init.body).inputs, { report_id: ID });
+  assert.deepEqual(JSON.parse(dispatchRequest("acme/reports", "send.yml", ID, "tok").init.body).inputs, { report_id: ID });
 });
