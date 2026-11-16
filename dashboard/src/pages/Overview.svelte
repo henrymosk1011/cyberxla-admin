@@ -1,5 +1,6 @@
 <script lang="ts">
   import Kpi from "../components/Kpi.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
   import ColumnChart from "../components/ColumnChart.svelte";
   import BarList from "../components/BarList.svelte";
   import StatusPill from "../components/StatusPill.svelte";
@@ -30,17 +31,13 @@
   const rangeLabel = $derived(RANGES.find((r) => r.weeks === weeks)!.label);
 </script>
 
-<header class="top">
-  <div>
-    <p class="eyebrow">Overview</p>
-    <h1>Pipeline</h1>
-  </div>
+<PageHeader eyebrow="Overview" title="Pipeline">
   <div class="seg" role="group" aria-label="Time range">
     {#each RANGES as r (r.weeks)}
       <button aria-pressed={weeks === r.weeks} onclick={() => (weeks = r.weeks)}>{r.label}</button>
     {/each}
   </div>
-</header>
+</PageHeader>
 
 <div class="grid rise" class:stale>
   <section class="card hero">
@@ -124,8 +121,6 @@
 </div>
 
 <style>
-  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
   .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; transition: opacity 0.2s; }
   .grid.stale { opacity: 0.6; }
   .hero { grid-column: span 2; display: flex; flex-direction: column; justify-content: flex-end; background: linear-gradient(160deg, rgba(214,255,63,0.08), transparent 55%), var(--surface); }

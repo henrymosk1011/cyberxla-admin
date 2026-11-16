@@ -376,7 +376,10 @@
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
   .main, .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .sel { height: 34px; padding: 0 36px 0 12px; font-size: 13px; background-position: right 12px center; }
-  .kind { font-size: 12px; color: var(--muted); }
+  /* The dot and its word stay on one line. */
+  .kind { display: inline-flex; align-items: center; white-space: nowrap; font-size: 12px; color: var(--muted); }
+  .quote .card-head { flex-wrap: wrap; }
+  .quote .card-head > div:first-child { flex: 1 1 200px; min-width: 0; }
   .kind.mo { color: var(--text-2); }
   .totals { display: flex; gap: 32px; padding: 16px 12px 4px; border-top: 1px solid var(--line-2); margin-top: 4px; }
   .totals div { display: flex; flex-direction: column; }
@@ -420,4 +423,8 @@
   .timeline .dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--axis); flex: none; }
   .timeline li:first-child .dot { background: var(--lime); }
   @media (max-width: 980px) { .cols { grid-template-columns: 1fr; } .value { align-items: flex-start; } }
+  @media (max-width: 640px) {
+    .qacts { justify-content: flex-start; width: 100%; }
+    .quote .table th, .quote .table td { padding-left: 4px; padding-right: 4px; }
+  }
 </style>

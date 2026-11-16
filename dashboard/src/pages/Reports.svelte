@@ -2,6 +2,7 @@
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import ReportPill from "../components/ReportPill.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
   import LoadState from "../components/LoadState.svelte";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { dateTime } from "../lib/format.ts";
@@ -166,21 +167,15 @@
   }
 </script>
 
-<header class="top">
-  <div>
-    <p class="eyebrow">Patch reports</p>
-    <h1>Reports</h1>
-  </div>
-  <div class="tools">
-    {#if settings}
-      <a class="mode" class:live={settings.mode === "live"} href="#/reports/settings">
-        {settings.mode === "live" ? "Live: reports go to clients" : "Preview: reports go to you only"}
-      </a>
-    {/if}
-    <a class="btn" href="#/reports/template">Template</a>
-    <a class="btn" href="#/reports/settings">Settings</a>
-  </div>
-</header>
+<PageHeader eyebrow="Patch reports" title="Reports">
+  {#if settings}
+    <a class="mode" class:live={settings.mode === "live"} href="#/reports/settings">
+      {settings.mode === "live" ? "Live: reports go to clients" : "Preview: reports go to you only"}
+    </a>
+  {/if}
+  <a class="btn" href="#/reports/template">Template</a>
+  <a class="btn" href="#/reports/settings">Settings</a>
+</PageHeader>
 
 {#if !loaded}
   <LoadState error={loadError} what="reports" onretry={() => { loadError = ""; load(); }} />
@@ -275,7 +270,7 @@
                 {#if r.failure_count}<span class="stnote">{plural(r.failure_count, "failure", "failures")} to check</span>{/if}
                 {#if r.content_version > r.rendered_version && can.edit}<span class="stnote">Preview updating</span>{/if}
               </td>
-              <td class="when-cell"><span class="lbl" aria-hidden="true">Sends </span>{dateTime(r.send_at)}</td>
+              <td class="when-cell"><span class="lbl">Sends</span> {dateTime(r.send_at)}</td>
               <td class="hide-md gen">{dateTime(r.created_at)}</td>
               <td class="r acts">
                 {#if can.hold}<button class="btn sm" disabled={busy} onclick={() => hold(r)}>Hold<span class="sr-only"> {r.client_name}</span></button>{/if}
@@ -303,9 +298,6 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
-  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .mode { font-size: 13px; font-weight: 600; text-decoration: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-2); }
   .mode.live { border-color: var(--lime); color: var(--lime); }
   .mode:hover { color: var(--text); }
@@ -331,7 +323,7 @@
   .pick input { width: 18px; height: 18px; accent-color: var(--lime); cursor: pointer; vertical-align: middle; }
   .list tbody tr.on { background: color-mix(in srgb, var(--lime) 7%, transparent); }
   .picked {
-    position: sticky; top: 8px; z-index: 5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+    position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px;
     margin: 4px 4px 8px; padding: 10px 12px; border: 1px solid var(--lime); border-radius: 10px; background: var(--surface-2); font-size: 14px; font-weight: 600;
   }
   .picked div { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -355,28 +347,36 @@
   .phone-sort { display: none; }
   .acts { white-space: nowrap; text-align: right; }
   .acts .btn { margin-left: 4px; }
-  @media (max-width: 860px) {
-    .top { flex-direction: column; align-items: stretch; }
-  }
-  @media (max-width: 1100px) { .hide-md { display: none; } }
-  @media (max-width: 640px) {
+  /* Below a full desktop width each report is a card: the table's columns are too narrow for their text. */
+  @media (max-width: 1100px) {
     .flush { padding: 4px; }
     .table thead { display: none; }
     .table, .table tbody { display: block; }
-    .table tbody tr { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px 12px; padding: 14px 12px; border-bottom: 1px solid var(--line); }
-    .table td.pick { grid-column: 1; }
-    .table td.who { grid-column: 2; }
+    .table tbody tr {
+      display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1.1fr) 244px;
+      grid-template-areas: "pick who st acts" "pick rep st acts" "pick when st acts";
+      align-items: start; gap: 4px 16px; padding: 14px 12px; border-bottom: 1px solid var(--line);
+    }
     .table tbody tr:last-child { border-bottom: 0; }
     .table td { display: block; padding: 0; border: 0; }
     .table td.hide-md { display: none; }
-    .st, .rep, .when-cell { grid-column: 1 / -1; }
+    /* The checkbox column keeps its width on rows without one, so names line up. */
+    .table td.pick { grid-area: pick; padding-top: 2px; }
+    .table td.who { grid-area: who; }
+    .rep { grid-area: rep; }
+    .st { grid-area: st; }
+    .when-cell { grid-area: when; }
     .when-cell .lbl { display: inline; }
+    .acts { grid-area: acts; align-self: center; }
     .phone-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 8px 12px; border-bottom: 1px solid var(--line); }
     .phone-sort label { font-size: 13px; color: var(--text-2); }
     .phone-sort .selall { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; }
     .phone-sort .selall input { width: 18px; height: 18px; accent-color: var(--lime); }
     .phone-sort .input { height: 36px; width: auto; }
-    .acts { grid-column: 1 / -1; white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; }
+  }
+  @media (max-width: 640px) {
+    .table tbody tr { grid-template-columns: 26px minmax(0, 1fr); grid-template-areas: "pick who" "pick rep" "pick st" "pick when" "pick acts"; gap: 6px 12px; }
+    .acts { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
     .acts .btn { margin-left: 0; }
   }
 </style>
