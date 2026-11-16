@@ -50,6 +50,11 @@
     .tools { justify-content: flex-start; flex-wrap: wrap; }
     .tools :global(.search) { flex: 1 1 200px; width: auto; }
   }
+  /* A record's headline number stays beside its name until the screen is phone sized. */
+  @media (min-width: 641px) and (max-width: 860px) {
+    .head:has(:global(.headvalue)) { flex-direction: row; align-items: flex-end; }
+    .head:has(:global(.headvalue)) .tools { justify-content: flex-end; flex-wrap: nowrap; }
+  }
   @media (max-width: 640px) {
     h1 { font-size: var(--fs-xl); }
     .tools :global(.search) { flex: 1 1 100%; }

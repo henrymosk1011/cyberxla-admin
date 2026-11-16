@@ -215,7 +215,7 @@
   .small { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
   .amt { font-weight: 600; font-size: var(--fs-md); }
-  .amt small { color: var(--muted); font-weight: 500; }
+  .amt small { font-size: var(--fs-xs); color: var(--muted); font-weight: 500; }
   .move { margin-top: 6px; background-color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--fs-xs); padding: 5px 32px 5px 8px; background-position: right 10px center; color: var(--text-2); }
   .drop { font-size: var(--fs-sm); text-align: center; padding: 24px 8px; border: 1px dashed var(--line-2); border-radius: var(--radius-md); }
 </style>

@@ -241,7 +241,7 @@
 
 <style>
   .lead { color: var(--text-2); font-size: var(--fs-md); max-width: 760px; margin-top: 10px; }
-  code { font-family: var(--mono); font-size: 0.92em; color: var(--lime); }
+  code { font-family: var(--mono); font-size: 1em; color: var(--lime); }
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
   .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .side { position: sticky; top: 16px; min-width: 0; }

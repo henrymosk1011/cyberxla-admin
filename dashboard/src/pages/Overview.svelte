@@ -142,7 +142,7 @@
   .who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .who span { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .amt { font-weight: 600; }
-  .amt small { color: var(--muted); font-weight: 500; }
+  .amt small { font-size: var(--fs-xs); color: var(--muted); font-weight: 500; }
   @media (max-width: 1180px) {
     .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .hero { grid-column: span 4; }
