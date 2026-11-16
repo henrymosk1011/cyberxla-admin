@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "./Icon.svelte";
   let {
     label, value, hint = "", hintTone, delta = null, deltaLabel = "", hero = false, spark = [],
   }: { label: string; value: string; hint?: string; /** "bad" turns the hint red: something overdue. */ hintTone?: "bad"; delta?: number | null; deltaLabel?: string; hero?: boolean; spark?: number[] } = $props();
@@ -19,7 +20,7 @@
   <div class="foot">
     {#if delta !== null}
       <span class="delta" class:up={delta > 0} class:down={delta < 0}>
-        <span aria-hidden="true">{delta > 0 ? "▲" : delta < 0 ? "▼" : "•"}</span>
+        {#if delta > 0}<Icon name="up" size={12} />{:else if delta < 0}<Icon name="down" size={12} />{/if}
         {delta > 0 ? "+" : ""}{delta}{deltaLabel ? " " + deltaLabel : ""}
       </span>
     {/if}
@@ -41,6 +42,5 @@
   .delta { font-weight: 600; color: var(--text-2); }
   .delta.up { color: var(--good-text); }
   .delta.down, .hint.bad { color: var(--critical); }
-  .delta span { font-size: 9px; vertical-align: 1px; }
   .spark { display: block; margin-top: 6px; max-width: 100%; }
 </style>

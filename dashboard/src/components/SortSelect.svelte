@@ -1,6 +1,7 @@
 <script lang="ts" generics="K extends string">
   // Sorting for narrow screens, where a table's column headings are hidden:
   // a dropdown of the columns and a button for the direction.
+  import Icon from "./Icon.svelte";
   import type { Sort, SortDir } from "../lib/sort.ts";
 
   let { id, columns, sort, onchange }: {
@@ -18,7 +19,7 @@
   </select>
   <button type="button" class="btn sm" aria-label="Sort direction: {sort.dir === 'asc' ? 'ascending' : 'descending'}. Press to switch."
     onclick={() => onchange({ key: sort.key, dir: sort.dir === "asc" ? "desc" : "asc" })}>
-    <span aria-hidden="true">{sort.dir === "asc" ? "↑" : "↓"}</span> {sort.dir === "asc" ? "Ascending" : "Descending"}
+    <Icon name={sort.dir === "asc" ? "arrow-up" : "arrow-down"} size={14} /> {sort.dir === "asc" ? "Ascending" : "Descending"}
   </button>
 </div>
 

@@ -2,6 +2,7 @@
   // The timeline card on a lead, client, project or report: what happened,
   // newest first. Where entries can be removed from the timeline (they are
   // only hidden; the record stays), a button shows the removed ones again.
+  import Icon from "./Icon.svelte";
   import { dateTime } from "../lib/format.ts";
   import type { AuditEntry } from "../lib/types.ts";
 
@@ -34,7 +35,7 @@
         <span class="dot" aria-hidden="true"></span>
         <div><p>{e.text}</p><span class="when">{dateTime(e.a.at)}{e.a.hidden ? " · removed" : ""}{note ? note(e.a) : ""}</span></div>
         {#if ontoggle}
-          <button class="iconbtn" title={e.a.hidden ? "Put back on the timeline" : "Remove from timeline"} aria-label={e.a.hidden ? "Restore this entry" : "Remove this entry from the timeline"} onclick={() => ontoggle(e.a)}>{e.a.hidden ? "↺" : "×"}</button>
+          <button class="iconbtn" title={e.a.hidden ? "Put back on the timeline" : "Remove from timeline"} aria-label={e.a.hidden ? "Restore this entry" : "Remove this entry from the timeline"} onclick={() => ontoggle(e.a)}><Icon name={e.a.hidden ? "undo" : "close"} /></button>
         {/if}
       </li>
     {:else}

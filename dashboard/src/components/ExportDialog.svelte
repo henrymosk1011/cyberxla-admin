@@ -134,7 +134,6 @@
   .opts { display: flex; flex-direction: column; gap: 6px; }
   .opt, .check { display: flex; align-items: center; gap: 9px; font-size: var(--fs-md); cursor: pointer; color: var(--text-2); }
   .opt .num { margin-left: auto; }
-  input[type="radio"], input[type="checkbox"] { accent-color: var(--lime); width: 16px; height: 16px; flex: none; }
   .groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .group { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; }
   .ghead { display: flex; justify-content: space-between; align-items: center; font-weight: 650; font-size: var(--fs-md); margin-bottom: 2px; }

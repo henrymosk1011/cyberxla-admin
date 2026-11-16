@@ -1,5 +1,7 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import db from "$db";
+  import EmptyState from "../components/EmptyState.svelte";
   import Field from "../components/Field.svelte";
   import Modal from "../components/Modal.svelte";
   import Menu from "../components/Menu.svelte";
@@ -379,8 +381,8 @@
 
 <PageHeader title="Services" sub={`${counts.live} live on your website${counts.total > counts.live ? ` · ${counts.total - counts.live} hidden` : ""}. Changes show on the quote builder right away.`}>
   <input class="input search" type="search" placeholder="Search services" aria-label="Search services" bind:value={q} />
-  <button class="btn" onclick={newCategory}>+ Category</button>
-  <button class="btn primary" onclick={() => newService()}>+ Service</button>
+  <button class="btn" onclick={newCategory}><Icon name="plus" size={14} /> Category</button>
+  <button class="btn primary" onclick={() => newService()}><Icon name="plus" size={14} /> Service</button>
 </PageHeader>
 
 <svelte:window onpointermove={onMove} onpointerup={endDrag} onpointercancel={endDrag} />
@@ -404,7 +406,7 @@
                   onchange={(e) => saveRate(p, i, e.currentTarget)}
                   onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = String(p.rates[i]); e.currentTarget.blur(); } }} />
               </label>
-              <span class="ok" class:show={pkgSaved === `${p.id}:${i}`}>{pkgSaved === `${p.id}:${i}` ? "✓" : ""}</span>
+              <span class="ok" class:show={pkgSaved === `${p.id}:${i}`}>{#if pkgSaved === `${p.id}:${i}`}<Icon name="check" size={14} /><span class="sr-only">Saved</span>{/if}</span>
             </div>
           {/each}
         </div>
@@ -414,7 +416,7 @@
   </section>
 {/if}
 
-{#if !q && groups.length}<p class="tip muted">Drag <span class="tipgrip" aria-hidden="true">⠿</span> to reorder services and categories, or move a service to another category. Click a price to change it.</p>{/if}
+{#if !q && groups.length}<p class="tip muted">Drag <span class="tipgrip"><Icon name="grip" size={14} /></span> to reorder services and categories, or move a service to another category. Click a price to change it.</p>{/if}
 
 <div class="cats" class:busy bind:this={cats} class:dragging={!!drag} class:catdrag={drag?.kind === "cat"}>
   {#each groups as g (g.cat.id)}
@@ -422,7 +424,7 @@
       <div class="cat-head">
         {#if !q}
           <button class="grip" data-handle="cat:{g.cat.id}" aria-label="Reorder {g.cat.name}. Drag, or use the up and down arrow keys." title="Drag to reorder"
-            onpointerdown={(e) => startDrag(e, "cat", g.cat.id)} onkeydown={(e) => keyMove(e, "cat", g.cat.id)}>⠿</button>
+            onpointerdown={(e) => startDrag(e, "cat", g.cat.id)} onkeydown={(e) => keyMove(e, "cat", g.cat.id)}><Icon name="grip" /></button>
         {/if}
         <div class="cat-title">
           <h2>{g.cat.name} <span class="muted count">{g.all.length}</span></h2>
@@ -441,7 +443,7 @@
           <li class:hidden={!s.active} data-id={s.id} class:placeholder={drag?.kind === "svc" && drag.id === s.id} animate:flip={{ duration: ms(200) }}>
             {#if !q}
               <button class="grip" data-handle="svc:{s.id}" aria-label="Reorder {s.name}. Drag, or use the up and down arrow keys." title="Drag to reorder or move to another category"
-                onpointerdown={(e) => startDrag(e, "svc", s.id)} onkeydown={(e) => keyMove(e, "svc", s.id)}>⠿</button>
+                onpointerdown={(e) => startDrag(e, "svc", s.id)} onkeydown={(e) => keyMove(e, "svc", s.id)}><Icon name="grip" /></button>
             {/if}
             <div class="info">
               <p class="name">
@@ -461,7 +463,7 @@
                   onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = String(s.price); e.currentTarget.blur(); } }} />
               </label>
               <span class="unit muted">{UNIT_LABEL[s.unit]}</span>
-              <span class="ok" class:show={savedId === s.id} aria-live="polite">{savedId === s.id ? "✓" : ""}</span>
+              <span class="ok" class:show={savedId === s.id} aria-live="polite">{#if savedId === s.id}<Icon name="check" size={14} /><span class="sr-only">Saved</span>{/if}</span>
             </div>
             <div class="acts">
               <button class="btn sm" onclick={() => editService(s)}>Edit<span class="sr-only"> {s.name}</span></button>
@@ -475,17 +477,23 @@
           <li class="empty-row muted">{drag?.kind === "svc" ? "Drop here" : "No services in this category yet."}</li>
         {/each}
       </ul>
-      {#if !q}<button class="btn ghost sm add" onclick={() => newService(g.cat.id)}>+ Add a service to {g.cat.name}</button>{/if}
+      {#if !q}<button class="btn ghost sm add" onclick={() => newService(g.cat.id)}><Icon name="plus" size={14} /> Add a service to {g.cat.name}</button>{/if}
     </section>
   {:else}
-    <p class="empty">{q ? "No services match." : "No categories yet. Start with + Category."}</p>
+    {#if q}
+      <EmptyState title="No services match"><button class="btn sm" onclick={() => (q = "")}>Clear search</button></EmptyState>
+    {:else}
+      <EmptyState title="No categories yet" text="Services live in categories. Add a category, then its services.">
+        <button class="btn primary sm" onclick={newCategory}><Icon name="plus" size={14} /> Category</button>
+      </EmptyState>
+    {/if}
   {/each}
 </div>
 
 {#if drag}
   <div class="lifted" class:gcat={drag.kind === "cat"} aria-hidden="true"
     style:left="{drag.x - drag.ox}px" style:top="{drag.y - drag.oy}px" style:width="{drag.w}px">
-    <span class="grip g">⠿</span>
+    <span class="grip g"><Icon name="grip" /></span>
     <strong>{drag.label}</strong>
     <span class="muted">{drag.meta}</span>
   </div>
@@ -617,7 +625,6 @@
   .req { color: var(--lime); font-weight: 700; }
   .checks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: var(--fs-md); color: var(--text-2); }
   .checks label { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
-  .checks input { accent-color: var(--lime); width: 16px; height: 16px; }
   .row { display: flex; justify-content: flex-end; gap: 8px; }
   .preview-wrap { display: flex; flex-direction: column; gap: 8px; }
   .preview { background: #fbfaf6; color: #111315; border: 1.5px solid rgba(17, 19, 21, 0.16); border-radius: 18px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }

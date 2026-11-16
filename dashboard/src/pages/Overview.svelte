@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import Kpi from "../components/Kpi.svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ColumnChart from "../components/ColumnChart.svelte";
@@ -8,7 +9,7 @@
   import { ago, money, moneyCompact, num, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import type { Client, ClientService, Lead, Quote } from "../lib/types.ts";
 
-  let { leads, quotes, clients = [], clientLines = [], stale }: { leads: Lead[]; quotes: Quote[]; clients?: Client[]; clientLines?: ClientService[]; stale: boolean } = $props();
+  let { leads, quotes, clients = [], clientLines = [] }: { leads: Lead[]; quotes: Quote[]; clients?: Client[]; clientLines?: ClientService[] } = $props();
 
   const activeClients = $derived(new Set(clients.filter((c) => c.status === "active").map((c) => c.id)));
   const mrr = $derived(clientLines.filter((l) => l.billing === "monthly" && activeClients.has(l.client_id)).reduce((s, l) => s + l.amount, 0));
@@ -39,7 +40,7 @@
   </div>
 </PageHeader>
 
-<div class="grid rise" class:stale>
+<div class="grid rise">
   <section class="card hero">
     <a class="hero-link" href="#/clients"><Kpi hero label="Monthly recurring revenue" value="{money(mrr)}/mo" hint="{num(activeClients.size)} active {activeClients.size === 1 ? 'client' : 'clients'} · {moneyCompact(mrr * 12)}/yr" /></a>
     <div class="pipe">
@@ -50,8 +51,8 @@
   </section>
   <section class="card"><Kpi label="New leads" value={num(k.newLeads)} delta={k.newLeads - k.newLeadsPrev} deltaLabel="vs prior" hint="last {rangeLabel}" /></section>
   <section class="card"><Kpi label="Quotes received" value={num(k.quotes)} delta={k.quotes - k.quotesPrev} deltaLabel="vs prior" spark={wk.map((w) => w.count)} /></section>
-  <section class="card"><Kpi label="Win rate" value={k.winRate === null ? "–" : Math.round(k.winRate * 100) + "%"} hint="{moneyCompact(k.wonMonthly)}/mo won in range" /></section>
-  <section class="card"><Kpi label="Average quote" value={k.avgMonthly === null ? "–" : money(k.avgMonthly) + "/mo"} hint="monthly, in range" /></section>
+  <section class="card"><Kpi label="Win rate" value={k.winRate === null ? "None yet" : Math.round(k.winRate * 100) + "%"} hint="{moneyCompact(k.wonMonthly)}/mo won in range" /></section>
+  <section class="card"><Kpi label="Average quote" value={k.avgMonthly === null ? "None yet" : money(k.avgMonthly) + "/mo"} hint="monthly, in range" /></section>
 
   <section class="card wide">
     <div class="card-head">
@@ -87,7 +88,7 @@
       label="Leads by stage"
       rows={st.map((s) => ({ key: s.status, label: `${STATUS_LABEL[s.status]} · ${s.count}`, value: s.monthly, display: moneyCompact(s.monthly) + "/mo", detail: `${s.count} leads, ${money(s.oneTime)} one time` }))}
     />
-    <a class="more" href="#/board">Open board →</a>
+    <a class="more" href="#/board">Open board <Icon name="arrow-right" size={14} /></a>
   </section>
 
   <section class="card half">
@@ -100,7 +101,7 @@
   </section>
 
   <section class="card half">
-    <div class="card-head"><div><h2>Latest quotes</h2></div><a class="more" href="#/leads">All leads →</a></div>
+    <div class="card-head"><div><h2>Latest quotes</h2></div><a class="more" href="#/leads">All leads <Icon name="arrow-right" size={14} /></a></div>
     {#if latest.length}
       <ul class="latest">
         {#each latest as q (q.id)}
@@ -122,7 +123,6 @@
 
 <style>
   .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; transition: opacity 0.2s; }
-  .grid.stale { opacity: 0.6; }
   .hero { grid-column: span 2; display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; }
   .hero-link { text-decoration: none; color: inherit; }
   .pipe { display: flex; flex-direction: column; gap: 2px; padding-top: 14px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
@@ -131,8 +131,8 @@
   .wide { grid-column: span 4; }
   .side { grid-column: span 2; display: flex; flex-direction: column; }
   .half { grid-column: span 3; }
-  .more { margin-top: auto; padding-top: 16px; font-size: var(--fs-sm); font-weight: 600; color: var(--lime); text-decoration: none; }
-  .card-head .more { margin: 0; padding: 0; }
+  .more { margin-top: auto; padding: 16px 0 4px; font-size: var(--fs-sm); font-weight: 600; color: var(--lime); text-decoration: none; }
+  .card-head .more { margin: 0; padding: 4px 0; }
   .scroll { overflow-x: auto; max-height: 240px; }
   .latest { list-style: none; }
   .latest a { display: grid; grid-template-columns: 1fr auto 110px; align-items: center; gap: 12px; padding: 10px 8px; margin: 0 -8px; border-radius: var(--radius-md); text-decoration: none; }

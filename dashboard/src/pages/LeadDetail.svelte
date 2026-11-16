@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import Menu from "../components/Menu.svelte";
@@ -199,7 +200,7 @@
   const tel = (p: string) => "tel:" + p.replace(/[^0-9+]/g, "");
 </script>
 
-<a class="back" href="#/leads">← All leads</a>
+<a class="back" href="#/leads"><Icon name="arrow-left" size={14} /> All leads</a>
 
 {#if lead === undefined}
   <LoadState error={loadError} what="this lead" onretry={() => { loadError = ""; load(); }} />
@@ -220,7 +221,7 @@
       <span class="muted num">{money(l.value_one_time)} one time</span>
       <div class="headacts">
         {#if clientFor}
-          <a class="btn sm" href="#/clients/{clientFor}">View client →</a>
+          <a class="btn sm" href="#/clients/{clientFor}">View client <Icon name="arrow-right" size={14} /></a>
         {:else}
           <button class="btn sm" class:primary={l.status === "won"} disabled={converting} onclick={convert}>{converting ? "Converting…" : "Convert to client"}</button>
         {/if}
@@ -272,7 +273,7 @@
           {#each notes as n (n.id)}
             <li>
               <div><p>{n.body}</p><span class="muted small">{dateTime(n.created_at)}</span></div>
-              <button class="iconbtn danger" title="Delete note" aria-label="Delete this note" onclick={() => deleteNote(n)}>×</button>
+              <button class="iconbtn danger" title="Delete note" aria-label="Delete this note" onclick={() => deleteNote(n)}><Icon name="close" /></button>
             </li>
           {/each}
         </ul>

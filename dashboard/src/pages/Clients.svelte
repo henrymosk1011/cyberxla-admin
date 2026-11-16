@@ -1,6 +1,8 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { tick } from "svelte";
   import db from "$db";
+  import EmptyState from "../components/EmptyState.svelte";
   import Field from "../components/Field.svelte";
   import Kpi from "../components/Kpi.svelte";
   import StatusPill from "../components/StatusPill.svelte";
@@ -13,7 +15,7 @@
   import { EMAIL } from "../lib/reports.ts";
   import { CLIENT_STATUSES, type Client, type ClientService, type ClientStatus } from "../lib/types.ts";
 
-  let { clients, services, stale }: { clients: Client[]; services: ClientService[]; stale: boolean } = $props();
+  let { clients, services }: { clients: Client[]; services: ClientService[] } = $props();
 
   let q = $state("");
   let filter = $state<ClientStatus | "all">("active");
@@ -114,7 +116,7 @@
 
 <PageHeader title="Clients">
   <input class="input search" type="search" placeholder="Search clients" aria-label="Search clients by company, contact, email or phone" bind:value={q} />
-  <button class="btn primary" onclick={() => (creating = true)}>+ New client</button>
+  <button class="btn primary" onclick={() => (creating = true)}><Icon name="plus" size={14} /> New client</button>
 </PageHeader>
 
 <div class="kpis rise">
@@ -134,7 +136,7 @@
   <div class="phonesort"><SortSelect id="client-sort" columns={COLUMNS} {sort} onchange={(s) => (sort = s)} /></div>
 </div>
 
-<section class="card flush" class:stale>
+<section class="card flush">
   {#if rows.length}
     <table class="table cards">
       <caption class="sr-only">Clients, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
@@ -158,7 +160,16 @@
       </tbody>
     </table>
   {:else}
-    <p class="empty">{clients.length ? "No clients match." : "No clients yet. Add one, or convert a won lead from its page."}</p>
+    {#if !clients.length}
+      <EmptyState title="No clients yet" text="Add one here, or convert a won lead from its page.">
+        <button class="btn primary sm" onclick={() => (creating = true)}><Icon name="plus" size={14} /> New client</button>
+      </EmptyState>
+    {:else}
+      <EmptyState title="No clients match">
+        {#if q}<button class="btn sm" onclick={() => (q = "")}>Clear search</button>{/if}
+        {#if filter !== "all" && searched.length}<button class="btn sm" onclick={() => (filter = "all")}>Show all clients</button>{/if}
+      </EmptyState>
+    {/if}
   {/if}
 </section>
 

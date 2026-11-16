@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { tick } from "svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
@@ -150,7 +151,7 @@
   const tel = (p: string) => "tel:" + p.replace(/[^0-9+]/g, "");
 </script>
 
-<a class="back" href="#/clients">← All clients</a>
+<a class="back" href="#/clients"><Icon name="arrow-left" size={14} /> All clients</a>
 
 {#if client === undefined}
   <LoadState error={loadError} what="this client" onretry={() => { loadError = ""; load(); }} />
@@ -164,7 +165,7 @@
         {#if c.company && c.contact_name}<span>{c.contact_name}</span>{/if}
         {#if c.email}<a href="mailto:{c.email}">{c.email}</a>{/if}
         {#if c.phone}<a href={tel(c.phone)}>{phone(c.phone)}</a>{/if}
-        {#if c.lead_id}<a href="#/leads/{c.lead_id}">Original lead →</a>{/if}
+        {#if c.lead_id}<a href="#/leads/{c.lead_id}">Original lead <Icon name="arrow-right" size={14} /></a>{/if}
       </p>
     {/snippet}
     <div class="headvalue">

@@ -16,9 +16,9 @@ export function totalsBy<T extends ServiceLine>(lines: T[], key: (l: T) => strin
   return m;
 }
 
-/** "$8,000 + $120/mo", "$8,000", "$120/mo", or "–" for nothing priced yet. */
+/** "$8,000 + $120/mo", "$8,000", "$120/mo", or "Not priced" for nothing priced yet. */
 export function valueLabel(t: LineTotals | undefined): string {
-  if (!t || (!t.once && !t.monthly)) return "–";
+  if (!t || (!t.once && !t.monthly)) return "Not priced";
   if (!t.monthly) return money(t.once);
   if (!t.once) return `${money(t.monthly)}/mo`;
   return `${money(t.once)} + ${money(t.monthly)}/mo`;

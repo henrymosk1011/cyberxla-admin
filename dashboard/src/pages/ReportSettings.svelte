@@ -148,7 +148,6 @@
   .now { font-size: var(--fs-sm); color: var(--text-2); }
   .pending { font-size: var(--fs-sm); color: var(--text); padding: 8px 12px; border: 1px solid var(--warning); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warning) 8%, transparent); }
   .check { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-md); }
-  .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .field { min-width: 0; }
   .input { width: 100%; min-width: 0; }

@@ -48,7 +48,7 @@ for (let i = 0; i < 46; i++) {
   const updated = new Date(Math.min(now, created.getTime() + rand() * 20 * 86400000));
   leads.push({
     id, created_at: created.toISOString(), updated_at: updated.toISOString(), name: `${first} ${last}`, company,
-    email: `${first.toLowerCase()}@${company.toLowerCase().replace(/[^a-z]/g, "")}.com`, phone: `(${pick(["213", "310", "323", "818"])}) 555-0${String(100 + i).slice(-3)}`,
+    email: `${first.toLowerCase()}@${company.toLowerCase().replace(/[^a-z]/g, "")}.example`, phone: `(${pick(["213", "310", "323", "818"])}) 555-0${String(100 + i).slice(-3)}`,
     status, source: "quote_builder", value_monthly: priced.monthly_total, value_one_time: priced.one_time_total, archived_at: null,
   });
   quotes.push({
@@ -94,7 +94,7 @@ function clientFromLead(l: Lead): string {
 leads.filter((l) => l.status === "won").slice(0, 7).forEach(clientFromLead);
 {
   const id = uuid();
-  clients.push({ id, created_at: new Date(now - 400 * 86400000).toISOString(), updated_at: new Date(now - 20 * 86400000).toISOString(), company: "Starlight Hospice", contact_name: "Dana Ortiz", email: "dana@starlighthospice.org", phone: "3235550142", address: "1200 Sunset Blvd, Los Angeles, CA", status: "active", started_on: "2025-08-01", workstations: 42, servers: 3, notes: "Renews every August. Prefers calls over email.", lead_id: null, ...NO_REPORTS });
+  clients.push({ id, created_at: new Date(now - 400 * 86400000).toISOString(), updated_at: new Date(now - 20 * 86400000).toISOString(), company: "Starlight Hospice", contact_name: "Dana Ortiz", email: "dana@starlighthospice.example", phone: "3235550142", address: "1200 Sunset Blvd, Los Angeles, CA", status: "active", started_on: "2025-08-01", workstations: 42, servers: 3, notes: "Renews every August. Prefers calls over email.", lead_id: null, ...NO_REPORTS });
   ([["mdr", "24/7 MDR", 650, 1], ["patching", "Patching", 10, 48], ["hipaa", "HIPAA Security Support", 400, 1], ["cloudbackup", "Microsoft 365 and Google Backup", 4, 42]] as const).forEach(([sid, nm, unit, qty], i) =>
     clientServices.push({ id: uuid(), client_id: id, service_id: sid, name: nm, billing: "monthly", unit_amount: unit, quantity: qty, amount: total(unit, qty), notes: i === 0 ? "Discounted 10% (3-year term)" : null, sort: i * 10 }));
 }

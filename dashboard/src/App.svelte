@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "./components/Icon.svelte";
   import db from "$db";
   import Login from "./pages/Login.svelte";
   import Overview from "./pages/Overview.svelte";
@@ -13,6 +14,7 @@
   import { lock } from "./lib/vault.svelte.ts";
   import Toast from "./components/Toast.svelte";
   import Brand from "./components/Brand.svelte";
+  import Skeleton from "./components/Skeleton.svelte";
   import { tick } from "svelte";
   import { fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
@@ -257,15 +259,17 @@
 </script>
 
 {#if auth === null}
-  <div class="boot" aria-busy="true"></div>
+  <div class="boot" role="status" aria-label="Loading cyberxLA Admin"><Brand admin size={24} /></div>
 {:else if auth.step !== "ready"}
   <Login {auth} onauth={(s) => (auth = s)} />
 {:else}
+  <!-- First stop for the keyboard: past the menu, straight to the page. -->
+  <button class="skip" onclick={() => document.querySelector<HTMLElement>("main h1")?.focus()}>Skip to content</button>
   <div class="shell">
     <aside class="rail" id="main-menu" class:open={navOpen} bind:this={railEl} inert={narrow && !navOpen}>
       <div class="railtop">
         <a class="brand" href="#/" aria-label="cyberxLA Admin, overview"><Brand admin size={22} /></a>
-        <button class="closenav" aria-label="Close menu" onclick={closeNav}><span aria-hidden="true">×</span></button>
+        <button class="closenav" aria-label="Close menu" onclick={closeNav}><Icon name="close" size={20} /></button>
       </div>
       <nav bind:this={navEl} aria-label="Main">
         <span class="pill" class:show={pillShow} aria-hidden="true" style:transform="translateY({pillY}px)" style:height="{pillH}px"></span>
@@ -276,7 +280,7 @@
               <a href={n.href} aria-current={n.match.includes(route.page) ? "page" : undefined}>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={n.icon} /></svg>
                 <span class="label">{n.label}</span>
-                {#if n.label === "Leads" && newCount}<span class="badge num">{newCount}</span>{/if}
+                {#if n.label === "Leads" && newCount}<span class="badge num">{newCount}<span class="sr-only"> new</span></span>{/if}
               </a>
             {/each}
           </div>
@@ -293,33 +297,37 @@
     {#if navOpen}<button class="scrim" tabindex="-1" aria-label="Close menu" onclick={closeNav}></button>{/if}
 
     <div class="topbar" inert={narrow && navOpen}>
-      <button class="btn ghost sm" bind:this={menuBtn} aria-expanded={navOpen} aria-controls="main-menu" onclick={openNav}>Menu</button>
+      <button class="menubtn" bind:this={menuBtn} aria-expanded={navOpen} aria-controls="main-menu" onclick={openNav}><Icon name="menu" size={20} /><span class="sr-only">Menu</span></button>
       <a class="brand" href="#/" aria-label="cyberxLA Admin, overview"><Brand size={19} /></a>
+      <!-- Which page this is, for the eye; the page's own heading says it to screen readers. -->
+      <span class="where" aria-hidden="true">{pageTitle}</span>
       <span class="live" class:on={live}><i aria-hidden="true"></i><span class="sr-only">{live ? "Live" : "Offline"}</span></span>
     </div>
 
     <main class="content" inert={narrow && navOpen}>
+      <!-- A thin line while the lists reload in the background, in place of dimming the page. -->
+      {#if stale && loaded}<div class="progress" aria-hidden="true"></div>{/if}
       {#if loadError}
         <p class="error banner" role="alert">{loadError} <button class="btn sm" onclick={refresh}>Retry</button></p>
       {/if}
       {#if !loaded}
-        <p class="muted">Loading…</p>
+        {#if !loadError}<Skeleton rows={6} />{/if}
       {:else}
       {#key pageKey}
-      <div class="page" in:fly={{ y: 12, duration: ms(380), easing: cubicOut }}>
+      <div class="page" in:fly={{ y: 6, duration: ms(160), easing: cubicOut }}>
       {#if route.page === "overview"}
-        <Overview leads={activeLeads} quotes={activeQuotes} {clients} {clientLines} {stale} />
+        <Overview leads={activeLeads} quotes={activeQuotes} {clients} {clientLines} />
       {:else if route.page === "leads" || route.page === "board"}
-        <Leads {leads} quotes={activeQuotes} {clients} {stale} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
+        <Leads {leads} quotes={activeQuotes} {clients} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
       {:else if route.page === "lead"}
         <LeadDetail id={route.id} {version} onstatus={setStatus} clientFor={clients.find((c) => c.lead_id === route.id)?.id ?? null} onconverted={refresh}
           projects={projects.filter((p) => p.lead_id === route.id)} {projectLines} />
       {:else if route.page === "clients"}
-        <Clients {clients} services={clientLines} {stale} />
+        <Clients {clients} services={clientLines} />
       {:else if route.page === "client"}
         <ClientDetail id={route.id} {version} projects={projects.filter((p) => p.client_id === route.id)} {projectLines} />
       {:else if route.page === "projects"}
-        <Projects {projects} lines={projectLines} {clients} {leads} {stale} />
+        <Projects {projects} lines={projectLines} {clients} {leads} />
       {:else if route.page === "project"}
         <ProjectDetail id={route.id} {version} {clients} {leads} quotes={activeQuotes} />
       {:else if route.page === "services"}
@@ -346,7 +354,7 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === "Escape" && navOpen) closeNav(); }} />
 
-{#snippet pageLoading()}<p class="muted" role="status">Loading…</p>{/snippet}
+{#snippet pageLoading()}<Skeleton />{/snippet}
 <!-- The page's code didn't arrive: offline, or a new version went live while this tab was open. -->
 {#snippet pageFailed()}
   <div class="banner" role="alert">
@@ -356,7 +364,11 @@
 {/snippet}
 
 <style>
-  .boot { min-height: 100dvh; }
+  .boot { min-height: 100dvh; display: grid; place-items: center; opacity: 0.7; }
+  .skip { position: fixed; left: 12px; top: 12px; z-index: 80; height: var(--control-md); padding: 0 16px; border: 1px solid var(--lime); border-radius: var(--radius-pill); background: var(--ink); color: var(--text); font-weight: 600; font-size: var(--fs-md); transform: translateY(-200%); }
+  .skip:focus { transform: none; }
+  .progress { position: fixed; left: 0; right: 0; top: 0; z-index: 60; height: 2px; background: linear-gradient(90deg, transparent, var(--lime), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: slide 1s linear infinite; animation-delay: 0.4s; opacity: 0; }
+  @keyframes slide { from { background-position: -50% 0; opacity: 1; } to { background-position: 150% 0; opacity: 1; } }
   .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100dvh; }
   .rail { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: 28px; padding: 22px 16px; border-right: 1px solid var(--line); background: var(--ink); }
   .brand { display: inline-flex; padding: 4px 10px; text-decoration: none; border-radius: var(--radius-sm); }
@@ -371,18 +383,17 @@
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), var(--surface-2);
     border: 1px solid var(--line-2);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 0 4px rgba(214, 255, 63, 0.03);
-    transition: transform 0.5s var(--ease-spring), height 0.3s var(--ease), opacity 0.3s var(--ease);
+    transition: transform 0.25s var(--ease), height 0.25s var(--ease), opacity 0.2s var(--ease);
   }
   .pill.show { opacity: 1; }
   nav a { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); text-decoration: none; font-weight: 500; color: var(--text-2); transition: color 0.25s var(--ease), background 0.25s var(--ease); }
-  nav a svg { flex: none; color: var(--muted); transition: color 0.3s var(--ease), transform 0.4s var(--ease-spring); }
+  nav a svg { flex: none; color: var(--muted); transition: color 0.2s var(--ease); }
   nav a:hover:not([aria-current="page"]) { color: var(--text); background: rgba(255, 255, 255, 0.03); }
-  nav a:hover svg { transform: translateX(2px) scale(1.06); color: var(--text-2); }
+  nav a:hover svg { color: var(--text-2); }
   nav a[aria-current="page"] { color: var(--text); font-weight: 600; }
-  nav a[aria-current="page"] svg { color: var(--lime); filter: drop-shadow(0 0 6px rgba(214, 255, 63, 0.45)); }
+  nav a[aria-current="page"] svg { color: var(--lime); }
   .label { flex: 1; }
-  .badge { font-size: var(--fs-xs); font-weight: 700; background: var(--lime); color: var(--on-lime); border-radius: var(--radius-pill); padding: 1px 7px; box-shadow: 0 0 12px rgba(214, 255, 63, 0.35); animation: pop 0.5s var(--ease-spring); }
-  @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
+  .badge { font-size: var(--fs-xs); font-weight: 700; background: var(--lime); color: var(--on-lime); border-radius: var(--radius-pill); padding: 1px 7px; }
   .page { min-width: 0; }
   .me { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 0 8px; font-size: var(--fs-sm); }
   .email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
@@ -397,7 +408,10 @@
   .topbar { display: none; }
   @media (max-width: 860px) {
     .shell { grid-template-columns: minmax(0, 1fr); }
-    .topbar { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 20; padding: 10px 12px; background: var(--ink); border-bottom: 1px solid var(--line); }
+    .topbar { display: flex; align-items: center; gap: 4px; position: sticky; top: 0; z-index: 20; height: 52px; padding: 0 12px 0 6px; background: var(--ink); border-bottom: 1px solid var(--line); }
+    .menubtn { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border: 0; border-radius: var(--radius-md); background: none; color: var(--text); }
+    .menubtn:hover { background: var(--surface-2); }
+    .where { flex: 1; min-width: 0; padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--line-2); font-size: var(--fs-md); font-weight: 600; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rail { position: fixed; z-index: 30; inset: 0 auto 0 0; width: 260px; transform: translateX(-100%); transition: transform 0.35s var(--ease); }
     .rail.open { transform: none; box-shadow: 20px 0 60px rgba(0,0,0,0.6); }
     .closenav { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: var(--radius-md); background: none; color: var(--text-2); font-size: var(--fs-xl); line-height: 1; }

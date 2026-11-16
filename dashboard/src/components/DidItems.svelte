@@ -2,6 +2,7 @@
   // The "What we did" items on a report: edit, remove, and reorder by
   // dragging the handle (mouse, pen or touch) or with the arrow keys on it.
   // Same handle as the Services page.
+  import Icon from "./Icon.svelte";
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
   import { ms } from "../lib/motion.ts";
@@ -95,13 +96,13 @@
 
 <svelte:window onpointermove={onMove} onpointerup={endDrag} onpointercancel={endDrag} />
 
-{#if items.length > 1}<p class="tip">Drag <span aria-hidden="true">⠿</span> to reorder, or focus it and use the up and down arrow keys.</p>{/if}
+{#if items.length > 1}<p class="tip">Drag <Icon name="grip" size={14} /> to reorder, or focus it and use the up and down arrow keys.</p>{/if}
 <ol class="items" bind:this={list} class:dragging={!!drag}>
   {#each items as it, i (keyOf(it))}
     <li data-key={keyOf(it)} class:placeholder={drag?.key === keyOf(it)} animate:flip={{ duration: ms(200) }}>
       <button type="button" class="grip" data-handle={keyOf(it)} title="Drag to reorder"
         aria-label="Move item {i + 1}, {name(it)}. Drag, or use the up and down arrow keys."
-        onpointerdown={(e) => startDrag(e, it)} onkeydown={(e) => keyMove(e, it)}>⠿</button>
+        onpointerdown={(e) => startDrag(e, it)} onkeydown={(e) => keyMove(e, it)}><Icon name="grip" /></button>
       <div class="field"><label for="{idPrefix}-{i}-t">Item {i + 1}</label><input id="{idPrefix}-{i}-t" class="input" bind:value={it.title} /></div>
       <div class="field"><label for="{idPrefix}-{i}-x">Item {i + 1} detail</label><input id="{idPrefix}-{i}-x" class="input" bind:value={it.text} /></div>
       <button type="button" class="btn sm ghost rm" onclick={() => items.splice(i, 1)}>Remove<span class="sr-only"> item {i + 1}</span></button>
@@ -112,7 +113,7 @@
 
 {#if drag}
   <div class="lifted" aria-hidden="true" style:left="{drag.x - drag.ox}px" style:top="{drag.y - drag.oy}px" style:width="{drag.w}px">
-    <span class="g">⠿</span><strong>{drag.label}</strong>
+    <span class="g"><Icon name="grip" /></span><strong>{drag.label}</strong>
   </div>
 {/if}
 

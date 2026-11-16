@@ -1,19 +1,20 @@
 <script lang="ts">
   // The corner messages (lib/toast.svelte.ts). The words carry the meaning;
   // the mark and color only help. Errors are announced right away.
+  import Icon from "./Icon.svelte";
   import { dismiss, toasts } from "../lib/toast.svelte.ts";
 </script>
 
 <div class="toasts" aria-live="polite" aria-label="Notifications">
   {#each toasts.list as t (t.id)}
     <div class="toast t-{t.tone}" role={t.tone === "error" ? "alert" : undefined}>
-      <span class="mark" aria-hidden="true">{t.tone === "success" ? "✓" : t.tone === "error" ? "!" : ""}</span>
+      <span class="mark" aria-hidden="true">{#if t.tone === "success"}<Icon name="check" size={12} />{:else if t.tone === "error"}!{/if}</span>
       <div class="body">
         {#if t.title}<strong>{t.title}</strong>{/if}
         <p><span class="sr-only">{t.tone === "error" ? "Error: " : ""}</span>{t.body}</p>
-        {#if t.href}<a href={t.href} onclick={() => dismiss(t.id)}>{t.link ?? "Open"} →</a>{/if}
+        {#if t.href}<a href={t.href} onclick={() => dismiss(t.id)}>{t.link ?? "Open"} <Icon name="arrow-right" size={14} /></a>{/if}
       </div>
-      <button class="iconbtn close" aria-label="Dismiss" onclick={() => dismiss(t.id)}>×</button>
+      <button class="iconbtn close" aria-label="Dismiss" onclick={() => dismiss(t.id)}><Icon name="close" /></button>
     </div>
   {/each}
 </div>

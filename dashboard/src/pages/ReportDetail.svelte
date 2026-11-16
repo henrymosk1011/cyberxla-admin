@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { onDestroy, tick } from "svelte";
   import db from "$db";
   import ActivityCard from "../components/ActivityCard.svelte";
@@ -470,7 +471,7 @@
   const pretty = (path: string) => path.replace(/^report\./, "").replace(/^email\.body$/, "email body").replace(/^email\.subject$/, "email subject");
 </script>
 
-<a class="back" href="#/reports">← All reports</a>
+<a class="back" href="#/reports"><Icon name="arrow-left" size={14} /> All reports</a>
 
 {#if report === undefined}
   <LoadState error={loadError} what="this report" onretry={() => { loadError = ""; load(true); }} />
@@ -906,7 +907,6 @@
   .hint.top { margin-top: -4px; }
   .row3 { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 12px; align-items: end; }
   .check { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-md); color: var(--text-2); min-height: 42px; }
-  .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: end; }
   fieldset.cols5 { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   fieldset legend { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-bottom: 6px; }

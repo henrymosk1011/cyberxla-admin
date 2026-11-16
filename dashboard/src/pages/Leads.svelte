@@ -1,6 +1,7 @@
 <script lang="ts">
   import StatusPill from "../components/StatusPill.svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import EmptyState from "../components/EmptyState.svelte";
   import SortTh from "../components/SortTh.svelte";
   import SortSelect from "../components/SortSelect.svelte";
   import { by, pressed, text, type Sort, type SortDir } from "../lib/sort.ts";
@@ -8,8 +9,8 @@
   import { ago, money, STATUS_LABEL } from "../lib/format.ts";
   import { LEAD_STATUSES, type Client, type Lead, type LeadStatus, type Quote } from "../lib/types.ts";
 
-  let { leads, quotes, clients, view, onstatus, stale }: {
-    leads: Lead[]; quotes: Quote[]; clients: Client[]; view: "list" | "board"; stale: boolean;
+  let { leads, quotes, clients, view, onstatus }: {
+    leads: Lead[]; quotes: Quote[]; clients: Client[]; view: "list" | "board";
     onstatus: (id: string, s: LeadStatus) => void;
   } = $props();
 
@@ -95,7 +96,7 @@
     <div class="phonesort"><SortSelect id="lead-sort" columns={COLUMNS} {sort} onchange={(s) => (sort = s)} /></div>
   </div>
 
-  <section class="card flush" class:stale>
+  <section class="card flush">
     {#if rows.length}
       <div class="scroll">
         <table class="table cards">
@@ -123,11 +124,20 @@
         </table>
       </div>
     {:else}
-      <p class="empty">{filter === "archived" && !q ? "No archived leads." : leads.length ? "No leads match." : "No leads yet. Quotes from the website will show up here."}</p>
+      {#if filter === "archived" && !q}
+        <EmptyState title="No archived leads" text="Archiving a lead (from its page) takes it out of your pipeline without deleting it." />
+      {:else if !leads.length}
+        <EmptyState title="No leads yet" text="Quotes from the website will show up here." />
+      {:else}
+        <EmptyState title="No leads match">
+          {#if q}<button class="btn sm" onclick={() => (q = "")}>Clear search</button>{/if}
+          {#if filter !== "all" && searched.length}<button class="btn sm" onclick={() => (filter = "all")}>Show all leads</button>{/if}
+        </EmptyState>
+      {/if}
     {/if}
   </section>
 {:else}
-  <div class="board" class:stale>
+  <div class="board">
     {#each columns as col (col.status)}
       <section
         class="col" class:over={over === col.status} aria-label="{STATUS_LABEL[col.status]} column"
@@ -210,7 +220,7 @@
   .lead { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 4px; cursor: grab; transition: transform 0.25s var(--ease), border-color 0.2s, box-shadow 0.25s var(--ease); animation: rise 0.4s var(--ease) both; }
   .lead:hover { border-color: var(--line-2); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
   .lead.dragging { opacity: 0.4; }
-  .lead a { text-decoration: none; }
+  .lead a { display: block; padding: 2px 0; text-decoration: none; }
   .lead strong { font-weight: 600; font-size: var(--fs-md); }
   .small { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }

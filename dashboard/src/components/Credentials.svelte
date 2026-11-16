@@ -2,6 +2,7 @@
   // Saved logins for one project. Everything except the label is encrypted in
   // this browser (lib/crypto.ts) before it's saved, with a key that only the
   // vault passphrase unlocks, so the database only ever holds ciphertext.
+  import Icon from "./Icon.svelte";
   import db from "$db";
   import Confirm from "./Confirm.svelte";
   import { changePassphrase, createVault, credentialAad, generatePassword, MIN_PASSPHRASE, openSecret, openVault, sealSecret, type CredentialSecret } from "../lib/crypto.ts";
@@ -240,7 +241,7 @@
                   {#if s.password || s.notes}<button class="btn ghost sm" aria-pressed={!!revealed[c.id]} onclick={() => (revealed[c.id] = !revealed[c.id])}>{revealed[c.id] ? "Hide" : "Show"}</button>{/if}
                   <button class="btn ghost sm" onclick={() => edit(c)}>Edit</button>
                 {/if}
-                <button class="iconbtn danger" aria-label="Delete {c.label}" title="Delete" onclick={() => remove(c)}>×</button>
+                <button class="iconbtn danger" aria-label="Delete {c.label}" title="Delete" onclick={() => remove(c)}><Icon name="close" /></button>
               </div>
             </div>
             {#if s === "error"}
@@ -308,7 +309,7 @@
       </form>
     {:else}
       <div class="row start">
-        <button class="btn sm" onclick={startNew}>+ Add credential</button>
+        <button class="btn sm" onclick={startNew}><Icon name="plus" size={14} /> Add credential</button>
         <button class="link" onclick={() => { changing = true; current = pass = pass2 = ""; error = ""; }}>Change vault passphrase</button>
       </div>
     {/if}
@@ -354,7 +355,7 @@
   a.val { color: var(--lime); text-decoration: none; }
   a.val:hover { text-decoration: underline; }
   .pre { white-space: pre-wrap; }
-  .copy { flex: none; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; border-radius: var(--radius-pill); padding: 1px 9px; transition: background 0.15s, color 0.15s; }
+  .copy { flex: none; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; border-radius: var(--radius-pill); min-height: 24px; padding: 2px 10px; transition: background 0.15s, color 0.15s; }
   .copy:hover { background: var(--surface-3); color: var(--text); }
   .none { font-size: var(--fs-md); margin-bottom: 12px; }
   .small { font-size: var(--fs-xs); }

@@ -1,6 +1,7 @@
 <script lang="ts">
   // The priced services on a client or project: add from the catalog or as a
   // custom line, change price x quantity inline, and see the totals.
+  import Icon from "./Icon.svelte";
   import Confirm from "./Confirm.svelte";
   import { catalog } from "../lib/store.svelte.ts";
   import { unitPrice } from "../lib/catalog.ts";
@@ -97,7 +98,7 @@
 </script>
 
 <section class="card">
-  <div class="card-head"><div><h2>Services</h2><p class="sub">{sub}</p></div><span class="saved" role="status">{#if saved}<span aria-hidden="true">✓</span> Saved{/if}</span></div>
+  <div class="card-head"><div><h2>Services</h2><p class="sub">{sub}</p></div><span class="saved" role="status">{#if saved}<Icon name="check" size={14} /> Saved{/if}</span></div>
   {#if lines.length}
     <ul class="lines">
       {#each lines as l (l.id)}
@@ -118,17 +119,17 @@
               <span aria-hidden="true">$</span>
               <input class="num" type="number" min="0" step="0.01" value={l.unit_amount} aria-label="Price per unit for {l.name}"
                 onchange={(e) => updateLine(l, { unit_amount: e.currentTarget.valueAsNumber }, e.currentTarget)}
-                onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = String(l.unit_amount); e.currentTarget.blur(); } }} />
             </label>
             <span class="times" aria-hidden="true">×</span>
             <label class="amount qty" title="Quantity (devices, seats, hours…)">
               <input class="num" type="number" min="1" max="100000" step="1" value={l.quantity} aria-label="Quantity for {l.name}"
                 onchange={(e) => updateLine(l, { quantity: e.currentTarget.valueAsNumber }, e.currentTarget)}
-                onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                onkeydown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { e.currentTarget.value = String(l.quantity); e.currentTarget.blur(); } }} />
             </label>
             <span class="total num" aria-label="Line total">{money(l.amount)}</span>
           </div>
-          <button class="iconbtn danger" aria-label="Remove {l.name}" title="Remove" onclick={() => removeLine(l)}>×</button>
+          <button class="iconbtn danger" aria-label="Remove {l.name}" title="Remove" onclick={() => removeLine(l)}><Icon name="close" /></button>
         </li>
       {/each}
     </ul>
@@ -172,7 +173,7 @@
     </div>
     <p class="muted hint">{hint}</p>
   {:else}
-    <button class="btn sm addbtn" onclick={() => (picking = true)}>+ Add service</button>
+    <button class="btn sm addbtn" onclick={() => (picking = true)}><Icon name="plus" size={14} /> Add service</button>
   {/if}
 
   <div class="totals">
@@ -190,7 +191,7 @@
   .nm { display: flex; flex-direction: column; min-width: 0; }
   .name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tag { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--line-2); border-radius: var(--radius-pill); padding: 1px 6px; }
-  .note { border: 0; background: transparent; color: var(--muted); font-size: var(--fs-xs); padding: 2px 0; border-bottom: 1px dashed transparent; width: 100%; }
+  .note { border: 0; background: transparent; color: var(--muted); font-size: var(--fs-xs); min-height: 24px; padding: 2px 0; border-bottom: 1px dashed transparent; width: 100%; }
   .note:hover, .note:focus { border-bottom-color: var(--line-2); color: var(--text-2); }
   .billing { height: var(--control-sm); font-size: var(--fs-sm); padding: 0 32px 0 10px; background-position: right 10px center; }
   .calc { display: flex; align-items: center; gap: 6px; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import Menu from "../components/Menu.svelte";
@@ -139,7 +140,7 @@
   }
 </script>
 
-<a class="back" href="#/projects">← All projects</a>
+<a class="back" href="#/projects"><Icon name="arrow-left" size={14} /> All projects</a>
 
 {#if project === undefined}
   <LoadState error={loadError} what="this project" onretry={() => { loadError = ""; load(); }} />
@@ -148,7 +149,7 @@
 {:else}
   <PageHeader eyebrow={`Project${project.due_on ? ` · due ${shortDate(project.due_on + "T12:00:00")}` : ""}`} title={project.name}>
     {#snippet meta()}
-      {#if owner}<p class="contact"><span>{owner.kind}</span><a href={owner.href}>{owner.label} →</a></p>{/if}
+      {#if owner}<p class="contact"><span>{owner.kind}</span><a href={owner.href}>{owner.label} <Icon name="arrow-right" size={14} /></a></p>{/if}
     {/snippet}
     <div class="headvalue">
       <span class="big num">{money(once)}<small> one time</small></span>

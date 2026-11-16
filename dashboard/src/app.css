@@ -164,19 +164,13 @@ select {
 select.input { padding-right: 40px; }
 select:hover { border-color: var(--line-2); }
 
-/* Cards: soft hover and an entrance. */
-.card { transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease), transform 0.25s var(--ease); }
-.card:hover { border-color: var(--line-2); box-shadow: var(--shadow-sm); }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
-.rise > * { animation: rise 0.5s var(--ease) both; }
-.rise > :nth-child(2) { animation-delay: 40ms; }
-.rise > :nth-child(3) { animation-delay: 80ms; }
-.rise > :nth-child(4) { animation-delay: 120ms; }
-.rise > :nth-child(5) { animation-delay: 160ms; }
-.rise > :nth-child(6) { animation-delay: 200ms; }
-.rise > :nth-child(7) { animation-delay: 240ms; }
-.rise > :nth-child(8) { animation-delay: 280ms; }
-.rise > :nth-child(n+9) { animation-delay: 320ms; }
+/* Cards don't react to the pointer: only things you can press do. A short entrance for groups of cards. */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.rise > * { animation: rise 0.3s var(--ease) both; }
+.rise > :nth-child(2) { animation-delay: 20ms; }
+.rise > :nth-child(3) { animation-delay: 40ms; }
+.rise > :nth-child(4) { animation-delay: 60ms; }
+.rise > :nth-child(n+5) { animation-delay: 80ms; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; }
@@ -187,7 +181,7 @@ select:hover { border-color: var(--line-2); }
    --------------------------------------------------------------------------- */
 
 /* The way back, above a page title. */
-.back { display: inline-block; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; margin-bottom: 16px; }
+.back { display: inline-block; padding: 4px 0; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; margin-bottom: 12px; }
 .back:hover { color: var(--text); }
 
 /* Small square buttons that carry a symbol: close, remove. */
@@ -219,9 +213,8 @@ select:hover { border-color: var(--line-2); }
   .filters .seg button { flex: none; }
 }
 
-/* A list in a card: the table runs to the card's edges, and dims while it reloads. */
+/* A list in a card: the table runs to the card's edges. */
 .card.flush { padding: 8px 8px 0; overflow-x: auto; }
-.stale { opacity: 0.6; }
 /* The first cell of a list row: a name over a quieter line. */
 .table .who { display: flex; flex-direction: column; text-decoration: none; min-width: 0; }
 .table .who strong { font-weight: 600; }
@@ -260,7 +253,7 @@ select:hover { border-color: var(--line-2); }
 .amount:hover { border-color: var(--line-2); }
 .amount:focus-within { border-color: var(--lime); background: var(--ink); box-shadow: 0 0 0 1px var(--lime); }
 .amount span { color: var(--muted); }
-.amount input { width: 100%; min-width: 0; border: 0; background: transparent; outline: none; text-align: right; font-weight: 600; font-size: var(--fs-md); -moz-appearance: textfield; appearance: textfield; }
+.amount input { width: 100%; height: 100%; min-width: 0; border: 0; background: transparent; outline: none; text-align: right; font-weight: 600; font-size: var(--fs-md); -moz-appearance: textfield; appearance: textfield; }
 .amount input::-webkit-inner-spin-button, .amount input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .amount.qty { width: 62px; }
 
@@ -288,7 +281,7 @@ select:hover { border-color: var(--line-2); }
 .callout p { margin-top: 2px; color: var(--text-2); }
 
 /* The line of contact details under a record's name, and its headline number on the right. */
-.contact { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--fs-md); color: var(--text-2); margin-top: 8px; }
+.contact { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; font-size: var(--fs-md); color: var(--text-2); margin-top: 8px; }
 .contact a { color: var(--lime); text-decoration: none; overflow-wrap: anywhere; }
 .contact a:hover { text-decoration: underline; }
 .headvalue { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
@@ -317,3 +310,24 @@ select:hover { border-color: var(--line-2); }
 .draft { margin-top: 12px; font-size: var(--fs-sm); color: var(--warning); }
 /* A button that reads as a link inside a sentence. */
 .linkbtn { border: 0; background: none; padding: 0; color: var(--lime); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Checkboxes and radio buttons: one size, the brand color. */
+input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; flex: none; accent-color: var(--lime); }
+
+/* Touch screens: the small controls grow to finger size. */
+@media (pointer: coarse) {
+  .btn.sm { height: var(--control-md); padding: 0 14px; }
+  .iconbtn { width: 40px; height: 40px; }
+  .seg button { padding: 8px 14px; }
+  input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; }
+  /* Links in a line of text: a taller hit area without moving the text. Any
+     link with its own padding keeps it. */
+  :where(.page, dialog) a:where(:not(.btn, .back)), .linkbtn { padding-block: 4px; }
+}
+
+/* Every dialog (forms, confirms, the report preview) shares one shell. */
+dialog { margin: auto; padding: 0; max-height: calc(100dvh - 24px); border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg); }
+dialog[open] { animation: dialog-in 0.2s var(--ease) both; }
+dialog::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(2px); }
+dialog h2 { font-size: var(--fs-lg); letter-spacing: -0.02em; }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }

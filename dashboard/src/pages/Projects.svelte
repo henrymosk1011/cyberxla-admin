@@ -1,6 +1,8 @@
 <script lang="ts">
+  import Icon from "../components/Icon.svelte";
   import { tick } from "svelte";
   import db from "$db";
+  import EmptyState from "../components/EmptyState.svelte";
   import Field from "../components/Field.svelte";
   import Kpi from "../components/Kpi.svelte";
   import StatusPill from "../components/StatusPill.svelte";
@@ -14,7 +16,7 @@
   import { clientLabel, leadLabel, ownerOptions, parseOwner } from "../lib/projects.ts";
   import { OPEN_PROJECT_STATUSES, PROJECT_STATUSES, type Client, type Lead, type Project, type ProjectService, type ProjectStatus } from "../lib/types.ts";
 
-  let { projects, lines, clients, leads, stale }: { projects: Project[]; lines: ProjectService[]; clients: Client[]; leads: Lead[]; stale: boolean } = $props();
+  let { projects, lines, clients, leads }: { projects: Project[]; lines: ProjectService[]; clients: Client[]; leads: Lead[] } = $props();
 
   let q = $state("");
   let filter = $state<ProjectStatus | "open" | "all">("open");
@@ -118,7 +120,7 @@
 
 <PageHeader title="Projects">
   <input class="input search" type="search" placeholder="Search projects" aria-label="Search projects by name, client or lead" bind:value={q} />
-  <button class="btn primary" onclick={() => (creating = true)}>+ New project</button>
+  <button class="btn primary" onclick={() => (creating = true)}><Icon name="plus" size={14} /> New project</button>
 </PageHeader>
 
 <div class="kpis rise">
@@ -139,7 +141,7 @@
   <div class="phonesort"><SortSelect id="project-sort" columns={COLUMNS} {sort} onchange={(s) => (sort = s)} /></div>
 </div>
 
-<section class="card flush" class:stale>
+<section class="card flush">
   {#if rows.length}
     <table class="table cards">
       <caption class="sr-only">Projects, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
@@ -163,7 +165,16 @@
       </tbody>
     </table>
   {:else}
-    <p class="empty">{projects.length ? "No projects match." : "No projects yet. Start one here, or from a lead's or client's page."}</p>
+    {#if !projects.length}
+      <EmptyState title="No projects yet" text="Start one here, or from a lead's or client's page.">
+        <button class="btn primary sm" onclick={() => (creating = true)}><Icon name="plus" size={14} /> New project</button>
+      </EmptyState>
+    {:else}
+      <EmptyState title="No projects match">
+        {#if q}<button class="btn sm" onclick={() => (q = "")}>Clear search</button>{/if}
+        {#if filter !== "all" && searched.length}<button class="btn sm" onclick={() => (filter = "all")}>Show all projects</button>{/if}
+      </EmptyState>
+    {/if}
   {/if}
 </section>
 

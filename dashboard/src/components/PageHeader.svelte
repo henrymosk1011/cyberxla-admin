@@ -2,6 +2,7 @@
   // The top of a page: where you are, the title, and the page's tools on the
   // right. The tools keep to one row on a desktop and drop under the title on
   // narrow screens.
+  import Icon from "./Icon.svelte";
   import type { Snippet } from "svelte";
   import { pageHeading } from "../lib/nav.svelte.ts";
 
@@ -20,7 +21,7 @@
   } = $props();
 </script>
 
-{#if back}<a class="back" href={back.href}><span aria-hidden="true">←</span> {back.label}</a>{/if}
+{#if back}<a class="back" href={back.href}><Icon name="arrow-left" size={14} /> {back.label}</a>{/if}
 <header class="head">
   <div class="titles">
     {#if eyebrow}<p class="eyebrow">{eyebrow}</p>{/if}
