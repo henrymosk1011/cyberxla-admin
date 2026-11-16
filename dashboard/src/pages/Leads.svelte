@@ -48,8 +48,8 @@
   }
 </script>
 
-<PageHeader eyebrow="Leads" title={view === "board" ? "Board" : "All leads"}>
-  <input class="input search" type="search" placeholder="Search name, company, email, phone" aria-label="Search leads" bind:value={q} />
+<PageHeader title="Leads">
+  <input class="input search" type="search" placeholder="Search leads" aria-label="Search leads by name, company, email or phone" bind:value={q} />
   <div class="seg" role="group" aria-label="View">
     <button aria-pressed={view === "list"} onclick={() => (location.hash = "#/leads")}>List</button>
     <button aria-pressed={view === "board"} onclick={() => (location.hash = "#/board")}>Board</button>
@@ -62,7 +62,7 @@
 
 {#if view === "list"}
   <div class="filters">
-    <div class="seg" role="group" aria-label="Status filter">
+    <div class="seg" role="group" aria-label="Stage filter">
       <button aria-pressed={filter === "open"} onclick={() => (filter = "open")}>Open <span class="c">{counts.new + counts.contacted + counts.proposal}</span></button>
       {#each LEAD_STATUSES as st (st)}
         <button aria-pressed={filter === st} onclick={() => (filter = st)}>{STATUS_LABEL[st]} <span class="c">{counts[st]}</span></button>
@@ -84,7 +84,7 @@
       <div class="scroll">
         <table class="table">
           <thead>
-            <tr><th>Lead</th><th>Status</th><th class="r">Monthly</th><th class="r">One time</th><th class="r hide-sm">Quotes</th><th class="r hide-sm">Last activity</th></tr>
+            <tr><th>Lead</th><th>Stage</th><th class="r">Monthly</th><th class="r">One time</th><th class="r hide-sm">Quotes</th><th class="r hide-sm">Last activity</th></tr>
           </thead>
           <tbody>
             {#each rows as l (l.id)}

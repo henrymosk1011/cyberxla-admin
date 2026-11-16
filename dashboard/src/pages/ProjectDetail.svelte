@@ -190,7 +190,7 @@
               {#if choices.leads.length}<optgroup label="Leads">{#each choices.leads as l (l.value)}<option value={l.value}>{l.label}</option>{/each}</optgroup>{/if}
             </select>
           </div>
-          <div class="field"><label for="p-due">Target date</label><input id="p-due" class="input" type="date" bind:value={details.due_on} /></div>
+          <div class="field"><label for="p-due">Due date</label><input id="p-due" class="input" type="date" bind:value={details.due_on} /></div>
           {#if detailsError}<p class="error" role="alert">{detailsError}</p>{/if}
           <div class="row"><button class="btn primary sm" disabled={!detailsDirty || saving === "details"}>{saving === "details" ? "Saving…" : "Save details"}</button></div>
         </form>

@@ -8,6 +8,7 @@
   import DidItems from "../components/DidItems.svelte";
   import LoadState from "../components/LoadState.svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import ReportsNav from "../components/ReportsNav.svelte";
   import SaveBar from "../components/SaveBar.svelte";
   import { guardUnsaved } from "../lib/nav.svelte.ts";
   import { messageOf } from "../lib/toast.svelte.ts";
@@ -108,11 +109,12 @@
   </div>
 {/snippet}
 
-<PageHeader back={{ href: "#/reports/settings", label: "Report settings" }} eyebrow="Patch reports" title="Report template">
+<PageHeader title="Report template">
   {#snippet meta()}
     <p class="lead">Every new report starts from this wording and order. Changes apply to reports generated after you save; reports already made don't change. Words in curly brackets, like <code>{"{computers}"}</code>, are filled in with each report's numbers and dates.</p>
   {/snippet}
 </PageHeader>
+<ReportsNav current="template" />
 
 {#if !draft || !p}
   <LoadState error={loadError} what="the template" onretry={() => { loadError = ""; load(); }} />

@@ -14,7 +14,7 @@ export const FIELDS: Field[] = [
   { key: "email", label: "Email", group: "Contact", kind: "text", get: (l) => l.email, on: true },
   { key: "phone", label: "Phone", group: "Contact", kind: "text", get: (l) => l.phone, on: true },
 
-  { key: "status", label: "Status", group: "Pipeline", kind: "text", get: (l) => STATUS_LABEL[l.status] ?? l.status, on: true },
+  { key: "status", label: "Stage", group: "Pipeline", kind: "text", get: (l) => STATUS_LABEL[l.status] ?? l.status, on: true },
   { key: "value_monthly", label: "Monthly value", group: "Pipeline", kind: "money", get: (l) => l.value_monthly, on: true },
   { key: "value_one_time", label: "One-time value", group: "Pipeline", kind: "money", get: (l) => l.value_one_time, on: true },
   { key: "source", label: "Source", group: "Pipeline", kind: "text", get: (l) => SOURCE[l.source] ?? l.source },

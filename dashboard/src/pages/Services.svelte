@@ -349,7 +349,7 @@
   const money = (n: number) => "$" + (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 </script>
 
-<PageHeader eyebrow="Catalog" title="Services" sub={`${counts.live} live on your website${counts.total > counts.live ? ` · ${counts.total - counts.live} hidden` : ""}. Changes show on the quote builder right away.`}>
+<PageHeader title="Services" sub={`${counts.live} live on your website${counts.total > counts.live ? ` · ${counts.total - counts.live} hidden` : ""}. Changes show on the quote builder right away.`}>
   <input class="input search" type="search" placeholder="Search services" aria-label="Search services" bind:value={q} />
   <button class="btn" onclick={newCategory}>+ Category</button>
   <button class="btn primary" onclick={() => newService()}>+ Service</button>

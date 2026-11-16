@@ -154,17 +154,17 @@ test("sortReports sorts by each column and breaks ties by send date, newest firs
   assert.deepEqual(names(sortReports(rows, "report", "asc")), ["Bayside Vet", "Alder Dental", "Cedar Law"]);
 });
 
-test("Clear is for finished reports and tests; Restore for cleared ones", () => {
+test("Archive is for finished reports and tests; Restore for archived ones", () => {
   const at = "2026-11-09T16:00:00Z";
   const r = (status: string, is_test = false, cleared_at: string | null = null) =>
     ({ status, send_at: at, sent_at: null, claimed_at: null, error: null, is_test, cleared_at }) as Parameters<typeof reportActions>[0];
   for (const s of ["sent", "failed", "cancelled"]) assert.equal(reportActions(r(s)).clear, true, s);
   for (const s of ["scheduled", "held", "sending"]) assert.equal(reportActions(r(s)).clear, false, s);
-  assert.equal(reportActions(r("held", true)).clear, true, "a held test report can be cleared");
+  assert.equal(reportActions(r("held", true)).clear, true, "a held test report can be archived");
   assert.equal(reportActions(r("sending", true)).clear, false);
   assert.equal(reportActions(r("sent", false, at)).clear, false);
   assert.equal(reportActions(r("sent", false, at)).restore, true);
-  // Deleting for good: a sent client report only once it's cleared; never while sending.
+  // Deleting for good: a sent client report only once it's archived; never while sending.
   assert.equal(reportActions(r("sent")).remove, false);
   assert.equal(reportActions(r("sent", false, at)).remove, true);
   assert.equal(reportActions(r("sending", false, at)).remove, false);

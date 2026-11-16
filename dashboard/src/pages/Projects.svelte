@@ -78,14 +78,14 @@
   }
 </script>
 
-<PageHeader eyebrow="Projects" title="Projects">
-  <input class="input search" type="search" placeholder="Search project, client, lead" aria-label="Search projects" bind:value={q} />
+<PageHeader title="Projects">
+  <input class="input search" type="search" placeholder="Search projects" aria-label="Search projects by name, client or lead" bind:value={q} />
   <button class="btn primary" onclick={() => { form = blank(); formError = ""; creating = true; }}>+ New project</button>
 </PageHeader>
 
 <div class="kpis rise">
   <section class="card kpi hero">
-    <p class="eyebrow">Pipeline</p>
+    <p class="eyebrow">Project pipeline</p>
     <p class="big num">{money(pipeline.once)}<small>one time</small></p>
     <p class="muted">{pipeline.monthly ? `+ ${money(pipeline.monthly)}/mo · ` : ""}{pipeline.n} potential and proposed</p>
   </section>
@@ -148,7 +148,7 @@
           {#each PROJECT_STATUSES as st (st)}<option value={st}>{STATUS_LABEL[st]}</option>{/each}
         </select>
       </div>
-      <div class="field"><label for="np-due">Target date</label><input id="np-due" class="input" type="date" bind:value={form.due_on} /></div>
+      <div class="field"><label for="np-due">Due date</label><input id="np-due" class="input" type="date" bind:value={form.due_on} /></div>
     </div>
     <p class="muted hint">You'll add services, notes and credentials on the next screen.</p>
     {#if formError}<p class="error" role="alert">{formError}</p>{/if}

@@ -69,7 +69,7 @@
 </script>
 
 <section class="card">
-  <div class="card-head"><h2>Patch reports</h2>{#if saved}<span class="ok" role="status">✓ {saved}</span>{/if}</div>
+  <div class="card-head"><h2>Reports</h2>{#if saved}<span class="ok" role="status">✓ {saved}</span>{/if}</div>
   <form class="form" onsubmit={save}>
     <label class="check"><input type="checkbox" bind:checked={form.enabled} /> Send weekly and monthly reports</label>
     <div class="field"><label for="r-group">Action1 group</label><input id="r-group" class="input" maxlength="80" autocomplete="off" bind:value={form.group} aria-describedby="r-group-h" /><span id="r-group-h" class="hint">Exactly as named in Action1.</span></div>

@@ -3,6 +3,7 @@
   import Confirm from "../components/Confirm.svelte";
   import ReportPill from "../components/ReportPill.svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import ReportsNav from "../components/ReportsNav.svelte";
   import LoadState from "../components/LoadState.svelte";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { dateTime } from "../lib/format.ts";
@@ -15,7 +16,7 @@
   let loadError = $state("");
   let busy = $state(false);
   let now = $state(Date.now());
-  let show = $state<"current" | "all" | "cleared">("current");
+  let show = $state<"current" | "all" | "archived">("current");
 
   // Sorting: newest send date first unless you pick another column. Remembered
   // in this browser only (a convenience; it falls back to the default).
@@ -23,7 +24,7 @@
     { key: "client", label: "Client", first: "asc" },
     { key: "report", label: "Report", first: "desc" },
     { key: "status", label: "Status", first: "asc" },
-    { key: "sends", label: "Sends", first: "desc" },
+    { key: "sends", label: "Send time", first: "desc" },
     { key: "generated", label: "Generated", first: "desc" },
   ];
   const DEFAULT_SORT = { key: "sends" as ReportSortKey, dir: "desc" as SortDir };
@@ -67,20 +68,20 @@
   });
 
   const WEEK = 7 * 86400000;
-  // Cleared reports are off the list (kept) until you open the Cleared view.
+  // Archived reports are off the list (kept) until you open the Archived view.
   const listed = $derived(rows.filter((r) => !r.cleared_at));
-  const cleared = $derived(rows.filter((r) => r.cleared_at));
+  const archived = $derived(rows.filter((r) => r.cleared_at));
   // Current: anything still to send, tests, and what went out in the last week.
-  const visible = $derived(show === "cleared" ? cleared : show === "all" ? listed : listed.filter((r) =>
+  const visible = $derived(show === "archived" ? archived : show === "all" ? listed : listed.filter((r) =>
     r.is_test || Date.parse(r.send_at) > now - WEEK || r.status === "scheduled" || r.status === "held" || r.status === "failed" || r.status === "sending"));
-  // Test reports Clear test reports would take off the list.
-  const clearableTests = $derived(listed.filter((r) => r.is_test && r.status !== "sending"));
+  // Test reports Archive test reports would take off the list.
+  const archivableTests = $derived(listed.filter((r) => r.is_test && r.status !== "sending"));
   const sorted = $derived(sortReports(visible, sort.key, sort.dir));
 
-  // Ticked rows, for Clear selected (or Restore selected and Delete selected in the Cleared view).
-  // Only rows that can be cleared (or restored) get a checkbox.
+  // Ticked rows, for Archive selected (or Restore selected and Delete selected in the Archived view).
+  // Only rows that can be archived (or restored) get a checkbox.
   let picked = $state<string[]>([]);
-  const canPick = (r: ReportRow) => (show === "cleared" ? !!r.cleared_at : reportActions(r, now).clear);
+  const canPick = (r: ReportRow) => (show === "archived" ? !!r.cleared_at : reportActions(r, now).clear);
   const pickable = $derived(sorted.filter(canPick));
   // Keep only ticks that are still on screen and still allowed.
   $effect(() => {
@@ -132,19 +133,19 @@
     await act(async () => db.moveReports(week.toResume.map((r) => r.id), "held", "scheduled"), `${plural(n, "report is", "reports are")} scheduled.`);
   }
   const open = (id: string) => (location.hash = `#/reports/${id}`);
-  async function clearPicked() {
+  async function archivePicked() {
     const ids = [...picked];
     const n = ids.length;
     if (!n) return;
-    if (show === "cleared") {
+    if (show === "archived") {
       await act(() => db.clearReports(ids, false), `${plural(n, "report is", "reports are")} back on the list.`);
     } else {
-      if (!(await confirm.ask({ title: `Clear ${plural(n, "report", "reports")}?`, body: "They leave the list now. Nothing is deleted: find them under Cleared, where Restore brings them back.", action: "Clear" }))) return;
-      await act(() => db.clearReports(ids, true), `${plural(n, "report is", "reports are")} cleared. Find them under Cleared.`);
+      if (!(await confirm.ask({ title: `Archive ${plural(n, "report", "reports")}?`, body: "They leave the list now. Nothing is deleted: find them under Archived, where Restore brings them back.", action: "Archive" }))) return;
+      await act(() => db.clearReports(ids, true), `${plural(n, "report is", "reports are")} archived. Find them under Archived.`);
     }
     picked = [];
   }
-  // Delete for good, from the Cleared view: the reports and their PDFs go.
+  // Delete for good, from the Archived view: the reports and their PDFs go.
   const deleteText = (n: number) => `This removes ${n === 1 ? "the report and its PDFs" : "the reports and their PDFs"} for good. It can't be undone. The record in Activity stays.`;
   async function deletePicked() {
     const ids = picked.filter((id) => { const r = rows.find((x) => x.id === id); return r && reportActions(r, now).remove; });
@@ -158,24 +159,26 @@
     if (!(await confirm.ask({ title: `Delete ${r.client_name}, ${periodLabel(r)} for good?`, body: deleteText(1), action: "Delete", danger: true }))) return;
     await act(() => db.deleteReports([r.id]), `${r.client_name}, ${periodLabel(r)} is deleted.`);
   }
-  const clear = (r: ReportRow) => act(() => db.clearReports([r.id], true), `${r.client_name}, ${periodLabel(r)} is cleared from the list. Find it under Cleared.`);
+  const archive = (r: ReportRow) => act(() => db.clearReports([r.id], true), `${r.client_name}, ${periodLabel(r)} is archived. Find it under Archived.`);
   const restore = (r: ReportRow) => act(() => db.clearReports([r.id], false), `${r.client_name}, ${periodLabel(r)} is back on the list.`);
-  async function clearTests() {
-    const n = clearableTests.length;
-    if (!(await confirm.ask({ title: `Clear ${plural(n, "test report", "test reports")}?`, body: "They leave the list now (find them under Cleared). Test reports delete themselves a week after they're made.", action: "Clear" }))) return;
-    await act(() => db.clearReports(clearableTests.map((r) => r.id), true), `${plural(n, "test report is", "test reports are")} cleared.`);
+  async function archiveTests() {
+    const n = archivableTests.length;
+    if (!(await confirm.ask({ title: `Archive ${plural(n, "test report", "test reports")}?`, body: "They leave the list now (find them under Archived). Test reports delete themselves a week after they're made.", action: "Archive" }))) return;
+    await act(() => db.clearReports(archivableTests.map((r) => r.id), true), `${plural(n, "test report is", "test reports are")} archived.`);
   }
 </script>
 
-<PageHeader eyebrow="Patch reports" title="Reports">
+<PageHeader title="Reports">
   {#if settings}
-    <a class="mode" class:live={settings.mode === "live"} href="#/reports/settings">
-      {settings.mode === "live" ? "Live: reports go to clients" : "Preview: reports go to you only"}
-    </a>
+    <!-- The mode is a status, with the way to change it beside it. -->
+    <p class="mode" class:live={settings.mode === "live"}>
+      <i aria-hidden="true"></i>
+      <span>{settings.mode === "live" ? "Live: reports go to clients" : "Preview: reports go to you only"}</span>
+      <a href="#/reports/settings">Change</a>
+    </p>
   {/if}
-  <a class="btn" href="#/reports/template">Template</a>
-  <a class="btn" href="#/reports/settings">Settings</a>
 </PageHeader>
+<ReportsNav current="reports" />
 
 {#if !loaded}
   <LoadState error={loadError} what="reports" onretry={() => { loadError = ""; load(); }} />
@@ -195,7 +198,7 @@
     <div class="bulk">
       <button class="btn" disabled={busy || !week.toHold.length} onclick={holdAll}>Hold all this week{week.toHold.length ? ` (${week.toHold.length})` : ""}</button>
       <button class="btn" disabled={busy || !week.toResume.length} onclick={resumeAll}>Resume all{week.toResume.length ? ` (${week.toResume.length})` : ""}</button>
-      <button class="btn ghost" disabled={busy || !clearableTests.length} onclick={clearTests}>Clear test reports{clearableTests.length ? ` (${clearableTests.length})` : ""}</button>
+      <button class="btn ghost" disabled={busy || !archivableTests.length} onclick={archiveTests}>Archive test reports{archivableTests.length ? ` (${archivableTests.length})` : ""}</button>
     </div>
   </section>
 
@@ -203,7 +206,7 @@
     <div class="seg" role="group" aria-label="Which reports">
       <button aria-pressed={show === "current"} onclick={() => setShow("current")}>This week</button>
       <button aria-pressed={show === "all"} onclick={() => setShow("all")}>Last 4 months</button>
-      <button aria-pressed={show === "cleared"} onclick={() => setShow("cleared")}>Cleared{cleared.length ? ` (${cleared.length})` : ""}</button>
+      <button aria-pressed={show === "archived"} onclick={() => setShow("archived")}>Archived{archived.length ? ` (${archived.length})` : ""}</button>
     </div>
   </div>
 
@@ -213,8 +216,8 @@
         <div class="picked" role="region" aria-label="Selected reports">
           <span>{plural(picked.length, "report", "reports")} selected</span>
           <div>
-            <button type="button" class="btn sm primary" disabled={busy} onclick={clearPicked}>{show === "cleared" ? "Restore selected" : "Clear selected"}</button>
-            {#if show === "cleared"}<button type="button" class="btn sm ghost del" disabled={busy} onclick={deletePicked}>Delete selected</button>{/if}
+            <button type="button" class="btn sm primary" disabled={busy} onclick={archivePicked}>{show === "archived" ? "Restore selected" : "Archive selected"}</button>
+            {#if show === "archived"}<button type="button" class="btn sm ghost del" disabled={busy} onclick={deletePicked}>Delete selected</button>{/if}
             <button type="button" class="btn sm ghost" onclick={() => (picked = [])}>Unselect all</button>
           </div>
         </div>
@@ -237,7 +240,7 @@
             <th class="pick">
               {#if pickable.length}
                 <input type="checkbox" checked={allPicked} indeterminate={somePicked} onchange={(e) => toggleAll(e.currentTarget.checked)}
-                  aria-label={show === "cleared" ? "Select every cleared report" : "Select every report that can be cleared"} />
+                  aria-label={show === "archived" ? "Select every archived report" : "Select every report that can be archived"} />
               {/if}
             </th>
             {#each COLUMNS as c (c.key)}
@@ -276,9 +279,9 @@
                 {#if can.hold}<button class="btn sm" disabled={busy} onclick={() => hold(r)}>Hold<span class="sr-only"> {r.client_name}</span></button>{/if}
                 {#if can.resume}<button class="btn sm" disabled={busy} onclick={() => resume(r)}>Resume<span class="sr-only"> {r.client_name}</span></button>{/if}
                 {#if can.sendNow}<button class="btn sm" disabled={busy} onclick={() => sendNow(r)}>Send now<span class="sr-only"> {r.client_name}</span></button>{/if}
-                {#if can.clear}<button class="btn sm ghost" disabled={busy} onclick={() => clear(r)}>Clear<span class="sr-only"> {r.client_name} {periodLabel(r)} from the list</span></button>{/if}
+                {#if can.clear}<button class="btn sm ghost" disabled={busy} onclick={() => archive(r)}>Archive<span class="sr-only"> {r.client_name} {periodLabel(r)}</span></button>{/if}
                 {#if can.restore}<button class="btn sm" disabled={busy} onclick={() => restore(r)}>Restore<span class="sr-only"> {r.client_name} {periodLabel(r)} to the list</span></button>{/if}
-                {#if show === "cleared" && can.remove}<button class="btn sm ghost del" disabled={busy} onclick={() => deleteOne(r)}>Delete<span class="sr-only"> {r.client_name} {periodLabel(r)} for good</span></button>{/if}
+                {#if show === "archived" && can.remove}<button class="btn sm ghost del" disabled={busy} onclick={() => deleteOne(r)}>Delete<span class="sr-only"> {r.client_name} {periodLabel(r)} for good</span></button>{/if}
                 <button class="btn sm ghost" onclick={() => open(r.id)}>Open<span class="sr-only"> {r.client_name} {periodLabel(r)}</span></button>
               </td>
             </tr>
@@ -289,7 +292,7 @@
   {:else}
     <section class="card">
       <p class="empty">
-        {show === "cleared" ? "Nothing cleared. Clear a finished report (sent, failed, cancelled or a test) to take it off the list." : rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
+        {show === "archived" ? "Nothing archived. Archive a finished report (sent, failed, cancelled or a test) to take it off the list." : rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
       </p>
     </section>
   {/if}
@@ -298,9 +301,11 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .mode { font-size: 13px; font-weight: 600; text-decoration: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-2); }
-  .mode.live { border-color: var(--lime); color: var(--lime); }
-  .mode:hover { color: var(--text); }
+  .mode { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .mode i { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex: none; }
+  .mode.live i { background: var(--lime); box-shadow: 0 0 6px rgba(214, 255, 63, 0.45); }
+  .mode.live span { color: var(--text); }
+  .mode a { color: var(--lime); text-underline-offset: 3px; }
   /* A little lighter than --critical so it stays readable on a ticked row's tint (4.5:1). */
   .del { color: color-mix(in srgb, var(--critical) 85%, white); }
   .summary { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
