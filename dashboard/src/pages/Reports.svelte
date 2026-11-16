@@ -241,7 +241,7 @@
           <span>{plural(picked.length, "report", "reports")} selected</span>
           <div>
             <button type="button" class="btn sm" disabled={busy} onclick={archivePicked}>{show === "archived" ? "Restore selected" : "Archive selected"}</button>
-            {#if show === "archived"}<button type="button" class="btn sm ghost del" disabled={busy} onclick={deletePicked}>Delete selected</button>{/if}
+            {#if show === "archived"}<button type="button" class="btn sm ghost danger" disabled={busy} onclick={deletePicked}>Delete selected</button>{/if}
             <button type="button" class="btn sm ghost" onclick={() => (picked = [])}>Unselect all</button>
           </div>
         </div>
@@ -278,7 +278,7 @@
                   <input type="checkbox" checked={picked.includes(r.id)} onchange={(e) => togglePick(r.id, e.currentTarget.checked)} aria-label="Select {r.client_name}, {periodLabel(r)}{r.is_test ? ' (test)' : ''}" />
                 {/if}
               </td>
-              <td class="who"><a href="#/reports/{r.id}"><strong>{r.client_name}</strong></a></td>
+              <td class="rname"><a href="#/reports/{r.id}"><strong>{r.client_name}</strong></a></td>
               <td class="rep">{periodLabel(r)}</td>
               <td class="st">
                 <ReportPill label={st.label} tone={st.tone} test={r.is_test} />
@@ -311,23 +311,22 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .mode { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .mode { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
   .mode i { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex: none; }
   .mode.live i { background: var(--lime); box-shadow: 0 0 6px rgba(214, 255, 63, 0.45); }
   .mode.live span { color: var(--text); }
   .mode a { color: var(--lime); text-underline-offset: 3px; }
-  /* A little lighter than --critical so it stays readable on a ticked row's tint (4.5:1). */
-  .del { color: color-mix(in srgb, var(--critical) 85%, white); }
+  /* A little lighter than --critical so it stays readable on the selected bar (4.5:1). */
+  .picked .danger { color: color-mix(in srgb, var(--critical) 85%, white); }
   .summary { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
   .next { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .when { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
-  .next .muted { font-size: 14px; }
-  .warn { color: var(--warning); font-size: 13px; }
+  .when { font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.02em; }
+  .next .muted { font-size: var(--fs-md); }
+  .warn { color: var(--warning); font-size: var(--fs-sm); }
   .bulk { display: flex; gap: 8px; flex-wrap: wrap; }
   .filters { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px 12px; flex-wrap: wrap; }
-  .search { width: 240px; height: 36px; flex: 0 1 240px; min-width: 0; }
+  .search { width: 240px; height: var(--control-md); flex: 0 1 240px; min-width: 0; }
   .list { margin-bottom: 16px; }
-  .flush { padding: 8px 8px 0; }
   .list .table { table-layout: fixed; }
   /* The sortable headings are their own component, so reach them by position. */
   .list :global(th:nth-child(1)) { width: 44px; }
@@ -341,24 +340,24 @@
   .list tbody tr.on { background: color-mix(in srgb, var(--lime) 7%, transparent); }
   .picked {
     position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 5; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px;
-    margin: 4px 4px 8px; padding: 10px 12px; border: 1px solid var(--lime); border-radius: 10px; background: var(--surface-2); font-size: 14px; font-weight: 600;
+    margin: 4px 4px 8px; padding: 10px 12px; border: 1px solid var(--lime); border-radius: var(--radius-md); background: var(--surface-2); font-size: var(--fs-md); font-weight: 600;
   }
   .picked div { display: flex; gap: 8px; flex-wrap: wrap; }
-  .who { min-width: 0; }
-  .who a { text-decoration: none; }
-  .who a:hover strong { text-decoration: underline; }
-  .rep { font-size: 14px; color: var(--text-2); }
-  .gen, .when-cell { font-size: 13px; color: var(--text-2); }
+  .rname { min-width: 0; }
+  .rname a { text-decoration: none; }
+  .rname a:hover strong { text-decoration: underline; }
+  .rep { font-size: var(--fs-md); color: var(--text-2); }
+  .gen, .when-cell { font-size: var(--fs-sm); color: var(--text-2); }
   .when-cell .lbl { display: none; }
   .st { min-width: 0; }
-  .stnote { display: block; margin-top: 4px; font-size: 13px; color: var(--text-2); }
+  .stnote { display: block; margin-top: 4px; font-size: var(--fs-sm); color: var(--text-2); }
   .stnote.warn { color: var(--warning); }
   .phone-sort { display: none; }
   .acts { white-space: nowrap; text-align: right; }
   .acts .btn { margin-left: 4px; }
   /* Below a full desktop width each report is a card: the table's columns are too narrow for their text. */
   @media (max-width: 1100px) {
-    .flush { padding: 4px; }
+    .list { padding: 4px; }
     .table thead { display: none; }
     .table, .table tbody { display: block; }
     .table tbody tr {
@@ -371,14 +370,14 @@
     .table td.hide-md { display: none; }
     /* The checkbox column keeps its width on rows without one, so names line up. */
     .table td.pick { grid-area: pick; padding-top: 2px; }
-    .table td.who { grid-area: who; }
+    .table td.rname { grid-area: who; }
     .rep { grid-area: rep; }
     .st { grid-area: st; }
     .when-cell { grid-area: when; }
     .when-cell .lbl { display: inline; }
     .acts { grid-area: acts; align-self: center; }
     .phone-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 8px 12px; border-bottom: 1px solid var(--line); }
-    .phone-sort .selall { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; font-size: 13px; color: var(--text-2); }
+    .phone-sort .selall { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; font-size: var(--fs-sm); color: var(--text-2); }
     .phone-sort .selall input { width: 18px; height: 18px; accent-color: var(--lime); }
   }
   @media (max-width: 640px) {

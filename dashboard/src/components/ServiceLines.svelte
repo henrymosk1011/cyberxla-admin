@@ -128,7 +128,7 @@
             </label>
             <span class="total num" aria-label="Line total">{money(l.amount)}</span>
           </div>
-          <button class="x" aria-label="Remove {l.name}" title="Remove" onclick={() => removeLine(l)}>×</button>
+          <button class="iconbtn danger" aria-label="Remove {l.name}" title="Remove" onclick={() => removeLine(l)}>×</button>
         </li>
       {/each}
     </ul>
@@ -189,53 +189,28 @@
   .lines li { display: grid; grid-template-columns: 16px minmax(0, 1fr) 112px auto 28px; gap: 10px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--line); animation: rise 0.3s var(--ease) both; }
   .nm { display: flex; flex-direction: column; min-width: 0; }
   .name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 6px; }
-  .note { border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 2px 0; border-bottom: 1px dashed transparent; width: 100%; }
+  .tag { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--line-2); border-radius: var(--radius-pill); padding: 1px 6px; }
+  .note { border: 0; background: transparent; color: var(--muted); font-size: var(--fs-xs); padding: 2px 0; border-bottom: 1px dashed transparent; width: 100%; }
   .note:hover, .note:focus { border-bottom-color: var(--line-2); color: var(--text-2); }
-  .billing { height: 34px; font-size: 13px; padding: 0 32px 0 10px; background-position: right 10px center; }
+  .billing { height: var(--control-sm); font-size: var(--fs-sm); padding: 0 32px 0 10px; background-position: right 10px center; }
   .calc { display: flex; align-items: center; gap: 6px; }
-  .calc .amount { width: 104px; }
-  .amount.qty { width: 62px; }
-  .times { color: var(--muted); font-size: 13px; }
+  .times { color: var(--muted); font-size: var(--fs-sm); }
   .total { min-width: 84px; text-align: right; font-weight: 650; }
-  .amount { display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--ink); transition: border-color 0.15s; }
-  .amount:focus-within { border-color: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
-  .amount span { color: var(--muted); }
-  .amount input { width: 100%; border: 0; background: transparent; outline: none; text-align: right; font-weight: 600; -moz-appearance: textfield; appearance: textfield; }
-  .amount input::-webkit-inner-spin-button, .amount input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-  .qdot { width: 8px; height: 8px; border-radius: 50%; justify-self: center; }
-  .qdot.mo { background: var(--lime); box-shadow: 0 0 6px rgba(214, 255, 63, 0.4); }
-  .qdot.once { border: 1.5px solid var(--muted); }
-  .x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 6px; padding: 2px 6px; transition: color 0.15s, background 0.15s; }
-  .x:hover { color: var(--critical); background: var(--surface-2); }
+  .qdot { justify-self: center; }
   .addbtn { margin-top: 12px; }
-  .saved { font-size: 13px; color: var(--good-text); white-space: nowrap; }
+  .saved { font-size: var(--fs-sm); color: var(--good-text); white-space: nowrap; }
   .problem { margin-top: 10px; }
-  .picker { margin-top: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--ink); padding: 12px; max-height: 420px; overflow-y: auto; animation: rise 0.3s var(--ease) both; }
-  .phead { display: flex; gap: 8px; position: sticky; top: -12px; background: var(--ink); padding-bottom: 8px; z-index: 1; }
-  .phead .input { flex: 1; height: 36px; }
-  .catname { margin: 12px 4px 6px; }
-  .options { list-style: none; }
-  .options button { width: 100%; display: grid; grid-template-columns: 1fr auto 24px; gap: 10px; align-items: center; text-align: left; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; font-size: 14px; transition: background 0.15s; }
-  .options button:hover { background: var(--surface-2); }
-  .options .muted { font-size: 12px; }
-  .plus { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); color: var(--text-2); transition: background 0.2s, color 0.2s, transform 0.3s var(--ease-spring); }
-  .options button:hover .plus { background: var(--lime); color: var(--on-lime); border-color: var(--lime); transform: rotate(90deg); }
-  .none { padding: 8px 4px; font-size: 13px; }
   .cr { display: grid; grid-template-columns: minmax(0, 1fr) 112px 104px auto 62px auto; gap: 8px; align-items: center; }
-  .cr .amount { height: 36px; }
-  .cr .input { height: 36px; }
+  .cr .amount { height: var(--control-md); }
+  .cr .input { height: var(--control-md); }
   .cr select.input { padding: 0 32px 0 10px; background-position: right 10px center; }
-  .hint { font-size: 12px; margin-top: 8px; }
-  .totals { display: flex; gap: 32px; padding: 16px 4px 4px; margin-top: 12px; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
-  .totals div { display: flex; flex-direction: column; }
-  .totals strong { font-size: 20px; font-weight: 650; }
+  .hint { font-size: var(--fs-xs); margin-top: 8px; }
   @media (max-width: 640px) {
     .lines li { grid-template-columns: 16px minmax(0, 1fr) 28px; }
     .billing { grid-column: 2; }
     .calc { grid-column: 2; }
     .calc .amount:first-child { flex: 1 1 0; width: auto; min-width: 0; }
-    .lines li > .x { grid-column: 3; grid-row: 1; }
+    .lines li > .iconbtn { grid-column: 3; grid-row: 1; }
     .cr { grid-template-columns: minmax(0, 1fr) auto 62px; }
     .cr .input:first-child, .cr select.input { grid-column: 1 / -1; }
   }

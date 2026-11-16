@@ -111,16 +111,16 @@
 
 <style>
   .wrap { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; align-content: center; gap: 20px; padding: 24px 16px; background: radial-gradient(1200px 600px at 50% -10%, rgba(214,255,63,0.07), transparent 60%), var(--plane); }
-  .panel { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
+  .panel { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 32px; display: flex; flex-direction: column; gap: 18px; }
   .brand { display: flex; }
   .panel { animation: rise 0.6s var(--ease) both; }
-  h1 { font-size: 26px; letter-spacing: -0.03em; }
-  .lead { color: var(--text-2); font-size: 14px; }
+  h1 { font-size: var(--fs-xl); letter-spacing: -0.03em; }
+  .lead { color: var(--text-2); font-size: var(--fs-md); }
   form { display: flex; flex-direction: column; gap: 14px; }
-  .qr { align-self: center; background: #fff; border-radius: 12px; padding: 10px; line-height: 0; }
-  .secret { font-size: 13px; background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px; text-align: center; letter-spacing: 0.1em; overflow-wrap: anywhere; }
+  .qr { align-self: center; background: #fff; border-radius: var(--radius-md); padding: 10px; line-height: 0; }
+  .secret { font-size: var(--fs-sm); background: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px; text-align: center; letter-spacing: 0.1em; overflow-wrap: anywhere; }
   /* Full width of the card and no wider: the spaced digits must not stretch it past a phone screen. */
-  .code { font-size: 22px; letter-spacing: 0.4em; text-align: center; height: 52px; width: 100%; min-width: 0; }
+  .code { font-size: var(--fs-xl); letter-spacing: 0.4em; text-align: center; height: 52px; width: 100%; min-width: 0; }
   form .input { min-width: 0; }
-  .foot { font-size: 12px; }
+  .foot { font-size: var(--fs-xs); }
 </style>

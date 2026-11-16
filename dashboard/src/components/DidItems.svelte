@@ -117,26 +117,20 @@
 {/if}
 
 <style>
-  .tip { font-size: 12.5px; color: var(--muted); }
+  .tip { font-size: var(--fs-xs); color: var(--muted); }
   .items { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-  li { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: end; border-radius: 10px; }
+  li { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: end; border-radius: var(--radius-md); }
   .field { min-width: 0; }
   .input { width: 100%; min-width: 0; }
-  .grip {
-    align-self: end; width: 26px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 8px;
-    background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: grab;
-    touch-action: none; user-select: none; -webkit-user-select: none; transition: color 0.15s, background 0.15s;
-  }
-  .grip:hover, .grip:focus-visible { color: var(--lime); background: var(--surface-2); }
-  .grip:disabled { cursor: default; opacity: 0.5; }
-  @media (pointer: coarse) { .grip { width: 36px; font-size: 18px; } }
+  /* As tall as the fields beside it. */
+  .grip { align-self: end; height: var(--control-lg); }
   .dragging, .dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
   li.placeholder { outline: 1.5px dashed var(--line-2); outline-offset: 2px; background: rgba(214, 255, 63, 0.04); }
   li.placeholder > * { visibility: hidden; }
   .lifted {
     position: fixed; z-index: 60; pointer-events: none; display: flex; align-items: center; gap: 10px;
-    padding: 12px 14px; border: 1px solid var(--lime); border-radius: 10px; background: var(--surface-3);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5); font-size: 14px;
+    padding: 12px 14px; border: 1px solid var(--lime); border-radius: var(--radius-md); background: var(--surface-3);
+    box-shadow: var(--shadow-md); font-size: var(--fs-md);
   }
   .lifted .g { color: var(--lime); }
   @media (max-width: 640px) {

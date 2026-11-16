@@ -32,16 +32,16 @@
 </header>
 
 <style>
-  .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
+  .back { display: inline-block; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; margin-bottom: 16px; }
   .back:hover { color: var(--text); }
   .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 20px; }
   .titles { min-width: 0; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; overflow-wrap: anywhere; }
+  h1 { font-size: var(--fs-2xl); letter-spacing: -0.035em; line-height: 1.1; overflow-wrap: anywhere; }
   .eyebrow + h1 { margin-top: 4px; }
-  .sub { font-size: 14px; color: var(--muted); margin-top: 6px; max-width: 760px; }
+  .sub { font-size: var(--fs-md); color: var(--muted); margin-top: 6px; max-width: 760px; }
   .tools { display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex: none; max-width: 100%; }
   /* A search box in the tools has a set width, so it never pushes the buttons to a second row. */
-  .tools :global(.search) { width: 280px; height: 38px; flex: 0 1 280px; min-width: 0; }
+  .tools :global(.search) { width: 280px; height: var(--control-md); flex: 0 1 280px; min-width: 0; }
   @media (max-width: 1100px) {
     .tools :global(.search) { width: 220px; flex-basis: 220px; }
   }
@@ -50,8 +50,13 @@
     .tools { justify-content: flex-start; flex-wrap: wrap; }
     .tools :global(.search) { flex: 1 1 200px; width: auto; }
   }
+  /* A record's headline number stays beside its name until the screen is phone sized. */
+  @media (min-width: 641px) and (max-width: 860px) {
+    .head:has(:global(.headvalue)) { flex-direction: row; align-items: flex-end; }
+    .head:has(:global(.headvalue)) .tools { justify-content: flex-end; flex-wrap: nowrap; }
+  }
   @media (max-width: 640px) {
-    h1 { font-size: 26px; }
+    h1 { font-size: var(--fs-xl); }
     .tools :global(.search) { flex: 1 1 100%; }
   }
 </style>

@@ -240,10 +240,8 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .lead { color: var(--text-2); font-size: 14px; max-width: 760px; margin-top: 10px; }
-  code { font-family: var(--mono); font-size: 0.92em; color: var(--lime); }
-  .callout { border: 1px solid var(--line-2); border-left: 3px solid var(--warning); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; background: var(--surface); }
-  .callout p { margin-top: 2px; color: var(--text-2); }
+  .lead { color: var(--text-2); font-size: var(--fs-md); max-width: 760px; margin-top: 10px; }
+  code { font-family: var(--mono); font-size: 1em; color: var(--lime); }
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
   .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .side { position: sticky; top: 16px; min-width: 0; }
@@ -252,16 +250,16 @@
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .wide { grid-column: 1 / -1; }
   .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .field label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+  .field label { font-size: var(--fs-sm); font-weight: 500; color: var(--text-2); }
   .input { width: 100%; min-width: 0; }
   textarea.input { line-height: 1.5; }
-  .hint { font-size: 12.5px; color: var(--muted); }
-  .periodbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 5; padding: 8px 12px; border-radius: 999px; background: var(--plane); border: 1px solid var(--line); align-self: flex-start; }
-  .periodbar span { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .hint { font-size: var(--fs-xs); color: var(--muted); }
+  .periodbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 5; padding: 8px 12px; border-radius: var(--radius-pill); background: var(--plane); border: 1px solid var(--line); align-self: flex-start; }
+  .periodbar span { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
   fieldset.cols5 { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-  fieldset legend { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+  fieldset legend { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
   .reset { flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-  .phs { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+  .phs { display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-sm); }
   .phs div { display: flex; flex-direction: column; gap: 1px; }
   .phs dd { color: var(--text-2); }
   @media (max-width: 1100px) {
@@ -271,6 +269,6 @@
   @media (max-width: 640px) {
     .grid { grid-template-columns: 1fr; }
     fieldset.cols5 { grid-template-columns: 1fr 1fr; }
-    .periodbar { border-radius: 14px; }
+    .periodbar { border-radius: var(--radius); }
   }
 </style>

@@ -18,8 +18,8 @@
 
 <style>
   .bars { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-  li { display: grid; grid-template-columns: minmax(90px, 38%) 1fr; align-items: center; gap: 12px; font-size: 13px; }
-  li:hover .fill { background: #e4ff7a; }
+  li { display: grid; grid-template-columns: minmax(90px, 38%) 1fr; align-items: center; gap: 12px; font-size: var(--fs-sm); }
+  li:hover .fill { background: var(--lime-hover); }
   li:hover .name { color: var(--text); }
   .name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .track { display: flex; align-items: center; gap: 8px; min-width: 0; }

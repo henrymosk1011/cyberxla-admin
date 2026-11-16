@@ -82,21 +82,21 @@
 <style>
   dialog {
     margin: auto; padding: 0; width: min(1000px, calc(100% - 24px)); max-height: calc(100dvh - 24px);
-    border: 1px solid var(--line-2); border-radius: 16px; background: var(--surface); color: var(--text);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); overflow: hidden;
+    border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface); color: var(--text);
+    box-shadow: var(--shadow-lg); overflow: hidden;
   }
   dialog[open] { display: flex; flex-direction: column; animation: pop-in 0.25s var(--ease) both; }
   dialog::backdrop { background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(2px); }
   @keyframes pop-in { from { opacity: 0; transform: scale(0.98); } }
   header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-  h2 { font-size: 16px; font-weight: 600; }
+  h2 { font-size: var(--fs-base); font-weight: 600; }
   h2 span { margin-left: 8px; font-weight: 500; color: var(--text-2); }
   /* Scrolling past the first or last page stops here, not on the page behind. */
   .frame {
     position: relative; flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain;
     display: flex; flex-direction: column; gap: 16px; padding: 16px; background: var(--plane);
   }
-  img { display: block; flex: none; width: 100%; max-width: 935px; height: auto; margin: 0 auto; border-radius: 4px; background: #fff; }
+  img { display: block; flex: none; width: 100%; max-width: 935px; height: auto; margin: 0 auto; border-radius: var(--radius-sm); background: #fff; }
   @media (max-width: 640px) {
     .frame { padding: 8px; gap: 8px; }
     h2 span { display: block; margin: 2px 0 0; }

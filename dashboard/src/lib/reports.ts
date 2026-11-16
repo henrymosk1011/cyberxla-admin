@@ -104,20 +104,6 @@ export function sortReports<T extends Pick<ReportRow, "client_name" | "period" |
   return [...rows].sort((a, b) => sign * by[key](a, b) || time(b.send_at) - time(a.send_at) || a.client_name.localeCompare(b.client_name));
 }
 
-/** Reports grouped by the day they send (tests on their own), soonest last week first. */
-export function groupBySend<T extends Pick<ReportRow, "send_at" | "is_test" | "client_name" | "period">>(rows: T[]) {
-  const day = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
-  const groups = new Map<string, { key: string; label: string; at: number; rows: T[] }>();
-  for (const r of rows) {
-    const d = new Date(r.send_at);
-    const key = r.is_test ? "test" : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    if (!groups.has(key)) groups.set(key, { key, label: r.is_test ? "Test reports" : `Sending ${day.format(d)}`, at: r.is_test ? -Infinity : d.getTime(), rows: [] });
-    groups.get(key)!.rows.push(r);
-  }
-  for (const g of groups.values()) g.rows.sort((a, b) => a.client_name.localeCompare(b.client_name) || (a.period === "weekly" ? -1 : 1));
-  return [...groups.values()].sort((a, b) => b.at - a.at);
-}
-
 /** Reports in the current send window: what Hold all and Resume all act on. */
 export function thisWeek<T extends Pick<ReportRow, "send_at" | "is_test" | "status">>(rows: T[], now = Date.now()) {
   const live = rows.filter((r) => !r.is_test && now - new Date(r.send_at).getTime() <= SEND_GRACE_MS);

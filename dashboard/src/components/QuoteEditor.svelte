@@ -85,7 +85,7 @@
         <span class="qdot" class:mo={it.kind === "monthly"} class:once={it.kind !== "monthly"} aria-hidden="true"></span>
         <span class="name"><span class="nm">{it.name}{#if added.includes(it.id)}<span class="tag">New</span>{/if}</span><small>{unitPrice(byId.get(it.id))}</small></span>
         <span class="price num">{it.from ? "from " : ""}{money(it.cost)}<small>{it.kind === "monthly" ? "/mo" : "one time"}</small></span>
-        <button type="button" class="x" aria-label="Remove {it.name}" title="Remove" onclick={() => remove(it.id)} disabled={ids.length === 1}>×</button>
+        <button type="button" class="iconbtn danger" aria-label="Remove {it.name}" title="Remove" onclick={() => remove(it.id)} disabled={ids.length === 1}>×</button>
       </li>
     {/each}
   </ul>
@@ -100,7 +100,7 @@
         <button type="button" class="btn ghost sm" onclick={() => { picking = false; search = ""; }}>Done</button>
       </div>
       {#each available as cat (cat.name)}
-        <p class="eyebrow cat">{cat.name}</p>
+        <p class="eyebrow catname">{cat.name}</p>
         <ul class="options">
           {#each cat.ids as id (id)}
             <li>
@@ -135,49 +135,33 @@
 
 <style>
   .editor { display: flex; flex-direction: column; gap: 14px; animation: rise 0.35s var(--ease) both; }
-  .devices { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; padding: 14px; border-radius: 12px; background: var(--ink); border: 1px solid var(--line); }
+  .devices { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; padding: 14px; border-radius: var(--radius-md); background: var(--ink); border: 1px solid var(--line); }
   .dev { display: flex; flex-direction: column; gap: 6px; }
-  .stepper { display: flex; align-items: center; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+  .stepper { display: flex; align-items: center; border: 1px solid var(--line-2); border-radius: var(--radius-md); overflow: hidden; }
   /* The number field has no outline of its own; the whole stepper lights up instead. */
   .stepper:has(input:focus-visible) { border-color: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
   .stepper button:focus-visible { outline-offset: -2px; }
-  .stepper button { width: 34px; height: 34px; border: 0; background: var(--surface-2); font-size: 16px; transition: background 0.15s; }
+  .stepper button { width: 34px; height: var(--control-sm); border: 0; background: var(--surface-2); font-size: var(--fs-base); transition: background 0.15s; }
   .stepper button:hover { background: var(--lime); color: var(--on-lime); }
-  .stepper input { width: 64px; height: 34px; border: 0; background: transparent; text-align: center; font-variant-numeric: tabular-nums; outline: none; -moz-appearance: textfield; appearance: textfield; }
+  .stepper input { width: 64px; height: var(--control-sm); border: 0; background: transparent; text-align: center; font-variant-numeric: tabular-nums; outline: none; -moz-appearance: textfield; appearance: textfield; }
   .stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-  .hint { font-size: 12px; margin-left: auto; }
+  .hint { font-size: var(--fs-xs); margin-left: auto; }
   .items { list-style: none; display: flex; flex-direction: column; }
   .items li { display: grid; grid-template-columns: 16px 1fr auto 28px; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); animation: rise 0.3s var(--ease) both; }
   .items li.new { background: linear-gradient(90deg, rgba(214, 255, 63, 0.06), transparent 60%); }
   .name { display: flex; flex-direction: column; min-width: 0; }
-  .name small, .price small { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .name small, .price small { font-size: var(--fs-xs); color: var(--muted); font-weight: 400; }
   .price { text-align: right; font-weight: 600; display: flex; flex-direction: column; }
   .nm { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; }
-  .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lime); }
-  .qdot { width: 8px; height: 8px; border-radius: 50%; justify-self: center; }
-  .qdot.mo { background: var(--lime); box-shadow: 0 0 6px rgba(214, 255, 63, 0.4); }
-  .qdot.once { border: 1.5px solid var(--muted); }
-  .x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 6px; padding: 2px 6px; transition: color 0.15s, background 0.15s; }
-  .x:hover:not(:disabled) { color: var(--critical); background: var(--surface-2); }
-  .x:disabled { opacity: 0.3; cursor: not-allowed; }
-  .removed { font-size: 13px; }
+  .tag { display: inline-block; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lime); }
+  .qdot { justify-self: center; }
+  .removed { font-size: var(--fs-sm); }
   .addbtn { align-self: flex-start; }
-  .picker { border: 1px solid var(--line-2); border-radius: 12px; background: var(--ink); padding: 12px; max-height: 360px; overflow-y: auto; animation: rise 0.3s var(--ease) both; }
-  .phead { display: flex; gap: 8px; position: sticky; top: -12px; background: var(--ink); padding: 0 0 8px; z-index: 1; }
-  .phead .input { flex: 1; height: 36px; }
-  .cat { margin: 12px 4px 6px; }
-  .options { list-style: none; }
-  .options button { width: 100%; display: grid; grid-template-columns: 1fr auto 24px; gap: 10px; align-items: center; text-align: left; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; font-size: 14px; transition: background 0.15s; }
-  .options button:hover { background: var(--surface-2); }
-  .options .muted { font-size: 12px; }
-  .plus { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); color: var(--text-2); transition: background 0.2s, color 0.2s, transform 0.3s var(--ease-spring); }
-  .options button:hover .plus { background: var(--lime); color: var(--on-lime); border-color: var(--lime); transform: rotate(90deg); }
-  .none { padding: 12px 4px; font-size: 13px; }
+  .picker { margin-top: 0; }
   .foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--line-2); }
-  .totals { display: flex; gap: 32px; }
-  .totals div { display: flex; flex-direction: column; }
-  .totals strong { font-size: 20px; font-weight: 650; }
-  .small { font-size: 12px; }
+  /* Here the totals sit in the editor's own footer, so no rule or space of their own. */
+  .totals { padding: 0; margin: 0; border: 0; }
+  .small { font-size: var(--fs-xs); }
   .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .actions .error { width: 100%; text-align: right; }
 </style>

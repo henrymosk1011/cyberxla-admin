@@ -32,10 +32,10 @@
 </dialog>
 
 <style>
-  dialog { margin: auto; width: min(420px, calc(100% - 32px)); border: 1px solid var(--line-2); border-radius: 16px; background: var(--surface-2); color: var(--text); padding: 24px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); }
+  dialog { margin: auto; width: min(420px, calc(100% - 32px)); border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--surface-2); color: var(--text); padding: 24px; box-shadow: var(--shadow-lg); }
   dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
-  h2 { font-size: 20px; letter-spacing: -0.02em; }
-  p { margin-top: 8px; color: var(--text-2); font-size: 14px; overflow-wrap: anywhere; }
+  h2 { font-size: var(--fs-lg); letter-spacing: -0.02em; }
+  p { margin-top: 8px; color: var(--text-2); font-size: var(--fs-md); overflow-wrap: anywhere; }
   .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
   /* The dialog is reused; don't animate the color swap between Archive and Delete. */
   .row .btn { transition: none; }

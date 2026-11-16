@@ -95,7 +95,7 @@
 
 <section class="card">
   <div class="card-head"><h2>Reports</h2><button class="btn sm" onclick={() => (editing = true)}>Edit<span class="sr-only"> report settings</span></button></div>
-  <dl class="facts">
+  <dl class="factlist">
     <div><dt>Sending</dt><dd><ReportPill label={client.reports_enabled ? "On, weekly and monthly" : "Off"} tone={client.reports_enabled ? "good" : "muted"} /></dd></div>
     <div><dt>Action1 group</dt><dd class:unset={!client.action1_group}>{client.action1_group || "Not set"}</dd></div>
     <div><dt>Send to</dt><dd class:unset={!to0}>{to0 || "Not set"}</dd></div>
@@ -103,7 +103,7 @@
     <div><dt>Always left off</dt><dd class:unset={!offCount}>{offCount ? `${offCount} ${offCount === 1 ? "computer" : "computers"}` : "None"}</dd></div>
     <div><dt>UniFi console</dt><dd class:unset={!client.unifi_console}>{client.unifi_console || "Not set"}</dd></div>
   </dl>
-  {#if changed && !editing}<p class="draft">You have unsaved changes here. <button class="link" onclick={() => (editing = true)}>Keep editing</button></p>{/if}
+  {#if changed && !editing}<p class="draft">You have unsaved changes here. <button class="linkbtn" onclick={() => (editing = true)}>Keep editing</button></p>{/if}
   {#if reports.length}
     <ul class="recent">
       {#each reports as r (r.id)}
@@ -138,21 +138,14 @@
 </Modal>
 
 <style>
-  .facts { display: flex; flex-direction: column; gap: 10px; }
-  .facts div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: baseline; font-size: 14px; }
-  dt { color: var(--muted); font-size: 13px; }
-  dd { overflow-wrap: anywhere; }
-  .unset { color: var(--text-2); }
-  .draft { margin-top: 12px; font-size: 13px; color: var(--warning); }
-  .link { border: 0; background: none; padding: 0; color: var(--lime); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
   .form { display: flex; flex-direction: column; gap: 12px; }
   .form :global(.input) { width: 100%; min-width: 0; }
   .form :global(textarea.input) { min-height: 76px; }
-  .hint { font-size: 12.5px; color: var(--muted); }
-  .check { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; }
+  .hint { font-size: var(--fs-xs); color: var(--muted); }
+  .check { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-md); }
   .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .row { display: flex; justify-content: flex-end; gap: 8px; }
-  .recent { list-style: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+  .recent { list-style: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-sm); }
   .recent li { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .recent a { color: var(--text); }
 </style>

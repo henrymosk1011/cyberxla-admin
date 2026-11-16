@@ -82,7 +82,7 @@
   svg { display: block; overflow: visible; }
   line { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
   line.base { stroke: var(--axis); }
-  .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .tick { fill: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
   .bar { fill: var(--lime); transition: opacity 0.2s; transform-box: fill-box; transform-origin: 50% 100%; animation: grow 0.7s var(--ease) both; }
   @keyframes grow { from { transform: scaleY(0); } }
   .bar.dim { opacity: 0.35; }
@@ -92,8 +92,8 @@
   .tip {
     position: absolute; transform: translate(-50%, -100%); pointer-events: none; z-index: 2;
     display: flex; flex-direction: column; gap: 1px; white-space: nowrap;
-    background: var(--surface-3); border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 12px;
-    font-size: 12px; color: var(--text-2); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    background: var(--surface-3); border: 1px solid var(--line-2); border-radius: var(--radius-md); padding: 8px 12px;
+    font-size: var(--fs-xs); color: var(--text-2); box-shadow: var(--shadow-sm);
   }
-  .tip strong { font-size: 15px; color: var(--text); font-weight: 650; }
+  .tip strong { font-size: var(--fs-base); color: var(--text); font-weight: 650; }
 </style>

@@ -4,9 +4,12 @@
   import Menu from "../components/Menu.svelte";
   import Credentials from "../components/Credentials.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
+  import ActivityCard from "../components/ActivityCard.svelte";
   import Field from "../components/Field.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
+  import StageButtons from "../components/StageButtons.svelte";
   import LoadState from "../components/LoadState.svelte";
-  import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
+  import { guardUnsaved } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeCredential, describeLine, describeProject } from "../lib/activity.ts";
   import { dateTime, money, shortDate, STATUS_LABEL } from "../lib/format.ts";
@@ -23,7 +26,6 @@
   let errors = $state<{ name?: string; owner?: string }>({});
   let saving = $state<"" | "details" | "notes">("");
   let confirm: Confirm;
-  let showHidden = $state(false);
 
   // Editable copies
   let details = $state({ name: "", owner: "", due_on: "" });
@@ -78,8 +80,6 @@
   const once = $derived(lines.filter((l) => l.billing === "once").reduce((s, l) => s + l.amount, 0));
   const detailsDirty = $derived(!!project && (details.name !== project.name || details.owner !== ownerValue(project) || details.due_on !== (project.due_on ?? "")));
   const notesDirty = $derived(!!project && notes !== (project.notes ?? ""));
-  const visibleActivity = $derived(activity.filter((a) => showHidden || !a.hidden));
-  const hiddenCount = $derived(activity.filter((a) => a.hidden).length);
 
   /** Run an action, say how it went (the message shows wherever you are on the page), and reload. True when it worked. */
   async function run(fn: () => Promise<void>, ok = ""): Promise<boolean> {
@@ -146,24 +146,18 @@
 {:else if project === null}
   <p class="empty">This project doesn't exist or was deleted.</p>
 {:else}
-  <header class="head">
-    <div>
-      <p class="eyebrow">Project{project.due_on ? ` · due ${shortDate(project.due_on + "T12:00:00")}` : ""}</p>
-      <h1 use:pageHeading>{project.name}</h1>
+  <PageHeader eyebrow={`Project${project.due_on ? ` · due ${shortDate(project.due_on + "T12:00:00")}` : ""}`} title={project.name}>
+    {#snippet meta()}
       {#if owner}<p class="contact"><span>{owner.kind}</span><a href={owner.href}>{owner.label} →</a></p>{/if}
-    </div>
-    <div class="value">
-      <span class="big num">{money(once)}<small>one time</small></span>
+    {/snippet}
+    <div class="headvalue">
+      <span class="big num">{money(once)}<small> one time</small></span>
       <span class="muted num">+ {money(monthly)}/mo · {money(monthly * 12)}/yr</span>
       <div class="headacts"><Menu label="More actions for this project" items={[{ label: "Delete project", danger: true, onselect: deleteProject }]} /></div>
     </div>
-  </header>
+  </PageHeader>
 
-  <div class="stages" role="group" aria-label="Status">
-    {#each PROJECT_STATUSES as s (s)}
-      <button class="stage ps-{s}" aria-pressed={project.status === s} onclick={() => setStatus(s)}><i aria-hidden="true"></i>{STATUS_LABEL[s]}</button>
-    {/each}
-  </div>
+  <StageButtons label="Status" options={PROJECT_STATUSES} value={project.status} onpick={setStatus} />
 
   <div class="cols">
     <div class="main">
@@ -203,23 +197,7 @@
         </form>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Activity</h2>
-          {#if hiddenCount}<button class="btn ghost sm" onclick={() => (showHidden = !showHidden)}>{showHidden ? "Hide" : "Show"} removed ({hiddenCount})</button>{/if}
-        </div>
-        <ol class="timeline">
-          {#each visibleActivity as a (a.id)}
-            <li class:hidden-entry={a.hidden}>
-              <span class="dot" aria-hidden="true"></span>
-              <div><p>{describe(a)}</p><span class="muted small">{dateTime(a.at)}{a.hidden ? " · removed" : ""}</span></div>
-              <button class="x" title={a.hidden ? "Put back on the timeline" : "Remove from timeline"} aria-label={a.hidden ? "Restore this entry" : "Remove this entry from the timeline"} onclick={() => toggleHidden(a)}>{a.hidden ? "↺" : "×"}</button>
-            </li>
-          {:else}
-            <li class="muted">No activity yet.</li>
-          {/each}
-        </ol>
-      </section>
+      <ActivityCard {activity} {describe} ontoggle={toggleHidden} />
     </aside>
   </div>
 {/if}
@@ -227,42 +205,8 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
-  .back:hover { color: var(--text); }
-  .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 34px; letter-spacing: -0.035em; line-height: 1.1; margin: 4px 0 8px; overflow-wrap: anywhere; }
-  .contact { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; color: var(--text-2); }
-  .contact a { color: var(--lime); text-decoration: none; overflow-wrap: anywhere; }
-  .contact a:hover { text-decoration: underline; }
-  .value { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-  .big { font-size: 34px; font-weight: 650; letter-spacing: -0.03em; color: var(--lime); }
-  .big small { font-size: 15px; color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 6px; }
-  .headacts { margin-top: 8px; }
-  .stages { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
-  .stage { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 600; transition: background 0.2s, color 0.2s, border-color 0.2s; }
-  .stage:hover { background: var(--surface-2); color: var(--text); }
-  .stage[aria-pressed="true"] { background: var(--surface-3); color: var(--text); border-color: var(--text-2); }
-  .stage i { width: 8px; height: 8px; border-radius: 50%; }
-  .ps-potential i { background: var(--st-new); } .ps-proposed i { background: var(--st-proposal); } .ps-in_progress i { background: var(--st-contacted); }
-  .ps-on_hold i { background: var(--warning); } .ps-done i { background: var(--good); } .ps-cancelled i { background: var(--st-lost); }
-  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
-  .main, .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   textarea.input { width: 100%; }
   .row { display: flex; justify-content: flex-end; margin-top: 10px; }
   .form { display: flex; flex-direction: column; gap: 10px; }
-  .form :global(.input) { height: 38px; width: 100%; min-width: 0; }
-  .x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 6px; padding: 2px 6px; transition: color 0.15s, background 0.15s; }
-  .x:hover { color: var(--critical); background: var(--surface-2); }
-  .timeline { list-style: none; display: flex; flex-direction: column; gap: 14px; }
-  .timeline li { display: flex; gap: 12px; font-size: 13px; align-items: flex-start; }
-  .timeline li > div { flex: 1; min-width: 0; }
-  .timeline .dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--axis); flex: none; }
-  .timeline li:first-child .dot { background: var(--lime); }
-  .timeline .x { font-size: 16px; opacity: 0; }
-  .timeline li:hover .x, .timeline .x:focus-visible { opacity: 1; }
-  .timeline li.hidden-entry p { color: var(--muted); }
-  .timeline li.hidden-entry .x { opacity: 1; }
-  .small { font-size: 12px; }
-  @media (hover: none) { .timeline .x { opacity: 1; } }
-  @media (max-width: 980px) { .cols { grid-template-columns: 1fr; } .value { align-items: flex-start; } }
+  .form :global(.input) { height: var(--control-md); width: 100%; min-width: 0; }
 </style>

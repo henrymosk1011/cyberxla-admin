@@ -17,7 +17,7 @@
 
 <style>
   .subnav { display: flex; gap: 4px; margin: -4px 0 20px; border-bottom: 1px solid var(--line); }
-  a { padding: 10px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; font-size: 14px; font-weight: 600; color: var(--text-2); text-decoration: none; transition: color 0.15s, background 0.15s; }
+  a { padding: 10px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; font-size: var(--fs-md); font-weight: 600; color: var(--text-2); text-decoration: none; transition: color 0.15s, background 0.15s; }
   a:hover { color: var(--text); background: var(--surface); }
   a[aria-current="page"] { color: var(--text); border-bottom-color: var(--lime); }
 </style>

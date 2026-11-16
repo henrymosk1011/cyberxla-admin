@@ -4,8 +4,11 @@
   import Menu from "../components/Menu.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import QuoteEditor from "../components/QuoteEditor.svelte";
+  import ActivityCard from "../components/ActivityCard.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
+  import StageButtons from "../components/StageButtons.svelte";
   import LoadState from "../components/LoadState.svelte";
-  import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
+  import { guardUnsaved } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeProject } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
@@ -45,7 +48,6 @@
   let saving = $state(false);
   let loadError = $state("");
   let showArchived = $state(false);
-  let showHidden = $state(false);
   // Per-quote line item filter, like the quote builder's.
   let itemFilter = $state<Record<string, "all" | "monthly" | "once">>({});
   let editing = $state<Record<string, boolean>>({});
@@ -59,8 +61,6 @@
 
   const activeQuotes = $derived(quotes.filter((q) => !q.archived_at));
   const archivedQuotes = $derived(quotes.filter((q) => q.archived_at));
-  const visibleActivity = $derived(activity.filter((a) => showHidden || !a.hidden));
-  const hiddenCount = $derived(activity.filter((a) => a.hidden).length);
 
   /** Run an action and reload; a failure is said in a message that shows wherever you are on the page. */
   async function run(fn: () => Promise<void>, failMsg: string) {
@@ -206,40 +206,35 @@
 {:else if lead === null}
   <p class="empty">This lead doesn't exist or was deleted.</p>
 {:else}
-  <header class="head">
-    <div class="id">
-      <p class="eyebrow">Lead · since {shortDate(lead.created_at)}</p>
-      <h1 use:pageHeading>{lead.company || lead.name}</h1>
+  {@const l = lead}
+  <PageHeader eyebrow={`Lead · since ${shortDate(l.created_at)}`} title={l.company || l.name}>
+    {#snippet meta()}
       <p class="contact">
-        {#if lead.company}<span>{lead.name}</span>{/if}
-        <a href="mailto:{lead.email}">{lead.email}</a>
-        {#if lead.phone}<a href={tel(lead.phone)}>{phone(lead.phone)}</a>{/if}
+        {#if l.company}<span>{l.name}</span>{/if}
+        <a href="mailto:{l.email}">{l.email}</a>
+        {#if l.phone}<a href={tel(l.phone)}>{phone(l.phone)}</a>{/if}
       </p>
-    </div>
-    <div class="value">
-      <span class="big num">{money(lead.value_monthly)}<small>/mo</small></span>
-      <span class="muted num">{money(lead.value_one_time)} one time</span>
-      <div class="acts">
+    {/snippet}
+    <div class="headvalue">
+      <span class="big num">{money(l.value_monthly)}<small>/mo</small></span>
+      <span class="muted num">{money(l.value_one_time)} one time</span>
+      <div class="headacts">
         {#if clientFor}
           <a class="btn sm" href="#/clients/{clientFor}">View client →</a>
         {:else}
-          <button class="btn sm" class:primary={lead.status === "won"} disabled={converting} onclick={convert}>{converting ? "Converting…" : "Convert to client"}</button>
+          <button class="btn sm" class:primary={l.status === "won"} disabled={converting} onclick={convert}>{converting ? "Converting…" : "Convert to client"}</button>
         {/if}
-        <button class="btn sm" onclick={toggleArchiveLead}>{lead.archived_at ? "Restore lead" : "Archive lead"}</button>
+        <button class="btn sm" onclick={toggleArchiveLead}>{l.archived_at ? "Restore lead" : "Archive lead"}</button>
         <Menu label="More actions for this lead" items={[{ label: "Delete lead", danger: true, onselect: deleteLead }]} />
       </div>
     </div>
-  </header>
+  </PageHeader>
 
   {#if lead.archived_at}
     <p class="banner">This lead is archived ({shortDate(lead.archived_at)}). It's hidden from your pipeline and stats.</p>
   {/if}
 
-  <div class="stages" role="group" aria-label="Stage">
-    {#each LEAD_STATUSES as s (s)}
-      <button class="stage st-{s}" aria-pressed={lead.status === s} onclick={() => setStatus(s)}><i aria-hidden="true"></i>{STATUS_LABEL[s]}</button>
-    {/each}
-  </div>
+  <StageButtons label="Stage" options={LEAD_STATUSES} value={lead.status} onpick={setStatus} />
 
   <div class="cols">
     <div class="main">
@@ -277,31 +272,13 @@
           {#each notes as n (n.id)}
             <li>
               <div><p>{n.body}</p><span class="muted small">{dateTime(n.created_at)}</span></div>
-              <button class="x" title="Delete note" aria-label="Delete this note" onclick={() => deleteNote(n)}>×</button>
+              <button class="iconbtn danger" title="Delete note" aria-label="Delete this note" onclick={() => deleteNote(n)}>×</button>
             </li>
           {/each}
         </ul>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Activity</h2>
-          {#if hiddenCount}
-            <button class="btn ghost sm" onclick={() => (showHidden = !showHidden)}>{showHidden ? "Hide" : "Show"} removed ({hiddenCount})</button>
-          {/if}
-        </div>
-        <ol class="timeline">
-          {#each visibleActivity as a (a.id)}
-            <li class:hidden-entry={a.hidden}>
-              <span class="dot" aria-hidden="true"></span>
-              <div><p>{describe(a)}</p><span class="muted small">{dateTime(a.at)}{a.hidden ? " · removed" : ""}</span></div>
-              <button class="x" title={a.hidden ? "Put back on the timeline" : "Remove from timeline"} aria-label={a.hidden ? "Restore this entry" : "Remove this entry from the timeline"} onclick={() => toggleHidden(a)}>{a.hidden ? "↺" : "×"}</button>
-            </li>
-          {:else}
-            <li class="muted">No activity yet.</li>
-          {/each}
-        </ol>
-      </section>
+      <ActivityCard {activity} {describe} ontoggle={toggleHidden} />
     </aside>
   </div>
 {/if}
@@ -359,72 +336,36 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
-  .back:hover { color: var(--text); }
-  .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 34px; letter-spacing: -0.035em; line-height: 1.1; margin: 4px 0 8px; overflow-wrap: anywhere; }
-  .contact { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--text-2); }
-  .contact a { color: var(--lime); text-decoration: none; overflow-wrap: anywhere; }
-  .contact a:hover { text-decoration: underline; }
-  .value { display: flex; flex-direction: column; align-items: flex-end; }
-  .big { font-size: 32px; font-weight: 650; letter-spacing: -0.03em; color: var(--lime); }
-  .big small { font-size: 16px; color: var(--muted); }
-  .stages { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
-  .stage { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 600; }
-  .stage:hover { background: var(--surface-2); color: var(--text); }
-  .stage[aria-pressed="true"] { background: var(--surface-3); color: var(--text); border-color: var(--text-2); }
-  .stage i { width: 8px; height: 8px; border-radius: 50%; }
-  .st-new i { background: var(--st-new); } .st-contacted i { background: var(--st-contacted); } .st-proposal i { background: var(--st-proposal); }
-  .st-won i { background: var(--st-won); } .st-lost i { background: var(--st-lost); }
-  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
-  .main, .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .sel { height: 34px; padding: 0 36px 0 12px; font-size: 13px; background-position: right 12px center; }
+  .sel { height: var(--control-sm); padding: 0 36px 0 12px; font-size: var(--fs-sm); background-position: right 12px center; }
   /* The dot and its word stay on one line. */
-  .kind { display: inline-flex; align-items: center; white-space: nowrap; font-size: 12px; color: var(--muted); }
+  .kind { display: inline-flex; align-items: center; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
+  .kind.mo { color: var(--text-2); }
+  .qdot { margin-right: 7px; }
   .quote .card-head { flex-wrap: wrap; }
   .quote .card-head > div:first-child { flex: 1 1 200px; min-width: 0; }
-  .kind.mo { color: var(--text-2); }
-  .totals { display: flex; gap: 32px; padding: 16px 12px 4px; border-top: 1px solid var(--line-2); margin-top: 4px; }
-  .totals div { display: flex; flex-direction: column; }
-  .totals strong { font-size: 20px; font-weight: 650; }
-  .small { font-size: 12px; }
-  blockquote { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--lime); background: var(--ink); border-radius: 0 8px 8px 0; color: var(--text-2); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .small { font-size: var(--fs-xs); }
+  blockquote { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--lime); background: var(--ink); border-radius: 0 8px 8px 0; color: var(--text-2); font-size: var(--fs-md); white-space: pre-wrap; overflow-wrap: anywhere; }
   form { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
   form textarea { width: 100%; }
   .notes { list-style: none; margin-top: 16px; display: flex; flex-direction: column; }
   .notes li { display: flex; gap: 8px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); animation: rise 0.35s var(--ease) both; }
   .notes li > div { flex: 1; min-width: 0; }
-  .notes .x, .timeline .x { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 6px; opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s; }
-  .notes li:hover .x, .notes .x:focus-visible { opacity: 1; }
-  .notes .x:hover { color: var(--critical); background: var(--surface-2); }
+  .notes p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-md); }
+  /* A note's delete button shows on hover or keyboard focus, and always on touch screens. */
+  .notes .iconbtn { opacity: 0; }
+  .notes li:hover .iconbtn, .notes .iconbtn:focus-visible { opacity: 1; }
+  @media (hover: none) { .notes .iconbtn { opacity: 1; } }
   .ifilter { margin: -4px 0 12px; }
-  .ifilter .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
   .ifilter button:disabled { opacity: 0.4; cursor: default; }
-  .qdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; }
-  .qdot.mo { background: var(--lime); box-shadow: 0 0 6px rgba(214, 255, 63, 0.4); }
-  .qdot.once { border: 1.5px solid var(--muted); }
   .irow { animation: rise 0.3s var(--ease) both; }
-  .notes p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
-  .timeline { list-style: none; display: flex; flex-direction: column; gap: 14px; }
-  .timeline li { display: flex; gap: 12px; font-size: 13px; align-items: flex-start; }
-  .timeline li > div { flex: 1; min-width: 0; }
-  .timeline li:hover .x, .timeline .x:focus-visible { opacity: 1; }
-  .timeline .x:hover { color: var(--text); background: var(--surface-2); }
-  .timeline li.hidden-entry p { color: var(--muted); }
-  .timeline li.hidden-entry .x { opacity: 1; }
-  @media (hover: none) { .timeline .x, .notes .x { opacity: 1; } }
-  .acts { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .qacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-  .banner { margin-bottom: 16px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--text-2); font-size: 14px; }
+  .banner { margin-bottom: 16px; padding: 10px 14px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--line-2); color: var(--text-2); font-size: var(--fs-md); }
   /* Archived quotes are marked by the dashed edge and the Archived tag, not by fading the text. */
   .quote.archived { border-style: dashed; }
-  .tag { margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--warning); vertical-align: 2px; }
+  .tag { margin-left: 8px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--warning); vertical-align: 2px; }
   .toggle { align-self: flex-start; }
-  .moved { font-size: 14px; }
+  .moved { font-size: var(--fs-md); }
   .moved a { color: var(--lime); }
-  .timeline .dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--axis); flex: none; }
-  .timeline li:first-child .dot { background: var(--lime); }
-  @media (max-width: 980px) { .cols { grid-template-columns: 1fr; } .value { align-items: flex-start; } }
   @media (max-width: 640px) {
     .qacts { justify-content: flex-start; width: 100%; }
     .quote .table th, .quote .table td { padding-left: 4px; padding-right: 4px; }
