@@ -11,8 +11,10 @@ export class BadRequest extends Error {}
 // render: bring the PDFs up to the latest edits. rebuild: build them again even
 // if they're up to date (the Rebuild button). send_now: send it now. unifi:
 // check the report's client's UniFi console now (Check now on the UniFi tab).
-export type Action = "render" | "rebuild" | "send_now" | "unifi";
-export const ACTIONS: readonly Action[] = ["render", "rebuild", "send_now", "unifi"];
+// copy: email Henry a copy as the client would get it (Send me a copy); it
+// never goes to the client and doesn't change the report.
+export type Action = "render" | "rebuild" | "send_now" | "unifi" | "copy";
+export const ACTIONS: readonly Action[] = ["render", "rebuild", "send_now", "unifi", "copy"];
 export type ReportState = {
   id: string;
   status: "scheduled" | "held" | "sending" | "sent" | "failed" | "cancelled";
@@ -45,12 +47,16 @@ export type Workflow = "send.yml" | "render.yml" | "unifi-check.yml";
 /**
  * The GitHub call that starts a workflow: send.yml and render.yml for one
  * report, unifi-check.yml for one client (id is then the client's id).
- * force (render.yml only) renders even if up to date.
+ * force (render.yml only) renders even if up to date. copy (send.yml only)
+ * emails Henry a copy instead of sending the report.
  */
-export function dispatchRequest(repo: string, workflow: Workflow, id: string, token: string, force = false) {
+export function dispatchRequest(repo: string, workflow: Workflow, id: string, token: string, force = false, copy = false) {
   if (!REPO.test(repo)) throw new Error("REPORTS_REPO must look like owner/name");
   if (!UUID.test(id)) throw new Error(workflow === "unifi-check.yml" ? "bad client id" : "bad report id");
-  const inputs = workflow === "unifi-check.yml" ? { client_id: id } : force && workflow === "render.yml" ? { report_id: id, force: "true" } : { report_id: id };
+  const inputs = workflow === "unifi-check.yml" ? { client_id: id }
+    : force && workflow === "render.yml" ? { report_id: id, force: "true" }
+    : copy && workflow === "send.yml" ? { report_id: id, copy: "true" }
+    : { report_id: id };
   return {
     url: `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`,
     init: {
