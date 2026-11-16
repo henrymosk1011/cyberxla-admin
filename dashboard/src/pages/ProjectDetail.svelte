@@ -1,8 +1,10 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import Menu from "../components/Menu.svelte";
   import Credentials from "../components/Credentials.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
+  import Field from "../components/Field.svelte";
   import LoadState from "../components/LoadState.svelte";
   import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
@@ -17,7 +19,8 @@
   let lines = $state<ProjectService[]>([]);
   let activity = $state<AuditEntry[]>([]);
   let loadError = $state("");
-  let detailsError = $state("");
+  // What is wrong with each field of the details form, shown under it.
+  let errors = $state<{ name?: string; owner?: string }>({});
   let saving = $state<"" | "details" | "notes">("");
   let confirm: Confirm;
   let showHidden = $state(false);
@@ -93,10 +96,14 @@
   }
   async function saveDetails(e: SubmitEvent) {
     e.preventDefault();
-    detailsError = "";
-    if (!details.name.trim()) { detailsError = "Give the project a name."; return; }
+    errors = {};
+    if (!details.name.trim()) errors.name = "Give the project a name.";
     const o = parseOwner(details.owner);
-    if (!o) { detailsError = "Pick the client or lead it's for."; return; }
+    if (!o) errors.owner = "Pick the client or lead it's for.";
+    if (!o || errors.name) {
+      document.getElementById(errors.name ? "p-name" : "p-for")?.focus();
+      return;
+    }
     saving = "details";
     await run(() => db.updateProject(id, { name: details.name.trim(), ...o, due_on: details.due_on || null }), "Details saved.");
     saving = "";
@@ -148,7 +155,7 @@
     <div class="value">
       <span class="big num">{money(once)}<small>one time</small></span>
       <span class="muted num">+ {money(monthly)}/mo · {money(monthly * 12)}/yr</span>
-      <button class="btn sm ghost del" onclick={deleteProject}>Delete project</button>
+      <div class="headacts"><Menu label="More actions for this project" items={[{ label: "Delete project", danger: true, onselect: deleteProject }]} /></div>
     </div>
   </header>
 
@@ -181,17 +188,17 @@
     <aside class="side">
       <section class="card">
         <div class="card-head"><h2>Details</h2></div>
-        <form class="form" onsubmit={saveDetails}>
-          <div class="field"><label for="p-name">Name</label><input id="p-name" class="input" maxlength="120" bind:value={details.name} /></div>
-          <div class="field">
-            <label for="p-for">For</label>
-            <select id="p-for" class="input" bind:value={details.owner}>
-              {#if choices.clients.length}<optgroup label="Clients">{#each choices.clients as c (c.value)}<option value={c.value}>{c.label}</option>{/each}</optgroup>{/if}
-              {#if choices.leads.length}<optgroup label="Leads">{#each choices.leads as l (l.value)}<option value={l.value}>{l.label}</option>{/each}</optgroup>{/if}
-            </select>
-          </div>
-          <div class="field"><label for="p-due">Due date</label><input id="p-due" class="input" type="date" bind:value={details.due_on} /></div>
-          {#if detailsError}<p class="error" role="alert">{detailsError}</p>{/if}
+        <form class="form" onsubmit={saveDetails} novalidate>
+          <Field id="p-name" label="Name" required error={errors.name}>{#snippet children(a)}<input {...a} class="input" maxlength="120" bind:value={details.name} />{/snippet}</Field>
+          <Field id="p-for" label="For" required error={errors.owner}>
+            {#snippet children(a)}
+              <select {...a} class="input" bind:value={details.owner}>
+                {#if choices.clients.length}<optgroup label="Clients">{#each choices.clients as c (c.value)}<option value={c.value}>{c.label}</option>{/each}</optgroup>{/if}
+                {#if choices.leads.length}<optgroup label="Leads">{#each choices.leads as l (l.value)}<option value={l.value}>{l.label}</option>{/each}</optgroup>{/if}
+              </select>
+            {/snippet}
+          </Field>
+          <Field id="p-due" label="Due date">{#snippet children(a)}<input {...a} class="input" type="date" bind:value={details.due_on} />{/snippet}</Field>
           <div class="row"><button class="btn primary sm" disabled={!detailsDirty || saving === "details"}>{saving === "details" ? "Saving…" : "Save details"}</button></div>
         </form>
       </section>
@@ -230,7 +237,7 @@
   .value { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
   .big { font-size: 34px; font-weight: 650; letter-spacing: -0.03em; color: var(--lime); }
   .big small { font-size: 15px; color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 6px; }
-  .del { color: var(--critical); margin-top: 8px; }
+  .headacts { margin-top: 8px; }
   .stages { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
   .stage { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 600; transition: background 0.2s, color 0.2s, border-color 0.2s; }
   .stage:hover { background: var(--surface-2); color: var(--text); }
@@ -243,8 +250,7 @@
   textarea.input { width: 100%; }
   .row { display: flex; justify-content: flex-end; margin-top: 10px; }
   .form { display: flex; flex-direction: column; gap: 10px; }
-  .form .input { height: 38px; width: 100%; min-width: 0; }
-  .form .field { min-width: 0; }
+  .form :global(.input) { height: 38px; width: 100%; min-width: 0; }
   .x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; border-radius: 6px; padding: 2px 6px; transition: color 0.15s, background 0.15s; }
   .x:hover { color: var(--critical); background: var(--surface-2); }
   .timeline { list-style: none; display: flex; flex-direction: column; gap: 14px; }

@@ -2,6 +2,7 @@
   import { onDestroy, tick } from "svelte";
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import Menu, { type MenuItem } from "../components/Menu.svelte";
   import DidItems from "../components/DidItems.svelte";
   import PageLightbox from "../components/PageLightbox.svelte";
   import ReportPill from "../components/ReportPill.svelte";
@@ -307,6 +308,11 @@
       await act(() => db.reportAction(id, "send_now"), "Sending. It shows Sent in a minute or two.");
   }
   const setStatus = (status: Report["status"], ok: string) => act(() => db.updateReport(id, { status }), ok);
+  // The less common actions, behind the More button in the header.
+  const moreItems = $derived<MenuItem[]>([
+    ...(can?.cancel ? [{ label: "Cancel report", onselect: cancelReport }] : []),
+    ...(can?.remove ? [{ label: "Delete report", danger: true, onselect: remove }] : []),
+  ]);
   async function cancelReport() {
     if (await confirm.ask({ title: "Cancel this report?", body: "It won't send. You can put it back on hold later.", action: "Cancel report", danger: true }))
       await setStatus("cancelled", "Cancelled. It won't send.");
@@ -486,8 +492,7 @@
       {#if can.sendNow}<button class="btn primary" disabled={busy || dirty} onclick={sendNow}>Send now</button>{/if}
       {#if can.markSent}<button class="btn" disabled={busy} onclick={markSent}>Mark as sent</button>{/if}
       {#if can.markNotSent}<button class="btn" disabled={busy} onclick={markNotSent}>Mark as not sent</button>{/if}
-      {#if can.cancel}<button class="btn ghost" disabled={busy} onclick={cancelReport}>Cancel report</button>{/if}
-      {#if can.remove}<button class="btn ghost del" disabled={busy} onclick={remove}>Delete</button>{/if}
+      {#if moreItems.length}<Menu label="More actions for this report" items={moreItems} />{/if}
     </div>
   </header>
 

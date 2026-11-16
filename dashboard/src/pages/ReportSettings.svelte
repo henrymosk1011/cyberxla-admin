@@ -86,6 +86,12 @@
           <button type="button" aria-pressed={form.mode === "live"} onclick={() => (form.mode = "live")}>Live</button>
         </div>
         <p class="hint">{form.mode === "live" ? "Live: reports go to each client's recipients, with replies to you." : "Preview: every report comes to you instead, tagged with who it's for. Nothing reaches a client."}</p>
+        <!-- The switch looks instant, so say plainly what is in effect until Save. -->
+        {#if form.mode !== saved.mode}
+          <p class="pending" role="status"><strong>Not saved yet.</strong> The mode is still {saved.mode === "live" ? "Live" : "Preview"}: reports keep {saved.mode === "live" ? "going to clients" : "coming to you only"} until you press Save settings.</p>
+        {:else}
+          <p class="now">In effect now: <strong>{saved.mode === "live" ? "Live" : "Preview"}</strong></p>
+        {/if}
       </fieldset>
 
       <fieldset>
@@ -139,6 +145,8 @@
   fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   legend { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
   .hint { font-size: 13px; color: var(--muted); }
+  .now { font-size: 13px; color: var(--text-2); }
+  .pending { font-size: 13px; color: var(--text); padding: 8px 12px; border: 1px solid var(--warning); border-radius: 10px; background: color-mix(in srgb, var(--warning) 8%, transparent); }
   .check { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; }
   .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

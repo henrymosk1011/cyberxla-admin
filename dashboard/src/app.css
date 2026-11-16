@@ -95,6 +95,8 @@ h1[tabindex="-1"]:focus { outline: none; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn.ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* A main button that can't be pressed goes neutral, so only what you can do is lit. */
+.btn.primary:disabled { background: var(--surface-3); border-color: var(--line-2); color: var(--text-2); box-shadow: none; }
 .btn.sm { height: 30px; padding: 0 12px; font-size: 13px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }

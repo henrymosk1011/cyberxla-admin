@@ -6,6 +6,7 @@
   import Confirm from "./Confirm.svelte";
   import { changePassphrase, createVault, credentialAad, generatePassword, MIN_PASSPHRASE, openSecret, openVault, sealSecret, type CredentialSecret } from "../lib/crypto.ts";
   import { lock, unlock, vault, vaultKey } from "../lib/vault.svelte.ts";
+  import { toast } from "../lib/toast.svelte.ts";
   import type { Credential, VaultConfig } from "../lib/types.ts";
 
   let { projectId, onchange }: { projectId: string; onchange: () => void } = $props();
@@ -24,7 +25,6 @@
   let current = $state("");
   let busy = $state(false);
   let error = $state("");
-  let notice = $state("");
   let copied = $state("");
   let confirm: Confirm;
   let clipTimer: ReturnType<typeof setTimeout> | undefined;
@@ -74,10 +74,7 @@
       busy = false;
     }
   }
-  function flash(msg: string) {
-    notice = msg;
-    setTimeout(() => { if (notice === msg) notice = ""; }, 2500);
-  }
+  const flash = (msg: string) => toast.success(msg);
   function newPassphraseProblem(): string {
     if (pass.length < MIN_PASSPHRASE) return `Use at least ${MIN_PASSPHRASE} characters. A few unrelated words works well.`;
     if (pass !== pass2) return "The two passphrases don't match.";
@@ -94,7 +91,7 @@
       config = v.config;
       unlock(v.key);
       pass = pass2 = "";
-      flash("Vault created");
+      flash("Vault created.");
     });
   }
 
@@ -122,7 +119,7 @@
       config = next;
       changing = false;
       current = pass = pass2 = "";
-      flash("Passphrase changed");
+      flash("Passphrase changed.");
     });
   }
 
@@ -317,7 +314,6 @@
     {/if}
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#if notice}<p class="ok" role="status">✓ {notice}</p>{/if}
 </section>
 
 <Confirm bind:this={confirm} />
@@ -366,7 +362,6 @@
   .small { font-size: 12px; }
   .error { margin-top: 10px; }
   .error.small { margin-top: 6px; }
-  .ok { margin-top: 10px; font-size: 13px; color: var(--good-text); animation: rise 0.3s var(--ease) both; }
   @media (max-width: 640px) {
     .grid2 { grid-template-columns: 1fr; }
     dl { grid-template-columns: 1fr; gap: 2px; }

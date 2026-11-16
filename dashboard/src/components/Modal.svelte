@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  let { open, title, onclose, children, wide = false }: { open: boolean; title: string; onclose: () => void; children: Snippet; wide?: boolean } = $props();
+  let { open, title, onclose, children, wide = false, persistent = false }: {
+    open: boolean; title: string; onclose: () => void; children: Snippet; wide?: boolean;
+    /** True while the form inside has input that would be lost: a click outside then doesn't close it (Escape and the buttons still do). */
+    persistent?: boolean;
+  } = $props();
   let dlg = $state<HTMLDialogElement | null>(null);
   const uid = $props.id();
   $effect(() => {
@@ -10,7 +14,7 @@
   });
 </script>
 
-<dialog bind:this={dlg} class:wide onclose={onclose} onclick={(e) => { if (e.target === dlg) onclose(); }} aria-labelledby="{uid}-title">
+<dialog bind:this={dlg} class:wide onclose={onclose} onclick={(e) => { if (e.target === dlg && !persistent) onclose(); }} aria-labelledby="{uid}-title">
   {#if open}
     <div class="inner">
       <header>

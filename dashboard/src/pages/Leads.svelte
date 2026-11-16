@@ -1,6 +1,9 @@
 <script lang="ts">
   import StatusPill from "../components/StatusPill.svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import SortTh from "../components/SortTh.svelte";
+  import SortSelect from "../components/SortSelect.svelte";
+  import { by, pressed, text, type Sort, type SortDir } from "../lib/sort.ts";
   import ExportDialog from "../components/ExportDialog.svelte";
   import { ago, money, STATUS_LABEL } from "../lib/format.ts";
   import { LEAD_STATUSES, type Client, type Lead, type LeadStatus, type Quote } from "../lib/types.ts";
@@ -12,7 +15,18 @@
 
   let q = $state("");
   let filter = $state<LeadStatus | "all" | "open" | "archived">("open");
-  let sort = $state<"recent" | "value" | "name">("recent");
+  // Column headings sort the list: most recent activity first to start with.
+  type LeadSort = "name" | "stage" | "monthly" | "once" | "quotes" | "recent";
+  const COLUMNS: { key: LeadSort; label: string; first: SortDir; right?: boolean; hide?: "sm" }[] = [
+    { key: "name", label: "Lead", first: "asc" },
+    { key: "stage", label: "Stage", first: "asc" },
+    { key: "monthly", label: "Monthly", first: "desc", right: true },
+    { key: "once", label: "One time", first: "desc", right: true },
+    { key: "quotes", label: "Quotes", first: "desc", right: true, hide: "sm" },
+    { key: "recent", label: "Last activity", first: "desc", right: true, hide: "sm" },
+  ];
+  let sort = $state<Sort<LeadSort>>({ key: "recent", dir: "desc" });
+  const sortBy = (k: LeadSort) => (sort = pressed(sort, k, COLUMNS.find((c) => c.key === k)!.first));
   let dragging = $state<string | null>(null);
   let over = $state<LeadStatus | null>(null);
   let exporting = $state(false);
@@ -30,10 +44,17 @@
   const counts = $derived(Object.fromEntries(LEAD_STATUSES.map((st) => [st, searched.filter((l) => l.status === st).length])) as Record<LeadStatus, number>);
   const rows = $derived.by(() => {
     const r = filter === "archived" ? searchedArchived : searched.filter((l) => filter === "all" || (filter === "open" ? ["new", "contacted", "proposal"].includes(l.status) : l.status === filter));
-    return [...r].sort((a, b) =>
-      sort === "value" ? b.value_monthly - a.value_monthly || b.value_one_time - a.value_one_time
-      : sort === "name" ? (a.company || a.name).localeCompare(b.company || b.name)
-      : b.updated_at.localeCompare(a.updated_at));
+    const cmp: Record<LeadSort, (a: Lead, b: Lead) => number> = {
+      name: (a, b) => text(a.company || a.name, b.company || b.name),
+      stage: (a, b) => LEAD_STATUSES.indexOf(a.status) - LEAD_STATUSES.indexOf(b.status),
+      monthly: (a, b) => a.value_monthly - b.value_monthly,
+      once: (a, b) => a.value_one_time - b.value_one_time,
+      quotes: (a, b) => (quoteCount.get(a.id) ?? 0) - (quoteCount.get(b.id) ?? 0),
+      recent: (a, b) => a.updated_at.localeCompare(b.updated_at),
+    };
+    const sign = sort.dir === "asc" ? 1 : -1;
+    // Ties fall back to the most recent activity.
+    return [...r].sort(by((a, b) => sign * cmp[sort.key](a, b), (a, b) => b.updated_at.localeCompare(a.updated_at)));
   });
   const columns = $derived(LEAD_STATUSES.map((st) => ({ status: st, leads: searched.filter((l) => l.status === st).sort((a, b) => b.updated_at.localeCompare(a.updated_at)) })));
 
@@ -70,21 +91,17 @@
       <button aria-pressed={filter === "all"} onclick={() => (filter = "all")}>All <span class="c">{searched.length}</span></button>
       <button aria-pressed={filter === "archived"} onclick={() => (filter = "archived")}>Archived <span class="c">{searchedArchived.length}</span></button>
     </div>
-    <label class="sort muted">Sort
-      <select class="input sm" bind:value={sort}>
-        <option value="recent">Recent activity</option>
-        <option value="value">Monthly value</option>
-        <option value="name">Name</option>
-      </select>
-    </label>
+    <!-- Phones hide the table's headings, so sorting lives here. -->
+    <div class="phonesort"><SortSelect id="lead-sort" columns={COLUMNS} {sort} onchange={(s) => (sort = s)} /></div>
   </div>
 
   <section class="card flush" class:stale>
     {#if rows.length}
       <div class="scroll">
         <table class="table">
+          <caption class="sr-only">Leads, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
           <thead>
-            <tr><th>Lead</th><th>Stage</th><th class="r">Monthly</th><th class="r">One time</th><th class="r hide-sm">Quotes</th><th class="r hide-sm">Last activity</th></tr>
+            <tr>{#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={sortBy} right={c.right} hide={c.hide ?? ""} />{/each}</tr>
           </thead>
           <tbody>
             {#each rows as l (l.id)}
@@ -152,8 +169,7 @@
   .filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
   .filters .seg { flex-wrap: wrap; border-radius: 14px; }
   .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
-  .sort { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .input.sm { height: 34px; padding: 0 36px 0 12px; background-position: right 12px center; }
+  .phonesort { display: none; }
   .flush { padding: 8px 8px 0; }
   .stale { opacity: 0.6; }
   .scroll { overflow-x: auto; }
@@ -172,11 +188,11 @@
     }
     .filters .seg::-webkit-scrollbar { display: none; }
     .filters .seg button { flex: none; scroll-snap-align: start; }
-    .sort { justify-content: flex-end; }
   }
 
   /* Phones: each lead becomes a compact card. */
   @media (max-width: 640px) {
+    .phonesort { display: block; }
     .flush { padding: 4px; }
     .table thead { display: none; }
     .table, .table tbody { display: block; }

@@ -6,6 +6,7 @@
   import db from "$db";
   import ReportPill from "./ReportPill.svelte";
   import { parseEmails, parseNames, periodLabel, reportState } from "../lib/reports.ts";
+  import { toast } from "../lib/toast.svelte.ts";
   import type { Client, ReportRow } from "../lib/types.ts";
 
   let { client, onsaved, dirty = $bindable(false) }: { client: Client; onsaved: () => void; /** True while the form has unsaved changes. */ dirty?: boolean } = $props();
@@ -18,7 +19,6 @@
   let form = $state({ group: "", to: "", cc: "", enabled: false, off: "", unifi: "" });
   let reports = $state<ReportRow[]>([]);
   let error = $state("");
-  let saved = $state("");
   let busy = $state(false);
 
   // Reset the form only when these saved values change, not every time the
@@ -56,8 +56,7 @@
     busy = true;
     try {
       await db.updateClient(client.id, { action1_group: group || null, report_recipients: to.emails, report_cc: cc.emails, reports_enabled: form.enabled, report_exclude: off, unifi_console: unifi || null });
-      saved = "Saved";
-      setTimeout(() => (saved = ""), 2000);
+      toast.success("Report settings saved.");
       onsaved();
     } catch (err) {
       const m = err instanceof Error ? err.message : "";
@@ -69,7 +68,7 @@
 </script>
 
 <section class="card">
-  <div class="card-head"><h2>Reports</h2>{#if saved}<span class="ok" role="status">✓ {saved}</span>{/if}</div>
+  <div class="card-head"><h2>Reports</h2></div>
   <form class="form" onsubmit={save}>
     <label class="check"><input type="checkbox" bind:checked={form.enabled} /> Send weekly and monthly reports</label>
     <div class="field"><label for="r-group">Action1 group</label><input id="r-group" class="input" maxlength="80" autocomplete="off" bind:value={form.group} aria-describedby="r-group-h" /><span id="r-group-h" class="hint">Exactly as named in Action1.</span></div>
@@ -104,7 +103,6 @@
   .check { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; }
   .check input { width: 18px; height: 18px; accent-color: var(--lime); }
   .row { display: flex; justify-content: flex-end; }
-  .ok { font-size: 13px; color: var(--good-text); }
   .recent { list-style: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
   .recent li { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .recent a { color: var(--text); }
