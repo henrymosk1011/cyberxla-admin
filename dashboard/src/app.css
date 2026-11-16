@@ -23,6 +23,9 @@
   --good-text: #4fd14f;
   --warning: #fab219;
   --critical: #e66767;
+  /* Filled danger buttons: dark enough for white text at 4.5:1. */
+  --danger: #d04444;
+  --danger-hover: #bd3a3a;
   --st-new: #d6ff3f;
   --st-contacted: #3987e5;
   --st-proposal: #9085e9;
@@ -58,6 +61,8 @@ a { color: inherit; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; border-radius: 4px; }
+/* A page heading takes focus after a move to another page; it isn't a control, so no ring. */
+h1[tabindex="-1"]:focus { outline: none; }
 ::selection { background: var(--lime); color: var(--on-lime); }
 
 .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
@@ -99,12 +104,16 @@ button { cursor: pointer; }
   background-color: var(--ink); outline: none; transition: border-color 0.15s;
 }
 .input:focus { border-color: var(--lime); }
+.input:focus-visible { box-shadow: 0 0 0 1px var(--lime); }
+::placeholder { color: var(--muted); opacity: 1; }
 textarea.input { height: auto; padding: 12px 14px; resize: vertical; min-height: 88px; }
 
 .seg { display: inline-flex; background: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
 .seg button { border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 999px; }
 .seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
 .seg button:hover:not([aria-pressed="true"]) { color: var(--text-2); }
+/* Counts inside the selected chip sit on a lighter background, so they need a lighter gray. */
+.seg button[aria-pressed="true"] .c { color: var(--text-2); }
 
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 12px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }

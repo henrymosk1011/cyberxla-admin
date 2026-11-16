@@ -4,6 +4,7 @@
   // Same handle as the Services page.
   import { tick } from "svelte";
   import { flip } from "svelte/animate";
+  import { ms } from "../lib/motion.ts";
 
   type Item = { title: string; text: string };
   // idPrefix keeps field ids unique when two lists are on one page.
@@ -97,7 +98,7 @@
 {#if items.length > 1}<p class="tip">Drag <span aria-hidden="true">⠿</span> to reorder, or focus it and use the up and down arrow keys.</p>{/if}
 <ol class="items" bind:this={list} class:dragging={!!drag}>
   {#each items as it, i (keyOf(it))}
-    <li data-key={keyOf(it)} class:placeholder={drag?.key === keyOf(it)} animate:flip={{ duration: 200 }}>
+    <li data-key={keyOf(it)} class:placeholder={drag?.key === keyOf(it)} animate:flip={{ duration: ms(200) }}>
       <button type="button" class="grip" data-handle={keyOf(it)} title="Drag to reorder"
         aria-label="Move item {i + 1}, {name(it)}. Drag, or use the up and down arrow keys."
         onpointerdown={(e) => startDrag(e, it)} onkeydown={(e) => keyMove(e, it)}>⠿</button>

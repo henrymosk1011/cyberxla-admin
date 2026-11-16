@@ -4,7 +4,7 @@
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import QuoteEditor from "../components/QuoteEditor.svelte";
   import LoadState from "../components/LoadState.svelte";
-  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeProject } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
@@ -208,7 +208,7 @@
   <header class="head">
     <div class="id">
       <p class="eyebrow">Lead · since {shortDate(lead.created_at)}</p>
-      <h1>{lead.company || lead.name}</h1>
+      <h1 use:pageHeading>{lead.company || lead.name}</h1>
       <p class="contact">
         {#if lead.company}<span>{lead.name}</span>{/if}
         <a href="mailto:{lead.email}">{lead.email}</a>
@@ -269,7 +269,7 @@
       <section class="card">
         <div class="card-head"><h2>Notes</h2></div>
         <form onsubmit={addNote}>
-          <textarea class="input" placeholder="Call notes, next steps…" maxlength="10000" bind:value={draft}></textarea>
+          <textarea class="input" placeholder="Call notes, next steps…" maxlength="10000" aria-label="New note" bind:value={draft}></textarea>
           <button class="btn primary sm" disabled={saving || !draft.trim()}>{saving ? "Saving…" : "Add note"}</button>
         </form>
         <ul class="notes">
@@ -407,7 +407,7 @@
   .timeline li > div { flex: 1; min-width: 0; }
   .timeline li:hover .x, .timeline .x:focus-visible { opacity: 1; }
   .timeline .x:hover { color: var(--text); background: var(--surface-2); }
-  .timeline li.hidden-entry { opacity: 0.5; }
+  .timeline li.hidden-entry p { color: var(--muted); }
   .timeline li.hidden-entry .x { opacity: 1; }
   @media (hover: none) { .timeline .x, .notes .x { opacity: 1; } }
   .acts { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; justify-content: flex-end; }
@@ -415,7 +415,8 @@
   .del { color: var(--critical); }
   .del:hover { color: #ff9a9a; }
   .banner { margin-bottom: 16px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--text-2); font-size: 14px; }
-  .quote.archived { opacity: 0.7; border-style: dashed; }
+  /* Archived quotes are marked by the dashed edge and the Archived tag, not by fading the text. */
+  .quote.archived { border-style: dashed; }
   .tag { margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--warning); vertical-align: 2px; }
   .toggle { align-self: flex-start; }
   .moved { font-size: 14px; }

@@ -4,7 +4,7 @@
   import Credentials from "../components/Credentials.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
   import LoadState from "../components/LoadState.svelte";
-  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeCredential, describeLine, describeProject } from "../lib/activity.ts";
   import { dateTime, money, shortDate, STATUS_LABEL } from "../lib/format.ts";
@@ -142,7 +142,7 @@
   <header class="head">
     <div>
       <p class="eyebrow">Project{project.due_on ? ` · due ${shortDate(project.due_on + "T12:00:00")}` : ""}</p>
-      <h1>{project.name}</h1>
+      <h1 use:pageHeading>{project.name}</h1>
       {#if owner}<p class="contact"><span>{owner.kind}</span><a href={owner.href}>{owner.label} →</a></p>{/if}
     </div>
     <div class="value">
@@ -170,8 +170,8 @@
         onremove={(l) => run(() => db.deleteProjectService(l.id))} />
 
       <section class="card">
-        <div class="card-head"><div><h2>Notes</h2><p class="sub">Not encrypted. Keep passwords and keys in Credentials.</p></div></div>
-        <textarea class="input" rows="6" maxlength="20000" placeholder="Scope, site details, contacts, next steps…" bind:value={notes}></textarea>
+        <div class="card-head"><div><h2 id="project-notes-h">Notes</h2><p class="sub" id="project-notes-d">Not encrypted. Keep passwords and keys in Credentials.</p></div></div>
+        <textarea class="input" rows="6" maxlength="20000" placeholder="Scope, site details, contacts, next steps…" aria-labelledby="project-notes-h" aria-describedby="project-notes-d" bind:value={notes}></textarea>
         <div class="row"><button class="btn primary sm" disabled={!notesDirty || saving === "notes"} onclick={saveNotes}>{saving === "notes" ? "Saving…" : "Save notes"}</button></div>
       </section>
 
@@ -254,7 +254,7 @@
   .timeline li:first-child .dot { background: var(--lime); }
   .timeline .x { font-size: 16px; opacity: 0; }
   .timeline li:hover .x, .timeline .x:focus-visible { opacity: 1; }
-  .timeline li.hidden-entry { opacity: 0.5; }
+  .timeline li.hidden-entry p { color: var(--muted); }
   .timeline li.hidden-entry .x { opacity: 1; }
   .small { font-size: 12px; }
   @media (hover: none) { .timeline .x { opacity: 1; } }

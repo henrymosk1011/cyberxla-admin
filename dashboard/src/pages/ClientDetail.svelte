@@ -5,7 +5,7 @@
   import ServiceLines from "../components/ServiceLines.svelte";
   import ClientReportsCard from "../components/ClientReportsCard.svelte";
   import LoadState from "../components/LoadState.svelte";
-  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeLine, describeProject, describeReport } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
@@ -141,7 +141,7 @@
   <header class="head">
     <div>
       <p class="eyebrow">Client{client.started_on ? ` · since ${shortDate(client.started_on + "T12:00:00")}` : ""}</p>
-      <h1>{title}</h1>
+      <h1 use:pageHeading>{title}</h1>
       <p class="contact">
         {#if client.company && client.contact_name}<span>{client.contact_name}</span>{/if}
         {#if client.email}<a href="mailto:{client.email}">{client.email}</a>{/if}
@@ -176,8 +176,8 @@
       <ProjectsCard {projects} lines={projectLines} owner={{ lead_id: null, client_id: id }} noun="client" />
 
       <section class="card">
-        <div class="card-head"><h2>Notes</h2></div>
-        <textarea class="input" rows="4" maxlength="10000" placeholder="Contract terms, renewal dates, quirks…" bind:value={notes}></textarea>
+        <div class="card-head"><h2 id="client-notes-h">Notes</h2></div>
+        <textarea class="input" rows="4" maxlength="10000" placeholder="Contract terms, renewal dates, quirks…" aria-labelledby="client-notes-h" bind:value={notes}></textarea>
         <div class="row"><button class="btn primary sm" disabled={!notesDirty || saving === "notes"} onclick={saveNotes}>{saving === "notes" ? "Saving…" : "Save notes"}</button></div>
       </section>
     </div>
@@ -261,7 +261,7 @@
   .timeline li:first-child .dot { background: var(--lime); }
   .timeline .x { font-size: 16px; opacity: 0; }
   .timeline li:hover .x, .timeline .x:focus-visible { opacity: 1; }
-  .timeline li.hidden-entry { opacity: 0.5; }
+  .timeline li.hidden-entry p { color: var(--muted); }
   .timeline li.hidden-entry .x { opacity: 1; }
   .small { font-size: 12px; }
   @media (hover: none) { .timeline .x { opacity: 1; } }

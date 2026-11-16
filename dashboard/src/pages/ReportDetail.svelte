@@ -7,7 +7,7 @@
   import ReportPill from "../components/ReportPill.svelte";
   import LoadState from "../components/LoadState.svelte";
   import SaveBar from "../components/SaveBar.svelte";
-  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { guardUnsaved, pageHeading } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeReport } from "../lib/activity.ts";
   import { resolveTemplate } from "../lib/template.ts";
@@ -474,7 +474,7 @@
   <header class="head">
     <div class="title">
       <p class="eyebrow">{periodLabel(report)} · {report.period_key} · generated {dateTime(report.created_at)}</p>
-      <h1>{report.client_name}</h1>
+      <h1 use:pageHeading>{report.client_name}</h1>
       <div class="state">
         <ReportPill label={st.label} tone={st.tone} test={report.is_test} />
         <span class="muted">{st.note}</span>

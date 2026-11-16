@@ -20,3 +20,19 @@ export function guardUnsaved(dirty: () => boolean, ask: () => Promise<boolean>) 
     };
   });
 }
+
+/** Set by the router when the page changes. */
+export const arrival = { pending: false };
+
+/**
+ * For a page's main heading (use:pageHeading). After a move to another page,
+ * focus lands on the heading, so keyboard and screen reader users start at the
+ * top of the new page instead of nowhere.
+ */
+export function pageHeading(el: HTMLElement) {
+  el.tabIndex = -1;
+  if (arrival.pending) {
+    arrival.pending = false;
+    el.focus({ preventScroll: true });
+  }
+}

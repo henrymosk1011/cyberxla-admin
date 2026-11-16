@@ -190,7 +190,7 @@
   .nm { display: flex; flex-direction: column; min-width: 0; }
   .name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 6px; }
-  .note { border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 2px 0; outline: none; border-bottom: 1px dashed transparent; width: 100%; }
+  .note { border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 2px 0; border-bottom: 1px dashed transparent; width: 100%; }
   .note:hover, .note:focus { border-bottom-color: var(--line-2); color: var(--text-2); }
   .billing { height: 34px; font-size: 13px; padding: 0 32px 0 10px; background-position: right 10px center; }
   .calc { display: flex; align-items: center; gap: 6px; }
@@ -199,7 +199,7 @@
   .times { color: var(--muted); font-size: 13px; }
   .total { min-width: 84px; text-align: right; font-weight: 650; }
   .amount { display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--ink); transition: border-color 0.15s; }
-  .amount:focus-within { border-color: var(--lime); }
+  .amount:focus-within { border-color: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
   .amount span { color: var(--muted); }
   .amount input { width: 100%; border: 0; background: transparent; outline: none; text-align: right; font-weight: 600; -moz-appearance: textfield; appearance: textfield; }
   .amount input::-webkit-inner-spin-button, .amount input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
