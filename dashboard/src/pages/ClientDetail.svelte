@@ -1,6 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import Menu from "../components/Menu.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
   import ClientReportsCard from "../components/ClientReportsCard.svelte";
@@ -152,7 +153,7 @@
     <div class="value">
       <span class="big num">{money(monthly)}<small>/mo</small></span>
       <span class="muted num">{money(once)} one time · {money(monthly * 12)}/yr</span>
-      <button class="btn sm ghost del" onclick={deleteClient}>Delete client</button>
+      <div class="headacts"><Menu label="More actions for this client" items={[{ label: "Delete client", danger: true, onselect: deleteClient }]} /></div>
     </div>
   </header>
 
@@ -237,7 +238,7 @@
   .value { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
   .big { font-size: 34px; font-weight: 650; letter-spacing: -0.03em; color: var(--lime); }
   .big small { font-size: 16px; color: var(--muted); }
-  .del { color: var(--critical); margin-top: 8px; }
+  .headacts { margin-top: 8px; }
   .stages { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
   .stage { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 600; transition: background 0.2s, color 0.2s, border-color 0.2s; }
   .stage:hover { background: var(--surface-2); color: var(--text); }

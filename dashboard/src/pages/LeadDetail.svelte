@@ -1,6 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import Menu from "../components/Menu.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import QuoteEditor from "../components/QuoteEditor.svelte";
   import LoadState from "../components/LoadState.svelte";
@@ -220,12 +221,12 @@
       <span class="muted num">{money(lead.value_one_time)} one time</span>
       <div class="acts">
         {#if clientFor}
-          <a class="btn sm primary" href="#/clients/{clientFor}">View client →</a>
+          <a class="btn sm" href="#/clients/{clientFor}">View client →</a>
         {:else}
           <button class="btn sm" class:primary={lead.status === "won"} disabled={converting} onclick={convert}>{converting ? "Converting…" : "Convert to client"}</button>
         {/if}
         <button class="btn sm" onclick={toggleArchiveLead}>{lead.archived_at ? "Restore lead" : "Archive lead"}</button>
-        <button class="btn sm ghost del" onclick={deleteLead}>Delete lead</button>
+        <Menu label="More actions for this lead" items={[{ label: "Delete lead", danger: true, onselect: deleteLead }]} />
       </div>
     </div>
   </header>
@@ -320,8 +321,10 @@
           {#each QUOTE_STATUSES as s (s)}<option value={s}>{STATUS_LABEL[s]}</option>{/each}
         </select>
         {#if !editing[q.id]}<button class="btn sm" onclick={() => (editing[q.id] = true)}>Edit</button>{/if}
-        <button class="btn sm" onclick={() => toggleArchiveQuote(q)}>{q.archived_at ? "Restore" : "Archive"}</button>
-        <button class="btn sm ghost del" onclick={() => deleteQuote(q)}>Delete</button>
+        <Menu label="More actions for the quote from {dateTime(q.created_at)}" items={[
+          { label: q.archived_at ? "Restore quote" : "Archive quote", onselect: () => toggleArchiveQuote(q) },
+          { label: "Delete quote", danger: true, onselect: () => deleteQuote(q) },
+        ]} />
       </div>
     </div>
     {#if editing[q.id]}
@@ -412,8 +415,6 @@
   @media (hover: none) { .timeline .x, .notes .x { opacity: 1; } }
   .acts { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .qacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-  .del { color: var(--critical); }
-  .del:hover { color: #ff9a9a; }
   .banner { margin-bottom: 16px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line-2); color: var(--text-2); font-size: 14px; }
   /* Archived quotes are marked by the dashed edge and the Archived tag, not by fading the text. */
   .quote.archived { border-style: dashed; }

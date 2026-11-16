@@ -1,9 +1,12 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import Menu from "../components/Menu.svelte";
   import ReportPill from "../components/ReportPill.svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ReportsNav from "../components/ReportsNav.svelte";
+  import SortTh from "../components/SortTh.svelte";
+  import SortSelect from "../components/SortSelect.svelte";
   import LoadState from "../components/LoadState.svelte";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { dateTime } from "../lib/format.ts";
@@ -41,7 +44,12 @@
     sort = { key, dir: dir ?? (sort.key === key ? (sort.dir === "asc" ? "desc" : "asc") : col.first) };
     try { localStorage.setItem("reports.sort", JSON.stringify(sort)); } catch { /* not saved; fine */ }
   }
-  const ariaSort = (key: ReportSortKey) => (sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined);
+  // Search by client or period, on top of the This week, Last 4 months or Archived view.
+  let q = $state("");
+  const matches = (r: ReportRow) => {
+    const s = q.trim().toLowerCase();
+    return !s || r.client_name.toLowerCase().includes(s) || periodLabel(r).toLowerCase().includes(s);
+  };
   let confirm: Confirm;
 
   async function load() {
@@ -72,8 +80,9 @@
   const listed = $derived(rows.filter((r) => !r.cleared_at));
   const archived = $derived(rows.filter((r) => r.cleared_at));
   // Current: anything still to send, tests, and what went out in the last week.
-  const visible = $derived(show === "archived" ? archived : show === "all" ? listed : listed.filter((r) =>
+  const inView = $derived(show === "archived" ? archived : show === "all" ? listed : listed.filter((r) =>
     r.is_test || Date.parse(r.send_at) > now - WEEK || r.status === "scheduled" || r.status === "held" || r.status === "failed" || r.status === "sending"));
+  const visible = $derived(inView.filter(matches));
   // Test reports Archive test reports would take off the list.
   const archivableTests = $derived(listed.filter((r) => r.is_test && r.status !== "sending"));
   const sorted = $derived(sortReports(visible, sort.key, sort.dir));
@@ -132,7 +141,6 @@
     if (!(await confirm.ask({ title: `Resume ${plural(n, "report", "reports")}?`, body: `They send at their scheduled time${settings?.mode === "live" ? ", to clients" : ", to you only (preview mode)"}.`, action: "Resume all" }))) return;
     await act(async () => db.moveReports(week.toResume.map((r) => r.id), "held", "scheduled"), `${plural(n, "report is", "reports are")} scheduled.`);
   }
-  const open = (id: string) => (location.hash = `#/reports/${id}`);
   async function archivePicked() {
     const ids = [...picked];
     const n = ids.length;
@@ -161,6 +169,21 @@
   }
   const archive = (r: ReportRow) => act(() => db.clearReports([r.id], true), `${r.client_name}, ${periodLabel(r)} is archived. Find it under Archived.`);
   const restore = (r: ReportRow) => act(() => db.clearReports([r.id], false), `${r.client_name}, ${periodLabel(r)} is back on the list.`);
+  /**
+   * What can be done to a row, the action most likely wanted first. The first
+   * gets a button; the rest go in the row's More menu. The client's name is
+   * the link that opens the report.
+   */
+  function rowActions(r: ReportRow): { label: string; run: () => void; danger?: boolean }[] {
+    const can = reportActions(r, now), out: { label: string; run: () => void; danger?: boolean }[] = [];
+    if (can.hold) out.push({ label: "Hold", run: () => hold(r) });
+    if (can.resume) out.push({ label: "Resume", run: () => resume(r) });
+    if (can.sendNow) out.push({ label: "Send now", run: () => sendNow(r) });
+    if (can.restore) out.push({ label: "Restore", run: () => restore(r) });
+    if (can.clear) out.push({ label: "Archive", run: () => archive(r) });
+    if (show === "archived" && can.remove) out.push({ label: "Delete", run: () => deleteOne(r), danger: true });
+    return out;
+  }
   async function archiveTests() {
     const n = archivableTests.length;
     if (!(await confirm.ask({ title: `Archive ${plural(n, "test report", "test reports")}?`, body: "They leave the list now (find them under Archived). Test reports delete themselves a week after they're made.", action: "Archive" }))) return;
@@ -208,6 +231,7 @@
       <button aria-pressed={show === "all"} onclick={() => setShow("all")}>Last 4 months</button>
       <button aria-pressed={show === "archived"} onclick={() => setShow("archived")}>Archived{archived.length ? ` (${archived.length})` : ""}</button>
     </div>
+    <input class="input search" type="search" placeholder="Search reports" aria-label="Search reports by client or period" bind:value={q} />
   </div>
 
   {#if sorted.length}
@@ -216,7 +240,7 @@
         <div class="picked" role="region" aria-label="Selected reports">
           <span>{plural(picked.length, "report", "reports")} selected</span>
           <div>
-            <button type="button" class="btn sm primary" disabled={busy} onclick={archivePicked}>{show === "archived" ? "Restore selected" : "Archive selected"}</button>
+            <button type="button" class="btn sm" disabled={busy} onclick={archivePicked}>{show === "archived" ? "Restore selected" : "Archive selected"}</button>
             {#if show === "archived"}<button type="button" class="btn sm ghost del" disabled={busy} onclick={deletePicked}>Delete selected</button>{/if}
             <button type="button" class="btn sm ghost" onclick={() => (picked = [])}>Unselect all</button>
           </div>
@@ -227,11 +251,7 @@
           <!-- Phones hide the table header, so its select all box lives here. -->
           <label class="selall"><input type="checkbox" checked={allPicked} indeterminate={somePicked} onchange={(e) => toggleAll(e.currentTarget.checked)} /> Select all</label>
         {/if}
-        <label for="sort-key">Sort by</label>
-        <select id="sort-key" class="input" value={sort.key} onchange={(e) => sortBy(e.currentTarget.value as ReportSortKey, COLUMNS.find((c) => c.key === e.currentTarget.value)!.first)}>
-          {#each COLUMNS as c (c.key)}<option value={c.key}>{c.label}</option>{/each}
-        </select>
-        <button type="button" class="btn sm" onclick={() => sortBy(sort.key, sort.dir === "asc" ? "desc" : "asc")}>{sort.dir === "asc" ? "Oldest or A to Z first" : "Newest or Z to A first"}</button>
+        <SortSelect id="sort-key" columns={COLUMNS} {sort} onchange={(s) => sortBy(s.key, s.dir)} />
       </div>
       <table class="table">
         <caption class="sr-only">Reports, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
@@ -243,13 +263,7 @@
                   aria-label={show === "archived" ? "Select every archived report" : "Select every report that can be archived"} />
               {/if}
             </th>
-            {#each COLUMNS as c (c.key)}
-              <th aria-sort={ariaSort(c.key)} class:hide-md={c.key === "generated"}>
-                <button type="button" class="sort" class:on={sort.key === c.key} onclick={() => sortBy(c.key)}>
-                  {c.label}<span class="arrow" aria-hidden="true">{sort.key === c.key ? (sort.dir === "asc" ? "↑" : "↓") : "↕"}</span>
-                </button>
-              </th>
-            {/each}
+            {#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={(k) => sortBy(k)} hide={c.key === "generated" ? "md" : ""} />{/each}
             <th class="r"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
@@ -257,6 +271,7 @@
           {#each sorted as r (r.id)}
             {@const st = reportState(r, now)}
             {@const can = reportActions(r, now)}
+            {@const acts = rowActions(r)}
             <tr class:on={picked.includes(r.id)}>
               <td class="pick">
                 {#if canPick(r)}
@@ -276,13 +291,8 @@
               <td class="when-cell"><span class="lbl">Sends</span> {dateTime(r.send_at)}</td>
               <td class="hide-md gen">{dateTime(r.created_at)}</td>
               <td class="r acts">
-                {#if can.hold}<button class="btn sm" disabled={busy} onclick={() => hold(r)}>Hold<span class="sr-only"> {r.client_name}</span></button>{/if}
-                {#if can.resume}<button class="btn sm" disabled={busy} onclick={() => resume(r)}>Resume<span class="sr-only"> {r.client_name}</span></button>{/if}
-                {#if can.sendNow}<button class="btn sm" disabled={busy} onclick={() => sendNow(r)}>Send now<span class="sr-only"> {r.client_name}</span></button>{/if}
-                {#if can.clear}<button class="btn sm ghost" disabled={busy} onclick={() => archive(r)}>Archive<span class="sr-only"> {r.client_name} {periodLabel(r)}</span></button>{/if}
-                {#if can.restore}<button class="btn sm" disabled={busy} onclick={() => restore(r)}>Restore<span class="sr-only"> {r.client_name} {periodLabel(r)} to the list</span></button>{/if}
-                {#if show === "archived" && can.remove}<button class="btn sm ghost del" disabled={busy} onclick={() => deleteOne(r)}>Delete<span class="sr-only"> {r.client_name} {periodLabel(r)} for good</span></button>{/if}
-                <button class="btn sm ghost" onclick={() => open(r.id)}>Open<span class="sr-only"> {r.client_name} {periodLabel(r)}</span></button>
+                {#if acts[0]}<button class="btn sm" disabled={busy} onclick={acts[0].run}>{acts[0].label}<span class="sr-only"> {r.client_name}, {periodLabel(r)}</span></button>{/if}
+                {#if acts.length > 1}<Menu label="More actions for {r.client_name}, {periodLabel(r)}" items={acts.slice(1).map((x) => ({ label: x.label, danger: x.danger, onselect: x.run }))} />{/if}
               </td>
             </tr>
           {/each}
@@ -292,7 +302,7 @@
   {:else}
     <section class="card">
       <p class="empty">
-        {show === "archived" ? "Nothing archived. Archive a finished report (sent, failed, cancelled or a test) to take it off the list." : rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
+        {q.trim() && inView.length ? "No reports match that search." : show === "archived" ? "Nothing archived. Archive a finished report (sent, failed, cancelled or a test) to take it off the list." : rows.length ? "Nothing this week. Switch to Last 4 months to see older reports." : "No reports yet. Turn reports on for a client (on the client's page), and drafts arrive on Sunday."}
       </p>
     </section>
   {/if}
@@ -314,17 +324,19 @@
   .next .muted { font-size: 14px; }
   .warn { color: var(--warning); font-size: 13px; }
   .bulk { display: flex; gap: 8px; flex-wrap: wrap; }
-  .filters { margin-bottom: 16px; }
+  .filters { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px 12px; flex-wrap: wrap; }
+  .search { width: 240px; height: 36px; flex: 0 1 240px; min-width: 0; }
   .list { margin-bottom: 16px; }
   .flush { padding: 8px 8px 0; }
   .list .table { table-layout: fixed; }
-  .list th:nth-child(1) { width: 44px; }
-  .list th:nth-child(2) { width: 16%; }
-  .list th:nth-child(3) { width: 16%; }
-  .list th:nth-child(4) { width: auto; }
-  .list th:nth-child(5) { width: 14%; }
-  .list th:nth-child(6) { width: 13%; }
-  .list th:nth-child(7) { width: 250px; }
+  /* The sortable headings are their own component, so reach them by position. */
+  .list :global(th:nth-child(1)) { width: 44px; }
+  .list :global(th:nth-child(2)) { width: 16%; }
+  .list :global(th:nth-child(3)) { width: 16%; }
+  .list :global(th:nth-child(4)) { width: auto; }
+  .list :global(th:nth-child(5)) { width: 14%; }
+  .list :global(th:nth-child(6)) { width: 13%; }
+  .list :global(th:nth-child(7)) { width: 176px; }
   .pick input { width: 18px; height: 18px; accent-color: var(--lime); cursor: pointer; vertical-align: middle; }
   .list tbody tr.on { background: color-mix(in srgb, var(--lime) 7%, transparent); }
   .picked {
@@ -332,14 +344,6 @@
     margin: 4px 4px 8px; padding: 10px 12px; border: 1px solid var(--lime); border-radius: 10px; background: var(--surface-2); font-size: 14px; font-weight: 600;
   }
   .picked div { display: flex; gap: 8px; flex-wrap: wrap; }
-  th .sort {
-    display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; margin: -4px -6px; border: 0; border-radius: 6px;
-    background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
-  }
-  th .sort:hover { color: var(--text); background: var(--surface-2); }
-  th .sort.on { color: var(--text); }
-  .arrow { font-size: 12px; color: var(--muted); }
-  .sort.on .arrow { color: var(--lime); }
   .who { min-width: 0; }
   .who a { text-decoration: none; }
   .who a:hover strong { text-decoration: underline; }
@@ -358,7 +362,7 @@
     .table thead { display: none; }
     .table, .table tbody { display: block; }
     .table tbody tr {
-      display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1.1fr) 244px;
+      display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1.1fr) 150px;
       grid-template-areas: "pick who st acts" "pick rep st acts" "pick when st acts";
       align-items: start; gap: 4px 16px; padding: 14px 12px; border-bottom: 1px solid var(--line);
     }
@@ -374,10 +378,8 @@
     .when-cell .lbl { display: inline; }
     .acts { grid-area: acts; align-self: center; }
     .phone-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 8px 12px; border-bottom: 1px solid var(--line); }
-    .phone-sort label { font-size: 13px; color: var(--text-2); }
-    .phone-sort .selall { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; }
+    .phone-sort .selall { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; font-size: 13px; color: var(--text-2); }
     .phone-sort .selall input { width: 18px; height: 18px; accent-color: var(--lime); }
-    .phone-sort .input { height: 36px; width: auto; }
   }
   @media (max-width: 640px) {
     .table tbody tr { grid-template-columns: 26px minmax(0, 1fr); grid-template-areas: "pick who" "pick rep" "pick st" "pick when" "pick acts"; gap: 6px 12px; }

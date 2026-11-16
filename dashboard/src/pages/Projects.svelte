@@ -1,8 +1,13 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import db from "$db";
+  import Field from "../components/Field.svelte";
   import Modal from "../components/Modal.svelte";
   import PageHeader from "../components/PageHeader.svelte";
-  import { money, shortDate, STATUS_LABEL } from "../lib/format.ts";
+  import SortTh from "../components/SortTh.svelte";
+  import SortSelect from "../components/SortSelect.svelte";
+  import { by, pressed, text, type Sort, type SortDir } from "../lib/sort.ts";
+  import { localDay, money, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { totalsBy, valueLabel } from "../lib/lines.ts";
   import { clientLabel, leadLabel, ownerOptions, parseOwner } from "../lib/projects.ts";
   import { OPEN_PROJECT_STATUSES, PROJECT_STATUSES, type Client, type Lead, type Project, type ProjectService, type ProjectStatus } from "../lib/types.ts";
@@ -14,17 +19,21 @@
   let creating = $state(false);
   let busy = $state(false);
   let formError = $state("");
+  // What is wrong with each field, shown under it.
+  let errors = $state<{ name?: string; owner?: string }>({});
+  // The form keeps what was typed if the dialog is closed by accident; Cancel and a finished project clear it.
   let form = $state(blank());
 
   function blank() {
     return { name: "", owner: "", status: "potential" as ProjectStatus, due_on: "" };
   }
-  /** YYYY-MM-DD in local time, `days` from today. */
-  function day(days = 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  function cancelNew() {
+    creating = false;
+    form = blank();
+    errors = {};
+    formError = "";
   }
+  const day = localDay;
 
   const owners = $derived(new Map<string, { kind: string; label: string }>([
     ...clients.map((c) => [c.id, { kind: "Client", label: clientLabel(c) }] as const),
@@ -41,10 +50,31 @@
     return projects.filter((p) => [p.name, ownerOf(p)?.label ?? ""].some((v) => v.toLowerCase().includes(s)));
   });
   const counts = $derived(Object.fromEntries(PROJECT_STATUSES.map((st) => [st, searched.filter((p) => p.status === st).length])) as Record<ProjectStatus, number>);
-  // Soonest due first; undated after.
-  const rows = $derived(searched
-    .filter((p) => filter === "all" || (filter === "open" ? isOpen(p) : p.status === filter))
-    .sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || b.updated_at.localeCompare(a.updated_at)));
+  // Column headings sort the list: soonest due first to start with.
+  type ProjectSort = "name" | "status" | "value" | "due";
+  const COLUMNS: { key: ProjectSort; label: string; first: SortDir; right?: boolean; hide?: "sm" }[] = [
+    { key: "name", label: "Project", first: "asc" },
+    { key: "status", label: "Status", first: "asc" },
+    { key: "value", label: "Value", first: "desc", right: true },
+    { key: "due", label: "Due", first: "asc", right: true, hide: "sm" },
+  ];
+  let sort = $state<Sort<ProjectSort>>({ key: "due", dir: "asc" });
+  const sortBy = (k: ProjectSort) => (sort = pressed(sort, k, COLUMNS.find((c) => c.key === k)!.first));
+  const rows = $derived.by(() => {
+    // Value: the one time total plus a year of the monthly total.
+    const worth = (p: Project) => { const t = totals.get(p.id); return (t?.once ?? 0) + (t?.monthly ?? 0) * 12; };
+    const cmp: Record<ProjectSort, (a: Project, b: Project) => number> = {
+      name: (a, b) => text(a.name, b.name),
+      status: (a, b) => PROJECT_STATUSES.indexOf(a.status) - PROJECT_STATUSES.indexOf(b.status),
+      value: (a, b) => worth(a) - worth(b),
+      due: (a, b) => (a.due_on ?? "").localeCompare(b.due_on ?? ""),
+    };
+    const sign = sort.dir === "asc" ? 1 : -1;
+    return searched
+      .filter((p) => filter === "all" || (filter === "open" ? isOpen(p) : p.status === filter))
+      // By due date, projects without one come last either way. Ties fall back to the latest change.
+      .sort(by((a, b) => (sort.key === "due" ? Number(!a.due_on) - Number(!b.due_on) : 0), (a, b) => sign * cmp[sort.key](a, b), (a, b) => b.updated_at.localeCompare(a.updated_at)));
+  });
 
   const today = day();
   const sum = (ps: Project[]) => ps.reduce((t, p) => {
@@ -61,9 +91,15 @@
   async function create(e: SubmitEvent) {
     e.preventDefault();
     formError = "";
-    if (!form.name.trim()) return (formError = "Give the project a name.");
+    errors = {};
+    if (!form.name.trim()) errors.name = "Give the project a name.";
     const owner = parseOwner(form.owner);
-    if (!owner) return (formError = "Pick the client or lead it's for.");
+    if (!owner) errors.owner = "Pick the client or lead it's for.";
+    if (!owner || errors.name) {
+      await tick();
+      document.getElementById(errors.name ? "np-name" : "np-for")?.focus();
+      return;
+    }
     busy = true;
     try {
       const id = await db.createProject({ ...owner, name: form.name.trim(), status: form.status, due_on: form.due_on || null, notes: null });
@@ -80,7 +116,7 @@
 
 <PageHeader title="Projects">
   <input class="input search" type="search" placeholder="Search projects" aria-label="Search projects by name, client or lead" bind:value={q} />
-  <button class="btn primary" onclick={() => { form = blank(); formError = ""; creating = true; }}>+ New project</button>
+  <button class="btn primary" onclick={() => (creating = true)}>+ New project</button>
 </PageHeader>
 
 <div class="kpis rise">
@@ -101,12 +137,15 @@
     {/each}
     <button aria-pressed={filter === "all"} onclick={() => (filter = "all")}>All <span class="c">{searched.length}</span></button>
   </div>
+  <!-- Phones hide the table's headings, so sorting lives here. -->
+  <div class="phonesort"><SortSelect id="project-sort" columns={COLUMNS} {sort} onchange={(s) => (sort = s)} /></div>
 </div>
 
 <section class="card flush" class:stale>
   {#if rows.length}
     <table class="table">
-      <thead><tr><th>Project</th><th>Status</th><th class="r">Value</th><th class="r hide-sm">Due</th></tr></thead>
+      <caption class="sr-only">Projects, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}, {sort.dir === "asc" ? "ascending" : "descending"}. Column headings sort the table.</caption>
+      <thead><tr>{#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={sortBy} right={c.right} hide={c.hide ?? ""} />{/each}</tr></thead>
       <tbody>
         {#each rows as p (p.id)}
           {@const o = ownerOf(p)}
@@ -131,29 +170,32 @@
 </section>
 
 <Modal open={creating} title="New project" onclose={() => (creating = false)}>
-  <form class="form" onsubmit={create}>
-    <div class="field"><label for="np-name">Project name</label><input id="np-name" class="input" maxlength="120" placeholder="e.g. Office network refresh" bind:value={form.name} /></div>
-    <div class="field">
-      <label for="np-for">For</label>
-      <select id="np-for" class="input" bind:value={form.owner}>
-        <option value="" disabled>Pick a client or lead</option>
-        {#if choices.clients.length}<optgroup label="Clients">{#each choices.clients as c (c.value)}<option value={c.value}>{c.label}</option>{/each}</optgroup>{/if}
-        {#if choices.leads.length}<optgroup label="Leads">{#each choices.leads as l (l.value)}<option value={l.value}>{l.label}</option>{/each}</optgroup>{/if}
-      </select>
-    </div>
-    <div class="grid2">
-      <div class="field">
-        <label for="np-st">Status</label>
-        <select id="np-st" class="input" bind:value={form.status}>
-          {#each PROJECT_STATUSES as st (st)}<option value={st}>{STATUS_LABEL[st]}</option>{/each}
+  <form class="form" onsubmit={create} novalidate>
+    <Field id="np-name" label="Project name" required error={errors.name}>{#snippet children(a)}<input {...a} class="input" maxlength="120" placeholder="e.g. Office network refresh" bind:value={form.name} />{/snippet}</Field>
+    <Field id="np-for" label="For" required error={errors.owner}>
+      {#snippet children(a)}
+        <select {...a} class="input" bind:value={form.owner}>
+          <option value="" disabled>Pick a client or lead</option>
+          {#if choices.clients.length}<optgroup label="Clients">{#each choices.clients as c (c.value)}<option value={c.value}>{c.label}</option>{/each}</optgroup>{/if}
+          {#if choices.leads.length}<optgroup label="Leads">{#each choices.leads as l (l.value)}<option value={l.value}>{l.label}</option>{/each}</optgroup>{/if}
         </select>
-      </div>
-      <div class="field"><label for="np-due">Due date</label><input id="np-due" class="input" type="date" bind:value={form.due_on} /></div>
+      {/snippet}
+    </Field>
+    <div class="grid2">
+      <Field id="np-st" label="Status">
+        {#snippet children(a)}
+          <select {...a} class="input" bind:value={form.status}>
+            {#each PROJECT_STATUSES as st (st)}<option value={st}>{STATUS_LABEL[st]}</option>{/each}
+          </select>
+        {/snippet}
+      </Field>
+      <Field id="np-due" label="Due date">{#snippet children(a)}<input {...a} class="input" type="date" bind:value={form.due_on} />{/snippet}</Field>
     </div>
+    <p class="muted hint"><span class="req" aria-hidden="true">*</span> Required.</p>
     <p class="muted hint">You'll add services, notes and credentials on the next screen.</p>
     {#if formError}<p class="error" role="alert">{formError}</p>{/if}
     <div class="row">
-      <button type="button" class="btn ghost" onclick={() => (creating = false)}>Cancel</button>
+      <button type="button" class="btn ghost" onclick={cancelNew}>Cancel</button>
       <button class="btn primary" disabled={busy}>{busy ? "Creating…" : "Create project"}</button>
     </div>
   </form>
@@ -168,7 +210,8 @@
   .big small { font-size: 0.4em; color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 8px; }
   .kpi .muted { font-size: 13px; }
   .late { color: var(--critical); }
-  .filters { margin-bottom: 16px; }
+  .filters { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .phonesort { display: none; }
   .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
   .flush { padding: 8px 8px 0; }
   .stale { opacity: 0.6; }
@@ -183,8 +226,8 @@
   .form { display: flex; flex-direction: column; gap: 14px; }
   .form .input { width: 100%; min-width: 0; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .grid2 .field { min-width: 0; }
   .hint { font-size: 13px; }
+  .req { color: var(--lime); font-weight: 700; }
   .row { display: flex; justify-content: flex-end; gap: 8px; }
   @media (max-width: 720px) { .hide-sm { display: none; } }
   @media (max-width: 860px) {
@@ -195,6 +238,7 @@
     .filters .seg button { flex: none; }
   }
   @media (max-width: 640px) {
+    .phonesort { display: block; }
     .grid2 { grid-template-columns: 1fr; }
     .flush { padding: 4px; }
     .table thead { display: none; }

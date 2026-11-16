@@ -1,6 +1,8 @@
 <script lang="ts">
   import db from "$db";
+  import Field from "../components/Field.svelte";
   import Modal from "../components/Modal.svelte";
+  import Menu from "../components/Menu.svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import Confirm from "../components/Confirm.svelte";
   import { flip } from "svelte/animate";
@@ -23,6 +25,12 @@
   let catNew = $state(false);
   let cat = $state<ServiceCategory>({ id: "", name: "", blurb: "", sort: 0 });
   let formError = $state("");
+  // What is wrong with each field, shown under it.
+  let errors = $state<{ name?: string; category?: string; price?: string }>({});
+  // The form as it was opened, to tell whether closing would lose anything.
+  let opened = $state("");
+  const svcDirty = $derived(svcOpen && JSON.stringify(svc) !== opened);
+  const catDirty = $derived(catOpen && JSON.stringify(cat) !== opened);
 
   const groups = $derived.by(() => {
     const s = q.trim().toLowerCase();
@@ -57,22 +65,32 @@
   }
   function newService(categoryId = catalog.categories[0]?.id ?? "") {
     svc = blankService(categoryId);
+    opened = JSON.stringify(svc);
     svcNew = true;
     formError = "";
+    errors = {};
     svcOpen = true;
   }
   function editService(s: ServiceRow) {
     svc = { ...s };
+    opened = JSON.stringify(svc);
     svcNew = false;
     formError = "";
+    errors = {};
     svcOpen = true;
   }
   async function saveService(e: SubmitEvent) {
     e.preventDefault();
     formError = "";
-    if (!svc.name.trim()) return (formError = "Give the service a name.");
-    if (!svc.category_id) return (formError = "Pick a category.");
-    if (!Number.isFinite(svc.price) || svc.price < 0) return (formError = "Enter a price of 0 or more.");
+    errors = {};
+    if (!svc.name.trim()) errors.name = "Give the service a name.";
+    if (!svc.category_id) errors.category = "Pick a category.";
+    if (!Number.isFinite(svc.price) || svc.price < 0) errors.price = "Enter a price of 0 or more.";
+    if (errors.name || errors.category || errors.price) {
+      await tick();
+      document.getElementById(errors.name ? "s-name" : errors.category ? "s-cat" : "s-price")?.focus();
+      return;
+    }
     const row = { ...svc };
     if (svcNew) {
       row.id = slugify(row.name, catalog.services.map((s) => s.id));
@@ -311,20 +329,30 @@
 
   function newCategory() {
     cat = { id: "", name: "", blurb: "", sort: (Math.max(-10, ...catalog.categories.map((c) => c.sort)) + 10) };
+    opened = JSON.stringify(cat);
     catNew = true;
     formError = "";
+    errors = {};
     catOpen = true;
   }
   function editCategory(c: ServiceCategory) {
     cat = { ...c };
+    opened = JSON.stringify(cat);
     catNew = false;
     formError = "";
+    errors = {};
     catOpen = true;
   }
   async function saveCategory(e: SubmitEvent) {
     e.preventDefault();
     formError = "";
-    if (!cat.name.trim()) return (formError = "Give the category a name.");
+    errors = {};
+    if (!cat.name.trim()) {
+      errors.name = "Give the category a name.";
+      await tick();
+      document.getElementById("c-name")?.focus();
+      return;
+    }
     const row = { ...cat, id: catNew ? slugify(cat.name, catalog.categories.map((c) => c.id)) : cat.id };
     busy = true;
     try {
@@ -401,8 +429,10 @@
           {#if g.cat.blurb}<p class="muted">{g.cat.blurb}</p>{/if}
         </div>
         <div class="acts">
-          <button class="btn sm" onclick={() => editCategory(g.cat)}>Edit</button>
-          <button class="btn sm ghost del" onclick={() => deleteCategory(g.cat, g.all.length)}>Delete</button>
+          <button class="btn sm" onclick={() => editCategory(g.cat)}>Edit<span class="sr-only"> {g.cat.name}</span></button>
+          <Menu label="More actions for {g.cat.name}" items={[
+            { label: "Delete category", danger: true, disabled: g.all.length > 0, hint: g.all.length ? `Move or delete its ${g.all.length === 1 ? "service" : `${g.all.length} services`} first.` : "", onselect: () => deleteCategory(g.cat, g.all.length) },
+          ]} />
         </div>
       </div>
 
@@ -434,9 +464,11 @@
               <span class="ok" class:show={savedId === s.id} aria-live="polite">{savedId === s.id ? "✓" : ""}</span>
             </div>
             <div class="acts">
-              <button class="btn sm" onclick={() => editService(s)}>Edit</button>
-              <button class="btn sm ghost" disabled={s.locked && s.active} title={s.locked ? "Package services stay visible" : ""} onclick={() => toggleActive(s)}>{s.active ? "Hide" : "Show"}</button>
-              <button class="btn sm ghost del" disabled={s.locked} title={s.locked ? "Package services can't be deleted" : ""} onclick={() => deleteService(s)}>Delete</button>
+              <button class="btn sm" onclick={() => editService(s)}>Edit<span class="sr-only"> {s.name}</span></button>
+              <Menu label="More actions for {s.name}" items={[
+                { label: s.active ? "Hide from the website" : "Show on the website", disabled: s.locked && s.active, hint: s.locked && s.active ? "Package services stay visible." : "", onselect: () => toggleActive(s) },
+                { label: "Delete service", danger: true, disabled: s.locked, hint: s.locked ? "Package services can't be deleted." : "", onselect: () => deleteService(s) },
+              ]} />
             </div>
           </li>
         {:else}
@@ -459,39 +491,33 @@
   </div>
 {/if}
 
-<Modal open={svcOpen} title={svcNew ? "New service" : `Edit ${svc.name || "service"}`} onclose={() => (svcOpen = false)} wide>
-  <form class="form" onsubmit={saveService}>
+<Modal open={svcOpen} title={svcNew ? "New service" : "Edit service"} onclose={() => (svcOpen = false)} persistent={svcDirty} wide>
+  <form class="form" onsubmit={saveService} novalidate>
     <div class="grid2">
-      <div class="field span2">
-        <label for="s-name">Name</label>
-        <input id="s-name" class="input" maxlength="80" required bind:value={svc.name} />
-      </div>
-      <div class="field">
-        <label for="s-cat">Category</label>
-        <select id="s-cat" class="input" bind:value={svc.category_id}>
-          {#each catalog.categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
-        </select>
-      </div>
-      <div class="field">
-        <label for="s-unit">Billing</label>
-        <select id="s-unit" class="input" bind:value={svc.unit}>
-          {#each UNIT_OPTIONS as u (u.value)}<option value={u.value}>{u.label}</option>{/each}
-        </select>
-      </div>
-      <div class="field">
-        <label for="s-price">Price ($)</label>
-        <input id="s-price" class="input num" type="number" min="0" max="1000000" step="0.01" required bind:value={svc.price} />
-      </div>
+      <Field id="s-name" label="Name" required wide error={errors.name}>{#snippet children(a)}<input {...a} class="input" maxlength="80" bind:value={svc.name} />{/snippet}</Field>
+      <Field id="s-cat" label="Category" required error={errors.category}>
+        {#snippet children(a)}
+          <select {...a} class="input" bind:value={svc.category_id}>
+            {#each catalog.categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+          </select>
+        {/snippet}
+      </Field>
+      <Field id="s-unit" label="Billing">
+        {#snippet children(a)}
+          <select {...a} class="input" bind:value={svc.unit}>
+            {#each UNIT_OPTIONS as u (u.value)}<option value={u.value}>{u.label}</option>{/each}
+          </select>
+        {/snippet}
+      </Field>
+      <Field id="s-price" label="Price ($)" required error={errors.price}>{#snippet children(a)}<input {...a} class="input num" type="number" min="0" max="1000000" step="0.01" bind:value={svc.price} />{/snippet}</Field>
       <div class="checks">
         <label><input type="checkbox" bind:checked={svc.price_from} /> Show as "from" (starting price)</label>
         <label><input type="checkbox" bind:checked={svc.in_packages} /> "In packages" badge</label>
         <label title={svc.locked ? "Package services stay visible" : ""}><input type="checkbox" bind:checked={svc.active} disabled={svc.locked} /> Visible on website</label>
       </div>
-      <div class="field span2">
-        <label for="s-desc">Description <span class="muted">{svc.description.length}/400</span></label>
-        <textarea id="s-desc" class="input" rows="3" maxlength="400" bind:value={svc.description}></textarea>
-      </div>
+      <Field id="s-desc" label="Description" wide hint="{svc.description.length} of 400 characters">{#snippet children(a)}<textarea {...a} class="input" rows="3" maxlength="400" bind:value={svc.description}></textarea>{/snippet}</Field>
     </div>
+    <p class="muted hint"><span class="req" aria-hidden="true">*</span> Required.</p>
 
     <div class="preview-wrap">
       <p class="eyebrow">Preview on your website</p>
@@ -513,16 +539,10 @@
   </form>
 </Modal>
 
-<Modal open={catOpen} title={catNew ? "New category" : `Edit ${cat.name || "category"}`} onclose={() => (catOpen = false)}>
-  <form class="form" onsubmit={saveCategory}>
-    <div class="field">
-      <label for="c-name">Name</label>
-      <input id="c-name" class="input" maxlength="80" required bind:value={cat.name} />
-    </div>
-    <div class="field">
-      <label for="c-blurb">Short description <span class="muted">{cat.blurb.length}/300</span></label>
-      <textarea id="c-blurb" class="input" rows="2" maxlength="300" bind:value={cat.blurb}></textarea>
-    </div>
+<Modal open={catOpen} title={catNew ? "New category" : "Edit category"} onclose={() => (catOpen = false)} persistent={catDirty}>
+  <form class="form" onsubmit={saveCategory} novalidate>
+    <Field id="c-name" label="Name" required error={errors.name}>{#snippet children(a)}<input {...a} class="input" maxlength="80" bind:value={cat.name} />{/snippet}</Field>
+    <Field id="c-blurb" label="Short description" hint="{cat.blurb.length} of 300 characters">{#snippet children(a)}<textarea {...a} class="input" rows="2" maxlength="300" bind:value={cat.blurb}></textarea>{/snippet}</Field>
     {#if formError}<p class="error" role="alert">{formError}</p>{/if}
     <div class="row">
       <button type="button" class="btn ghost" onclick={() => (catOpen = false)}>Cancel</button>
@@ -571,7 +591,6 @@
   .lifted.gcat strong { font-size: 18px; letter-spacing: -0.02em; }
   .lifted .g { color: var(--lime); cursor: grabbing; }
   @keyframes lift { from { transform: scale(1); box-shadow: none; } }
-  .del { color: var(--critical); }
   .btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .svcs { list-style: none; }
   .svcs li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 12px 4px; border-top: 1px solid var(--line); animation: rise 0.35s var(--ease) both; }
@@ -602,9 +621,9 @@
 
   .form { display: flex; flex-direction: column; gap: 16px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .grid2 .field { min-width: 0; }
-  .grid2 .input { width: 100%; min-width: 0; }
-  .span2 { grid-column: 1 / -1; }
+  .form :global(.input) { width: 100%; min-width: 0; }
+  .hint { font-size: 13px; }
+  .req { color: var(--lime); font-weight: 700; }
   .checks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 14px; color: var(--text-2); }
   .checks label { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
   .checks input { accent-color: var(--lime); width: 16px; height: 16px; }

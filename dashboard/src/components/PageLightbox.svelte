@@ -67,7 +67,7 @@
   {#if pages.length}
     <header>
       <h2 id="lb-title">{title} <span>Page {shown + 1} of {pages.length}</span></h2>
-      <button type="button" class="btn sm primary" onclick={close}>Close</button>
+      <button type="button" class="btn sm" onclick={close}>Close</button>
     </header>
     <!-- The pages scroll inside this box, so keyboard users need to be able to focus it. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

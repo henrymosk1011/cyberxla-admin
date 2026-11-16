@@ -40,3 +40,10 @@ export function phone(raw: string | null | undefined): string {
   if (ten.length !== 10) return raw;
   return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}${ext ? ` ext. ${ext[1]}` : ""}`;
 }
+
+/** YYYY-MM-DD in local time, `days` from today (the UTC date is a day ahead in the evening, Pacific time). */
+export function localDay(days = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
