@@ -9,3 +9,8 @@ verify_jwt = false
 # it doesn't depend on the gateway's JWT check.
 [functions.report-action]
 verify_jwt = false
+
+# The patch reports' schedule: pg_cron (migration 0018) calls it with a token
+# from Vault, which the function checks against REPORT_CRON_HASH itself.
+[functions.report-cron]
+verify_jwt = false
