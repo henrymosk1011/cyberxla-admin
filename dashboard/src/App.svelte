@@ -17,7 +17,9 @@
   import { cubicOut } from "svelte/easing";
   import { watchIdle } from "./lib/idle.ts";
   import { money } from "./lib/format.ts";
-  import type { AuthState, Client, ClientService, Lead, LeadStatus, Project, ProjectService, Quote, ToastMsg } from "./lib/types.ts";
+  import { leave } from "./lib/nav.svelte.ts";
+  import { messageOf, toast } from "./lib/toast.svelte.ts";
+  import type { AuthState, Client, ClientService, Lead, LeadStatus, Project, ProjectService, Quote } from "./lib/types.ts";
 
   const IDLE_MS = 30 * 60 * 1000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,7 +37,6 @@
   let version = $state(0);
   let live = $state(false);
   let unseen = $state(0);
-  let toasts = $state<ToastMsg[]>([]);
   let hash = $state(location.hash);
   let navOpen = $state(false);
 
@@ -69,7 +70,30 @@
   const newCount = $derived(activeLeads.filter((l) => l.status === "new").length);
 
   $effect(() => {
-    const onHash = () => {
+    // Every history entry carries a number, so a leave that is turned down can
+    // go back exactly the way it came (a link, a button, or Back and Forward).
+    const step = () => (history.state as { i?: number } | null)?.i;
+    let at = step() ?? 0;
+    if (step() === undefined) history.replaceState({ i: at }, "");
+    let asking = false;
+    const onHash = async () => {
+      if (location.hash === hash) return;
+      // A new entry has no number yet; Back and Forward land on one that has.
+      if (step() === undefined) history.replaceState({ i: at + 1 }, "");
+      // A page with unsaved edits gets to ask first.
+      const guard = leave.guard;
+      if (guard) {
+        if (asking) return;
+        asking = true;
+        const ok = await guard();
+        asking = false;
+        if (!ok) {
+          history.go(at - (step() ?? at));
+          return;
+        }
+        leave.guard = null;
+      }
+      at = step() ?? at;
       hash = location.hash; navOpen = false; window.scrollTo(0, 0);
       // Lists are cheap to reload; keeps clients and totals current after edits on detail pages.
       if (auth?.step === "ready" && loaded) refresh();
@@ -110,7 +134,7 @@
       if (e.table === "quotes" && e.type === "INSERT") {
         unseen++;
         const lead = leads.find((l) => l.id === e.row.lead_id);
-        notify("New quote", `${lead?.company || lead?.name || "A new lead"} · ${money(Number(e.row.monthly_total ?? 0))}/mo`, e.row.lead_id ? `#/leads/${e.row.lead_id}` : undefined);
+        toast.info("New quote", `${lead?.company || lead?.name || "A new lead"} · ${money(Number(e.row.monthly_total ?? 0))}/mo`, e.row.lead_id ? { href: `#/leads/${e.row.lead_id}`, label: "Open lead" } : undefined);
       }
       clearTimeout(pending);
       pending = setTimeout(refresh, 400);
@@ -129,14 +153,6 @@
     return () => document.removeEventListener("visibilitychange", clear);
   });
 
-  let toastId = 0;
-  function notify(title: string, body: string, href?: string) {
-    const t = { id: ++toastId, title, body, href };
-    toasts = [...toasts, t].slice(-4);
-    setTimeout(() => dismiss(t.id), 12000);
-  }
-  const dismiss = (id: number) => (toasts = toasts.filter((t) => t.id !== id));
-
   async function setStatus(id: string, status: LeadStatus) {
     const l = leads.find((x) => x.id === id);
     const before = l?.status;
@@ -145,7 +161,7 @@
       await db.setLeadStatus(id, status);
     } catch (e) {
       if (l && before) l.status = before;
-      notify("Couldn't update", e instanceof Error ? e.message : "Try again.");
+      toast.error(`Couldn't change the stage. ${messageOf(e, "Try again.")}`);
     }
   }
 
@@ -236,13 +252,13 @@
         <Services />
       {:else if route.page === "reports"}
         <!-- The report pages load on first visit, so they don't slow down the rest. -->
-        {#await import("./pages/Reports.svelte") then { default: Reports }}<Reports />{/await}
+        {#await import("./pages/Reports.svelte")}{@render pageLoading()}{:then { default: Reports }}<Reports />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "report"}
-        {#await import("./pages/ReportDetail.svelte") then { default: ReportDetail }}<ReportDetail id={route.id} />{/await}
+        {#await import("./pages/ReportDetail.svelte")}{@render pageLoading()}{:then { default: ReportDetail }}<ReportDetail id={route.id} />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "report-settings"}
-        {#await import("./pages/ReportSettings.svelte") then { default: ReportSettings }}<ReportSettings {clients} />{/await}
+        {#await import("./pages/ReportSettings.svelte")}{@render pageLoading()}{:then { default: ReportSettings }}<ReportSettings {clients} />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "report-template"}
-        {#await import("./pages/ReportTemplate.svelte") then { default: ReportTemplate }}<ReportTemplate />{/await}
+        {#await import("./pages/ReportTemplate.svelte")}{@render pageLoading()}{:then { default: ReportTemplate }}<ReportTemplate />{:catch}{@render pageFailed()}{/await}
       {:else}
         <p class="empty">Page not found. <a href="#/">Go to overview</a></p>
       {/if}
@@ -251,8 +267,17 @@
       {/if}
     </main>
   </div>
-  <Toast {toasts} {dismiss} />
+  <Toast />
 {/if}
+
+{#snippet pageLoading()}<p class="muted" role="status">Loading…</p>{/snippet}
+<!-- The page's code didn't arrive: offline, or a new version went live while this tab was open. -->
+{#snippet pageFailed()}
+  <div class="banner" role="alert">
+    <p class="error">This page couldn't load. If a new version just went live, reloading fixes it.</p>
+    <button class="btn sm" onclick={() => location.reload()}>Reload</button>
+  </div>
+{/snippet}
 
 <style>
   .boot { min-height: 100dvh; }

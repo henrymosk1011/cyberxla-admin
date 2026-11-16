@@ -3,6 +3,9 @@
   import Confirm from "../components/Confirm.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
   import QuoteEditor from "../components/QuoteEditor.svelte";
+  import LoadState from "../components/LoadState.svelte";
+  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeProject } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Project, type ProjectService, type Quote, type QuoteStatus } from "../lib/types.ts";
@@ -22,13 +25,12 @@
       action: "Convert to client",
     }))) return;
     converting = true;
-    error = "";
     try {
       const cid = await db.convertLead(id);
       onconverted?.();
       location.hash = `#/clients/${cid}`;
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't convert this lead.";
+      toast.error(messageOf(e, "Couldn't convert this lead."));
     } finally {
       converting = false;
     }
@@ -40,7 +42,7 @@
   let activity = $state<AuditEntry[]>([]);
   let draft = $state("");
   let saving = $state(false);
-  let error = $state("");
+  let loadError = $state("");
   let showArchived = $state(false);
   let showHidden = $state(false);
   // Per-quote line item filter, like the quote builder's.
@@ -59,15 +61,17 @@
   const visibleActivity = $derived(activity.filter((a) => showHidden || !a.hidden));
   const hiddenCount = $derived(activity.filter((a) => a.hidden).length);
 
+  /** Run an action and reload; a failure is said in a message that shows wherever you are on the page. */
   async function run(fn: () => Promise<void>, failMsg: string) {
-    error = "";
     try {
       await fn();
     } catch (e) {
-      error = e instanceof Error ? e.message : failMsg;
+      toast.error(messageOf(e, failMsg));
     }
     await load();
   }
+  // A note typed but not added yet: ask before leaving it behind.
+  guardUnsaved(() => !!draft.trim(), () => confirm.ask({ title: "Leave without adding the note?", body: "The note you typed hasn't been added.", action: "Leave", danger: true }));
 
   async function toggleArchiveLead() {
     if (!lead) return;
@@ -80,12 +84,12 @@
     const name = lead.company || lead.name;
     const also = projects.length ? `, its notes, and its ${projects.length === 1 ? "project" : `${projects.length} projects`} (with any saved credentials)` : ", and its notes";
     if (!(await confirm.ask({ title: `Delete ${name}?`, body: `This permanently deletes the lead, all of its quotes${also}. This can't be undone. (Archive instead if you might need it later.)`, action: "Delete permanently", danger: true }))) return;
-    error = "";
     try {
       await db.deleteLead(id);
+      toast.success(`${name} was deleted.`);
       location.hash = "#/leads";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't delete the lead.";
+      toast.error(messageOf(e, "Couldn't delete the lead."));
     }
   }
   async function toggleArchiveQuote(q: Quote) {
@@ -110,8 +114,11 @@
     try {
       const [l, q, n, a] = await Promise.all([db.lead(id), db.quotesFor(id), db.notesFor(id), db.activityFor(id)]);
       lead = l; quotes = q; notes = n; activity = a;
+      loadError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't load this lead.";
+      const m = messageOf(e, "Check your connection and try again.");
+      if (lead === undefined) loadError = m;
+      else toast.error(`Couldn't refresh this lead. ${m}`);
     }
   }
   $effect(() => {
@@ -126,8 +133,15 @@
     load();
   }
   async function setQuoteStatus(q: Quote, s: QuoteStatus) {
+    const before = q.status;
     q.status = s;
-    await db.setQuoteStatus(q.id, s);
+    try {
+      await db.setQuoteStatus(q.id, s);
+    } catch (e) {
+      // Put the dropdown back and say why.
+      q.status = before;
+      toast.error(`Couldn't change the quote's status. ${messageOf(e, "Try again.")}`);
+    }
     load();
   }
   async function addNote(e: SubmitEvent) {
@@ -140,7 +154,7 @@
       draft = "";
       await load();
     } catch (err) {
-      error = err instanceof Error ? err.message : "Couldn't save the note.";
+      toast.error(messageOf(err, "Couldn't save the note."));
     } finally {
       saving = false;
     }
@@ -187,9 +201,9 @@
 <a class="back" href="#/leads">← All leads</a>
 
 {#if lead === undefined}
-  <p class="muted">Loading…</p>
+  <LoadState error={loadError} what="this lead" onretry={() => { loadError = ""; load(); }} />
 {:else if lead === null}
-  <p class="empty">{error || "This lead doesn't exist or was deleted."}</p>
+  <p class="empty">This lead doesn't exist or was deleted.</p>
 {:else}
   <header class="head">
     <div class="id">
@@ -225,8 +239,6 @@
       <button class="stage st-{s}" aria-pressed={lead.status === s} onclick={() => setStatus(s)}><i aria-hidden="true"></i>{STATUS_LABEL[s]}</button>
     {/each}
   </div>
-
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
 
   <div class="cols">
     <div class="main">

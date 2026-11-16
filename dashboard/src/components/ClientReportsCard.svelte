@@ -2,12 +2,13 @@
   // Patch reports for one client: their Action1 group, who gets the reports,
   // whether they are on, computers to always leave off, their UniFi console,
   // and recent reports.
+  import { untrack } from "svelte";
   import db from "$db";
   import ReportPill from "./ReportPill.svelte";
   import { parseEmails, parseNames, periodLabel, reportState } from "../lib/reports.ts";
   import type { Client, ReportRow } from "../lib/types.ts";
 
-  let { client, onsaved }: { client: Client; onsaved: () => void } = $props();
+  let { client, onsaved, dirty = $bindable(false) }: { client: Client; onsaved: () => void; /** True while the form has unsaved changes. */ dirty?: boolean } = $props();
 
   // Until migration 0010 runs these columns don't exist; show the card empty instead of breaking the page.
   const to0 = $derived((client.report_recipients ?? []).join(", "));
@@ -25,15 +26,20 @@
   const savedKey = $derived(JSON.stringify([client.id, client.action1_group, to0, cc0, client.reports_enabled, off0, client.unifi_console]));
   $effect(() => {
     void savedKey;
-    form = { group: client.action1_group ?? "", to: to0, cc: cc0, enabled: !!client.reports_enabled, off: off0, unifi: client.unifi_console ?? "" };
+    untrack(() => {
+      form = { group: client.action1_group ?? "", to: to0, cc: cc0, enabled: !!client.reports_enabled, off: off0, unifi: client.unifi_console ?? "" };
+    });
   });
   $effect(() => {
     const id = client.id;
     db.reports().then((r) => (reports = r.filter((x) => x.client_id === id && !x.is_test).slice(0, 5)), () => {});
   });
 
-  const dirty = $derived(form.group !== (client.action1_group ?? "") || form.to !== to0 || form.cc !== cc0
+  const changed = $derived(form.group !== (client.action1_group ?? "") || form.to !== to0 || form.cc !== cc0
     || form.enabled !== !!client.reports_enabled || parseNames(form.off).join("\n") !== off0 || form.unifi.trim() !== (client.unifi_console ?? ""));
+  $effect(() => {
+    dirty = changed;
+  });
 
   async function save(e: SubmitEvent) {
     e.preventDefault();
@@ -77,7 +83,7 @@
     <div class="field"><label for="r-unifi">UniFi console</label><input id="r-unifi" class="input" maxlength="200" autocomplete="off" bind:value={form.unifi} aria-describedby="r-unifi-h" /><span id="r-unifi-h" class="hint">Optional. The router's name as UniFi shows it (the [TAG] can be left off). Its software version goes on your internal report, and a router update goes on the client's report.</span></div>
     <p class="hint">Changes apply to reports made after you save. Reports already made keep their recipients (edit those on the report).</p>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
-    <div class="row"><button class="btn primary sm" disabled={!dirty || busy}>Save</button></div>
+    <div class="row"><button class="btn primary sm" disabled={!changed || busy}>{busy ? "Saving…" : "Save"}</button></div>
   </form>
   {#if reports.length}
     <ul class="recent">

@@ -1,6 +1,8 @@
 <script lang="ts">
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
+  import LoadState from "../components/LoadState.svelte";
+  import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { thisWeek } from "../lib/reports.ts";
   import type { Client, ReportRow, ReportSettings } from "../lib/types.ts";
 
@@ -9,8 +11,8 @@
   let saved = $state<ReportSettings | null>(null);
   let form = $state({ mode: "preview" as ReportSettings["mode"], auto_send_default: true, generate_time: "12:00", send_time: "08:00", sunday_review_email: true });
   let rows = $state<ReportRow[]>([]);
+  let loadError = $state("");
   let error = $state("");
-  let notice = $state("");
   let busy = $state(false);
   let confirm: Confirm;
 
@@ -21,8 +23,11 @@
       saved = s;
       rows = r;
       form = { mode: s.mode, auto_send_default: s.auto_send_default, generate_time: hm(s.generate_time), send_time: hm(s.send_time), sunday_review_email: s.sunday_review_email };
+      loadError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't load settings.";
+      const m = messageOf(e, "Check your connection and try again.");
+      if (!saved) loadError = m;
+      else toast.error(`Couldn't refresh the settings. ${m}`);
     }
   }
   $effect(() => {
@@ -40,7 +45,6 @@
     e.preventDefault();
     if (!saved) return;
     error = "";
-    notice = "";
     if (!timeOk(form.generate_time) || !timeOk(form.send_time)) return (error = "Times must be 3:00 PM or earlier.");
     if (form.mode === "live" && saved.mode !== "live") {
       const n = thisWeek(rows).toHold.length;
@@ -55,10 +59,10 @@
     busy = true;
     try {
       await db.saveReportSettings({ ...form });
-      notice = form.mode === "live" ? "Saved. Mode is live." : "Saved.";
+      toast.success(form.mode === "live" ? "Settings saved. Mode is live." : "Settings saved.");
       await load();
     } catch (err) {
-      error = err instanceof Error ? err.message : "Couldn't save.";
+      error = messageOf(err, "Couldn't save the settings. Try again.");
     } finally {
       busy = false;
     }
@@ -71,12 +75,8 @@
   <h1>Report settings</h1>
 </header>
 
-{#if error}<p class="error banner" role="alert">{error}</p>{/if}
-<p class="sr-only" role="status">{notice}</p>
-{#if notice}<p class="notice" aria-hidden="true">{notice}</p>{/if}
-
 {#if !saved}
-  <p class="muted">Loading…</p>
+  <LoadState error={loadError} what="the settings" onretry={() => { loadError = ""; load(); }} />
 {:else}
   <div class="cols">
     <form class="card form" onsubmit={save}>
@@ -106,6 +106,8 @@
         <p class="hint">Up to 3:00 PM: the GitHub schedules run hourly through Sunday and Monday until then, so expect each within the hour after.</p>
       </fieldset>
 
+      <!-- Right above the button, so it is on screen when Save is pressed. -->
+      {#if error}<p class="error" role="alert">{error}</p>{/if}
       <div class="row"><button class="btn primary" disabled={!dirty || busy}>{busy ? "Saving…" : "Save settings"}</button></div>
     </form>
 
@@ -143,8 +145,6 @@
   .back:hover { color: var(--text); }
   .top { margin-bottom: 20px; }
   h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
-  .banner, .notice { margin-bottom: 16px; }
-  .notice { font-size: 14px; color: var(--good-text); }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .form { display: flex; flex-direction: column; gap: 20px; }
   fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }

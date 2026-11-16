@@ -3,6 +3,9 @@
   import Confirm from "../components/Confirm.svelte";
   import Credentials from "../components/Credentials.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
+  import LoadState from "../components/LoadState.svelte";
+  import { guardUnsaved } from "../lib/nav.svelte.ts";
+  import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeCredential, describeLine, describeProject } from "../lib/activity.ts";
   import { dateTime, money, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { clientLabel, leadLabel, ownerOptions, ownerValue, parseOwner } from "../lib/projects.ts";
@@ -13,8 +16,9 @@
   let project = $state<Project | null | undefined>(undefined);
   let lines = $state<ProjectService[]>([]);
   let activity = $state<AuditEntry[]>([]);
-  let error = $state("");
-  let saved = $state("");
+  let loadError = $state("");
+  let detailsError = $state("");
+  let saving = $state<"" | "details" | "notes">("");
   let confirm: Confirm;
   let showHidden = $state(false);
 
@@ -26,14 +30,23 @@
     try {
       const [p, l, a] = await Promise.all([db.project(id), db.projectServices(id), db.projectActivity(id)]);
       project = p; lines = l; activity = a;
-      if (p) {
-        details = { name: p.name, owner: ownerValue(p), due_on: p.due_on ?? "" };
-        notes = p.notes ?? "";
-      }
+      loadError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't load this project.";
+      const m = messageOf(e, "Check your connection and try again.");
+      if (project === undefined) loadError = m;
+      else toast.error(`Couldn't refresh this project. ${m}`);
     }
   }
+  // The forms fill in when the saved values change (the first load, or after
+  // a save), never on a plain reload, so a reload can't wipe what is being typed.
+  const savedDetails = $derived(project ? JSON.stringify({ name: project.name, owner: ownerValue(project), due_on: project.due_on ?? "" }) : "");
+  $effect(() => {
+    if (savedDetails) details = JSON.parse(savedDetails);
+  });
+  const savedNotes = $derived(project ? project.notes ?? "" : null);
+  $effect(() => {
+    if (savedNotes !== null) notes = savedNotes;
+  });
   $effect(() => {
     void id; void version;
     load();
@@ -65,36 +78,49 @@
   const visibleActivity = $derived(activity.filter((a) => showHidden || !a.hidden));
   const hiddenCount = $derived(activity.filter((a) => a.hidden).length);
 
-  async function run(fn: () => Promise<void>, ok = "") {
-    error = "";
+  /** Run an action, say how it went (the message shows wherever you are on the page), and reload. True when it worked. */
+  async function run(fn: () => Promise<void>, ok = ""): Promise<boolean> {
+    let worked = true;
     try {
       await fn();
-      if (ok) { saved = ok; setTimeout(() => (saved = ""), 2000); }
+      if (ok) toast.success(ok);
     } catch (e) {
-      error = e instanceof Error ? e.message : "Something went wrong.";
+      worked = false;
+      toast.error(messageOf(e, "That didn't go through. Try again."));
     }
     await load();
+    return worked;
   }
   async function saveDetails(e: SubmitEvent) {
     e.preventDefault();
-    if (!details.name.trim()) { error = "Give the project a name."; return; }
+    detailsError = "";
+    if (!details.name.trim()) { detailsError = "Give the project a name."; return; }
     const o = parseOwner(details.owner);
-    if (!o) { error = "Pick the client or lead it's for."; return; }
-    await run(() => db.updateProject(id, { name: details.name.trim(), ...o, due_on: details.due_on || null }), "Details saved");
+    if (!o) { detailsError = "Pick the client or lead it's for."; return; }
+    saving = "details";
+    await run(() => db.updateProject(id, { name: details.name.trim(), ...o, due_on: details.due_on || null }), "Details saved.");
+    saving = "";
   }
   const setStatus = (s: ProjectStatus) => project && project.status !== s && run(() => db.updateProject(id, { status: s }));
-  const saveNotes = () => run(() => db.updateProject(id, { notes: notes.trim() || null }), "Notes saved");
+  async function saveNotes() {
+    saving = "notes";
+    await run(() => db.updateProject(id, { notes: notes.trim() || null }), "Notes saved.");
+    saving = "";
+  }
+  guardUnsaved(() => detailsDirty || notesDirty, () => confirm.ask({ title: "Leave without saving?", body: "Your changes to this project haven't been saved.", action: "Leave", danger: true }));
   async function reloadActivity() {
     activity = await db.projectActivity(id).catch(() => activity);
   }
   async function deleteProject() {
     if (!project) return;
     if (!(await confirm.ask({ title: `Delete ${project.name}?`, body: "This permanently deletes the project with its services, notes and saved credentials.", action: "Delete permanently", danger: true }))) return;
+    const name = project.name;
     try {
       await db.deleteProject(id);
+      toast.success(`${name} was deleted.`);
       location.hash = "#/projects";
     } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't delete.";
+      toast.error(messageOf(e, "Couldn't delete this project."));
     }
   }
   const toggleHidden = (a: AuditEntry) => run(() => db.hideActivity(a.id, !a.hidden));
@@ -109,9 +135,9 @@
 <a class="back" href="#/projects">← All projects</a>
 
 {#if project === undefined}
-  <p class="muted">Loading…</p>
+  <LoadState error={loadError} what="this project" onretry={() => { loadError = ""; load(); }} />
 {:else if project === null}
-  <p class="empty">{error || "This project doesn't exist or was deleted."}</p>
+  <p class="empty">This project doesn't exist or was deleted.</p>
 {:else}
   <header class="head">
     <div>
@@ -130,9 +156,7 @@
     {#each PROJECT_STATUSES as s (s)}
       <button class="stage ps-{s}" aria-pressed={project.status === s} onclick={() => setStatus(s)}><i aria-hidden="true"></i>{STATUS_LABEL[s]}</button>
     {/each}
-    {#if saved}<span class="saved">✓ {saved}</span>{/if}
   </div>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
 
   <div class="cols">
     <div class="main">
@@ -142,14 +166,13 @@
         empty="No services yet. Add what this project would include below."
         {hint}
         onadd={(l) => run(() => db.addProjectService({ ...l, project_id: id }))}
-        onupdate={(l, patch) => run(() => db.updateProjectService(l.id, patch), "Saved")}
-        onremove={(l) => run(() => db.deleteProjectService(l.id))}
-        onerror={(m) => (error = m)} />
+        onupdate={(l, patch) => run(() => db.updateProjectService(l.id, patch))}
+        onremove={(l) => run(() => db.deleteProjectService(l.id))} />
 
       <section class="card">
         <div class="card-head"><div><h2>Notes</h2><p class="sub">Not encrypted. Keep passwords and keys in Credentials.</p></div></div>
         <textarea class="input" rows="6" maxlength="20000" placeholder="Scope, site details, contacts, next steps…" bind:value={notes}></textarea>
-        <div class="row"><button class="btn primary sm" disabled={!notesDirty} onclick={saveNotes}>Save notes</button></div>
+        <div class="row"><button class="btn primary sm" disabled={!notesDirty || saving === "notes"} onclick={saveNotes}>{saving === "notes" ? "Saving…" : "Save notes"}</button></div>
       </section>
 
       <Credentials projectId={id} onchange={reloadActivity} />
@@ -168,7 +191,8 @@
             </select>
           </div>
           <div class="field"><label for="p-due">Target date</label><input id="p-due" class="input" type="date" bind:value={details.due_on} /></div>
-          <div class="row"><button class="btn primary sm" disabled={!detailsDirty}>Save details</button></div>
+          {#if detailsError}<p class="error" role="alert">{detailsError}</p>{/if}
+          <div class="row"><button class="btn primary sm" disabled={!detailsDirty || saving === "details"}>{saving === "details" ? "Saving…" : "Save details"}</button></div>
         </form>
       </section>
 
@@ -214,7 +238,6 @@
   .stage i { width: 8px; height: 8px; border-radius: 50%; }
   .ps-potential i { background: var(--st-new); } .ps-proposed i { background: var(--st-proposal); } .ps-in_progress i { background: var(--st-contacted); }
   .ps-on_hold i { background: var(--warning); } .ps-done i { background: var(--good); } .ps-cancelled i { background: var(--st-lost); }
-  .saved { font-size: 13px; color: var(--good-text); animation: rise 0.3s var(--ease) both; }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
   .main, .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   textarea.input { width: 100%; }

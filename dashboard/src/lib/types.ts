@@ -285,7 +285,7 @@ export type Credential = {
 };
 export type CredentialInput = Pick<Credential, "id" | "project_id" | "label" | "secret" | "sort">;
 
-export type ToastMsg = { id: number; title: string; body: string; href?: string };
+export type ToastMsg = { id: number; tone: "info" | "success" | "error"; title?: string; body: string; href?: string; /** The words of the link, when there is an href. */ link?: string };
 
 // ---------------------------------------------------------------------------
 // Patch reports (made in the cyberxla-patch-reports repo, edited here)
