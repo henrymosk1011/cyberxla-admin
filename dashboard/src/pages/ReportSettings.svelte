@@ -2,6 +2,7 @@
   import db from "$db";
   import Confirm from "../components/Confirm.svelte";
   import LoadState from "../components/LoadState.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { thisWeek } from "../lib/reports.ts";
   import type { Client, ReportRow, ReportSettings } from "../lib/types.ts";
@@ -69,11 +70,7 @@
   }
 </script>
 
-<a class="back" href="#/reports">← All reports</a>
-<header class="top">
-  <p class="eyebrow">Patch reports</p>
-  <h1>Report settings</h1>
-</header>
+<PageHeader back={{ href: "#/reports", label: "All reports" }} eyebrow="Patch reports" title="Report settings" />
 
 {#if !saved}
   <LoadState error={loadError} what="the settings" onretry={() => { loadError = ""; load(); }} />
@@ -141,10 +138,6 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
-  .back:hover { color: var(--text); }
-  .top { margin-bottom: 20px; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .form { display: flex; flex-direction: column; gap: 20px; }
   fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }

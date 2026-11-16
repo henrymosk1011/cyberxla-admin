@@ -1,5 +1,6 @@
 <script lang="ts">
   import StatusPill from "../components/StatusPill.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
   import ExportDialog from "../components/ExportDialog.svelte";
   import { ago, money, STATUS_LABEL } from "../lib/format.ts";
   import { LEAD_STATUSES, type Client, type Lead, type LeadStatus, type Quote } from "../lib/types.ts";
@@ -47,23 +48,17 @@
   }
 </script>
 
-<header class="top">
-  <div>
-    <p class="eyebrow">Leads</p>
-    <h1>{view === "board" ? "Board" : "All leads"}</h1>
+<PageHeader eyebrow="Leads" title={view === "board" ? "Board" : "All leads"}>
+  <input class="input search" type="search" placeholder="Search name, company, email, phone" aria-label="Search leads" bind:value={q} />
+  <div class="seg" role="group" aria-label="View">
+    <button aria-pressed={view === "list"} onclick={() => (location.hash = "#/leads")}>List</button>
+    <button aria-pressed={view === "board"} onclick={() => (location.hash = "#/board")}>Board</button>
   </div>
-  <div class="tools">
-    <input class="input search" type="search" placeholder="Search name, company, email, phone" aria-label="Search leads" bind:value={q} />
-    <div class="seg" role="group" aria-label="View">
-      <button aria-pressed={view === "list"} onclick={() => (location.hash = "#/leads")}>List</button>
-      <button aria-pressed={view === "board"} onclick={() => (location.hash = "#/board")}>Board</button>
-    </div>
-    <button class="btn export" onclick={() => (exporting = true)} disabled={!leads.length} title="Download leads as Excel or CSV">
-      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Export
-    </button>
-  </div>
-</header>
+  <button class="btn export" onclick={() => (exporting = true)} disabled={!leads.length} title="Download leads as Excel or CSV">
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Export
+  </button>
+</PageHeader>
 
 {#if view === "list"}
   <div class="filters">
@@ -153,11 +148,7 @@
 <ExportDialog open={exporting} onclose={() => (exporting = false)} {leads} shown={view === "board" ? searched : rows} {quotes} {clients} />
 
 <style>
-  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
-  .tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .export { display: inline-flex; align-items: center; gap: 7px; height: 38px; }
-  .search { width: min(340px, 100%); height: 38px; }
   .filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
   .filters .seg { flex-wrap: wrap; border-radius: 14px; }
   .c { color: var(--muted); font-weight: 500; margin-left: 2px; }
@@ -174,9 +165,6 @@
 
   /* Tablets and phones: stack the header, swipeable filter chips. */
   @media (max-width: 860px) {
-    .top { flex-direction: column; align-items: stretch; }
-    .tools { flex-wrap: nowrap; }
-    .search { flex: 1 1 0; width: 0; min-width: 0; }
     .filters { flex-direction: column; align-items: stretch; }
     .filters .seg {
       flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
@@ -189,9 +177,6 @@
 
   /* Phones: each lead becomes a compact card. */
   @media (max-width: 640px) {
-    .tools { flex-direction: column; align-items: stretch; }
-    .search { flex: none; width: 100%; }
-    .tools .seg { align-self: flex-start; }
     .flush { padding: 4px; }
     .table thead { display: none; }
     .table, .table tbody { display: block; }

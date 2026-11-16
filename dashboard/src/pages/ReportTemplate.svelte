@@ -7,6 +7,7 @@
   import Confirm from "../components/Confirm.svelte";
   import DidItems from "../components/DidItems.svelte";
   import LoadState from "../components/LoadState.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
   import SaveBar from "../components/SaveBar.svelte";
   import { guardUnsaved } from "../lib/nav.svelte.ts";
   import { messageOf } from "../lib/toast.svelte.ts";
@@ -107,12 +108,11 @@
   </div>
 {/snippet}
 
-<a class="back" href="#/reports/settings">← Report settings</a>
-<header class="top">
-  <p class="eyebrow">Patch reports</p>
-  <h1>Report template</h1>
-  <p class="lead">Every new report starts from this wording and order. Changes apply to reports generated after you save; reports already made don't change. Words in curly brackets, like <code>{"{computers}"}</code>, are filled in with each report's numbers and dates.</p>
-</header>
+<PageHeader back={{ href: "#/reports/settings", label: "Report settings" }} eyebrow="Patch reports" title="Report template">
+  {#snippet meta()}
+    <p class="lead">Every new report starts from this wording and order. Changes apply to reports generated after you save; reports already made don't change. Words in curly brackets, like <code>{"{computers}"}</code>, are filled in with each report's numbers and dates.</p>
+  {/snippet}
+</PageHeader>
 
 {#if !draft || !p}
   <LoadState error={loadError} what="the template" onretry={() => { loadError = ""; load(); }} />
@@ -238,11 +238,7 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
-  .back:hover { color: var(--text); }
-  .top { margin-bottom: 20px; max-width: 760px; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin: 4px 0 10px; }
-  .lead { color: var(--text-2); font-size: 14px; }
+  .lead { color: var(--text-2); font-size: 14px; max-width: 760px; margin-top: 10px; }
   code { font-family: var(--mono); font-size: 0.92em; color: var(--lime); }
   .callout { border: 1px solid var(--line-2); border-left: 3px solid var(--warning); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; background: var(--surface); }
   .callout p { margin-top: 2px; color: var(--text-2); }
@@ -258,7 +254,7 @@
   .input { width: 100%; min-width: 0; }
   textarea.input { line-height: 1.5; }
   .hint { font-size: 12.5px; color: var(--muted); }
-  .periodbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 8px; z-index: 5; padding: 8px 12px; border-radius: 999px; background: var(--plane); border: 1px solid var(--line); align-self: flex-start; }
+  .periodbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 5; padding: 8px 12px; border-radius: 999px; background: var(--plane); border: 1px solid var(--line); align-self: flex-start; }
   .periodbar span { font-size: 13px; font-weight: 600; color: var(--text-2); }
   fieldset.cols5 { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   fieldset legend { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
@@ -271,7 +267,6 @@
     .side { position: static; }
   }
   @media (max-width: 640px) {
-    h1 { font-size: 26px; }
     .grid { grid-template-columns: 1fr; }
     fieldset.cols5 { grid-template-columns: 1fr 1fr; }
     .periodbar { border-radius: 14px; }

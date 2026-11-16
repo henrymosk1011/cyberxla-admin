@@ -110,7 +110,7 @@
 {/snippet}
 
 <style>
-  .wrap { min-height: 100dvh; display: grid; place-items: center; align-content: center; gap: 20px; padding: 24px 16px; background: radial-gradient(1200px 600px at 50% -10%, rgba(214,255,63,0.07), transparent 60%), var(--plane); }
+  .wrap { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; align-content: center; gap: 20px; padding: 24px 16px; background: radial-gradient(1200px 600px at 50% -10%, rgba(214,255,63,0.07), transparent 60%), var(--plane); }
   .panel { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
   .brand { display: flex; }
   .panel { animation: rise 0.6s var(--ease) both; }
@@ -119,6 +119,8 @@
   form { display: flex; flex-direction: column; gap: 14px; }
   .qr { align-self: center; background: #fff; border-radius: 12px; padding: 10px; line-height: 0; }
   .secret { font-size: 13px; background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px; text-align: center; letter-spacing: 0.1em; overflow-wrap: anywhere; }
-  .code { font-size: 22px; letter-spacing: 0.4em; text-align: center; height: 52px; }
+  /* Full width of the card and no wider: the spaced digits must not stretch it past a phone screen. */
+  .code { font-size: 22px; letter-spacing: 0.4em; text-align: center; height: 52px; width: 100%; min-width: 0; }
+  form .input { min-width: 0; }
   .foot { font-size: 12px; }
 </style>

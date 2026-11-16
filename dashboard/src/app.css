@@ -32,8 +32,14 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --radius: 14px;
   --radius-sm: 8px;
+  /* Height of the bar across the top on narrow screens (0 on a desktop), for things that stick below it. */
+  --topbar-h: 0px;
   --sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@media (max-width: 860px) {
+  :root { --topbar-h: 52px; }
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

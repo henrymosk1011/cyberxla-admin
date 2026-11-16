@@ -1,6 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Modal from "../components/Modal.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
   import Confirm from "../components/Confirm.svelte";
   import { flip } from "svelte/animate";
   import { tick } from "svelte";
@@ -347,18 +348,11 @@
   const money = (n: number) => "$" + (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 </script>
 
-<header class="top">
-  <div>
-    <p class="eyebrow">Catalog</p>
-    <h1>Services</h1>
-    <p class="sub muted">{counts.live} live on your website{counts.total > counts.live ? ` · ${counts.total - counts.live} hidden` : ""}. Changes show on the quote builder right away.</p>
-  </div>
-  <div class="tools">
-    <input class="input search" type="search" placeholder="Search services" aria-label="Search services" bind:value={q} />
-    <button class="btn" onclick={newCategory}>+ Category</button>
-    <button class="btn primary" onclick={() => newService()}>+ Service</button>
-  </div>
-</header>
+<PageHeader eyebrow="Catalog" title="Services" sub={`${counts.live} live on your website${counts.total > counts.live ? ` · ${counts.total - counts.live} hidden` : ""}. Changes show on the quote builder right away.`}>
+  <input class="input search" type="search" placeholder="Search services" aria-label="Search services" bind:value={q} />
+  <button class="btn" onclick={newCategory}>+ Category</button>
+  <button class="btn primary" onclick={() => newService()}>+ Service</button>
+</PageHeader>
 
 <svelte:window onpointermove={onMove} onpointerup={endDrag} onpointercancel={endDrag} />
 
@@ -539,11 +533,6 @@
 <Confirm bind:this={confirm} />
 
 <style>
-  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
-  .sub { font-size: 14px; margin-top: 6px; }
-  .tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .search { width: 240px; height: 38px; }
   .cats { display: flex; flex-direction: column; gap: 16px; transition: opacity 0.2s; }
   .cats.busy { opacity: 0.7; }
   .cat-head { display: flex; align-items: flex-start; gap: 8px 12px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -636,7 +625,6 @@
     .unit { min-width: 0; }
     .svcs li > .acts { grid-column: 2; }
     .desc { white-space: normal; }
-    .search { flex: 1 1 100%; width: auto; }
   }
   @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
 </style>

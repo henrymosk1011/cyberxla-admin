@@ -1,6 +1,7 @@
 <script lang="ts">
   import db from "$db";
   import Modal from "../components/Modal.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
   import { money, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { CLIENT_STATUSES, type Client, type ClientService, type ClientStatus } from "../lib/types.ts";
 
@@ -65,16 +66,10 @@
   }
 </script>
 
-<header class="top">
-  <div>
-    <p class="eyebrow">Clients</p>
-    <h1>Clients</h1>
-  </div>
-  <div class="tools">
-    <input class="input search" type="search" placeholder="Search company, contact, email, phone" aria-label="Search clients" bind:value={q} />
-    <button class="btn primary" onclick={() => { form = blank(); formError = ""; creating = true; }}>+ New client</button>
-  </div>
-</header>
+<PageHeader eyebrow="Clients" title="Clients">
+  <input class="input search" type="search" placeholder="Search company, contact, email, phone" aria-label="Search clients" bind:value={q} />
+  <button class="btn primary" onclick={() => { form = blank(); formError = ""; creating = true; }}>+ New client</button>
+</PageHeader>
 
 <div class="kpis rise">
   <section class="card kpi hero"><p class="eyebrow">Monthly recurring revenue</p><p class="big num">{money(mrr)}<small>/mo</small></p><p class="muted">from {active.length} active {active.length === 1 ? "client" : "clients"}</p></section>
@@ -140,10 +135,6 @@
 </Modal>
 
 <style>
-  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 32px; letter-spacing: -0.035em; line-height: 1.1; margin-top: 4px; }
-  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .search { width: min(320px, 100%); height: 38px; }
   .kpis { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
   .kpi { display: flex; flex-direction: column; gap: 6px; justify-content: flex-end; }
   .kpi.hero { background: linear-gradient(160deg, rgba(214, 255, 63, 0.08), transparent 55%), var(--surface); }
@@ -175,9 +166,6 @@
   @media (max-width: 860px) {
     .kpis { grid-template-columns: 1fr 1fr; }
     .kpi.hero { grid-column: 1 / -1; }
-    .top { flex-direction: column; align-items: stretch; }
-    .tools { flex-wrap: nowrap; }
-    .search { flex: 1 1 0; width: 0; min-width: 0; }
     .filters .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
     .filters .seg::-webkit-scrollbar { display: none; }
     .filters .seg button { flex: none; }
