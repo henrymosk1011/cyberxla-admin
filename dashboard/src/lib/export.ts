@@ -23,14 +23,14 @@ export const FIELDS: Field[] = [
   { key: "archived", label: "Archived", group: "Pipeline", kind: "text", get: (l) => (l.archived_at ? "Yes" : "No") },
   { key: "client", label: "Converted to client", group: "Pipeline", kind: "text", get: (_, c) => (c.client ? "Yes" : "No") },
 
-  { key: "q_services", label: "Services", group: "Latest quote", kind: "text", get: (_, c) => c.quote?.items.map((i) => i.name).join(", ") ?? null, on: true },
-  { key: "q_workstations", label: "Workstations", group: "Latest quote", kind: "int", get: (_, c) => c.quote?.workstations ?? null },
-  { key: "q_servers", label: "Servers", group: "Latest quote", kind: "int", get: (_, c) => c.quote?.servers ?? null },
-  { key: "q_monthly", label: "Quote monthly total", group: "Latest quote", kind: "money", get: (_, c) => c.quote?.monthly_total ?? null },
-  { key: "q_once", label: "Quote one-time total", group: "Latest quote", kind: "money", get: (_, c) => c.quote?.one_time_total ?? null },
-  { key: "q_status", label: "Quote status", group: "Latest quote", kind: "text", get: (_, c) => (c.quote ? STATUS_LABEL[c.quote.status] ?? c.quote.status : null) },
-  { key: "q_date", label: "Quote date", group: "Latest quote", kind: "date", get: (_, c) => c.quote?.created_at ?? null },
-  { key: "q_message", label: "Their message", group: "Latest quote", kind: "text", get: (_, c) => c.quote?.message ?? null },
+  { key: "q_services", label: "Services", group: "Latest quote request", kind: "text", get: (_, c) => c.quote?.items.map((i) => i.name).join(", ") ?? null, on: true },
+  { key: "q_workstations", label: "Workstations", group: "Latest quote request", kind: "int", get: (_, c) => c.quote?.workstations ?? null },
+  { key: "q_servers", label: "Servers", group: "Latest quote request", kind: "int", get: (_, c) => c.quote?.servers ?? null },
+  { key: "q_monthly", label: "Quote request monthly total", group: "Latest quote request", kind: "money", get: (_, c) => c.quote?.monthly_total ?? null },
+  { key: "q_once", label: "Quote request one time total", group: "Latest quote request", kind: "money", get: (_, c) => c.quote?.one_time_total ?? null },
+  { key: "q_status", label: "Quote request status", group: "Latest quote request", kind: "text", get: (_, c) => (c.quote ? STATUS_LABEL[c.quote.status] ?? c.quote.status : null) },
+  { key: "q_date", label: "Quote request date", group: "Latest quote request", kind: "date", get: (_, c) => c.quote?.created_at ?? null },
+  { key: "q_message", label: "Their message", group: "Latest quote request", kind: "text", get: (_, c) => c.quote?.message ?? null },
 
   { key: "notes", label: "Notes", group: "Notes", kind: "text", get: (_, c) => c.notes.map((n) => `${localStamp(n.created_at)}: ${n.body}`).join("\n") || null },
 ];

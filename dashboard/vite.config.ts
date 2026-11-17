@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 // Security headers for Cloudflare Pages, generated at build time so the
 // Content-Security-Policy names the exact Supabase project and nothing else.
-function securityHeaders(supabaseUrl: string): Plugin {
+function securityHeaders(supabaseUrl: string, proposalOrigin: string): Plugin {
   const connect = ["'self'"];
   if (supabaseUrl) {
     const u = new URL(supabaseUrl);
@@ -18,6 +18,8 @@ function securityHeaders(supabaseUrl: string): Plugin {
     "font-src 'self'",
     "img-src 'self' data:",
     `connect-src ${connect.join(" ")}`,
+    // The quote editor's live preview frames the real quote page.
+    `frame-src ${proposalOrigin}`,
     "manifest-src 'self'",
     "base-uri 'none'",
     "form-action 'none'",
@@ -49,6 +51,13 @@ function securityHeaders(supabaseUrl: string): Plugin {
   };
 }
 
+/** Where the quote page lives (VITE_PROPOSAL_ORIGIN for local testing; cyberx.la otherwise). */
+function proposalOrigin(v: string | undefined): string {
+  const u = new URL(v || "https://cyberx.la");
+  if (u.protocol !== "https:" && u.hostname !== "localhost" && u.hostname !== "127.0.0.1") throw new Error("VITE_PROPOSAL_ORIGIN must be https");
+  return u.origin;
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const demo = mode === "demo";
@@ -56,7 +65,7 @@ export default defineConfig(({ mode }) => {
     throw new Error("Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (see dashboard/.env.example)");
   }
   return {
-    plugins: [svelte(), securityHeaders(demo ? "" : env.VITE_SUPABASE_URL ?? "")],
+    plugins: [svelte(), securityHeaders(demo ? "" : env.VITE_SUPABASE_URL ?? "", proposalOrigin(env.VITE_PROPOSAL_ORIGIN))],
     resolve: {
       alias: {
         // Demo mode swaps the real Supabase layer for sample data. The demo

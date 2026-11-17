@@ -5,7 +5,7 @@
   import { dismiss, toasts } from "../lib/toast.svelte.ts";
 </script>
 
-<div class="toasts" aria-live="polite" aria-label="Notifications">
+<div class="toasts" role="region" aria-live="polite" aria-label="Notifications">
   {#each toasts.list as t (t.id)}
     <div class="toast t-{t.tone}" role={t.tone === "error" ? "alert" : undefined}>
       <span class="mark" aria-hidden="true">{#if t.tone === "success"}<Icon name="check" size={12} />{:else if t.tone === "error"}!{/if}</span>

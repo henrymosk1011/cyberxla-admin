@@ -74,8 +74,10 @@ export const LIMITS = {
 } as const;
 
 export const KEY = /^[a-z0-9]{1,24}$/;
-const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u2028\u2029]/;
-const ONE_LINE = /[\u0000-\u001F\u007F\u2028\u2029]/;
+// Line and paragraph separators, built from char codes so no tool or editor can turn them into raw characters.
+const SEPARATORS = String.fromCharCode(0x2028, 0x2029);
+const CONTROL = new RegExp(`[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F${SEPARATORS}]`);
+const ONE_LINE = new RegExp(`[\\u0000-\\u001F\\u007F${SEPARATORS}]`);
 
 export class BadDoc extends Error {}
 

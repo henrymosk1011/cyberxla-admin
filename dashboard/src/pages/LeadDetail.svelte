@@ -26,7 +26,7 @@
     if (!lead) return;
     if (!(await confirm.ask({
       title: `Convert ${lead.company || lead.name} to a client?`,
-      body: `Creates a client with their contact details and the services and prices from their newest quote (you can change anything after).${projects.length ? " Their projects move to the client." : ""} The lead is marked Won.`,
+      body: `Creates a client with their contact details and the services and prices from their newest quote request (you can change anything after).${projects.length ? " Their projects move to the client." : ""} The lead is marked Won.`,
       action: "Convert to client",
     }))) return;
     converting = true;
@@ -96,11 +96,11 @@
   }
   async function toggleArchiveQuote(q: Quote) {
     const archiving = !q.archived_at;
-    if (archiving && !(await confirm.ask({ title: "Archive this quote?", body: "It's hidden from your stats and the lead's value, but kept. You can restore it under \"Archived quotes\".", action: "Archive" }))) return;
+    if (archiving && !(await confirm.ask({ title: "Archive this quote request?", body: "It's hidden from your stats and the lead's value, but kept. You can restore it under \"Archived quote requests\".", action: "Archive" }))) return;
     await run(() => db.archiveQuote(q.id, archiving), "Couldn't update the quote.");
   }
   async function deleteQuote(q: Quote) {
-    if (!(await confirm.ask({ title: "Delete this quote?", body: `The ${money(q.monthly_total)}/mo quote from ${dateTime(q.created_at)} will be permanently deleted. This can't be undone.`, action: "Delete permanently", danger: true }))) return;
+    if (!(await confirm.ask({ title: "Delete this quote request?", body: `The ${money(q.monthly_total)}/mo quote request from ${dateTime(q.created_at)} will be permanently deleted. This can't be undone.`, action: "Delete permanently", danger: true }))) return;
     await run(() => db.deleteQuote(q.id), "Couldn't delete the quote.");
   }
   async function deleteNote(n: Note) {
@@ -175,10 +175,10 @@
       return `${who}: lead deleted`;
     }
     if (a.table_name === "quotes") {
-      if (a.action === "insert") return `${who}: quote received (${money(Number(n.monthly_total ?? 0))}/mo)`;
-      if (a.action === "delete") return `${who}: quote deleted (${money(Number(o.monthly_total ?? 0))}/mo)`;
-      if (archivedChange) return `${who}: quote ${n.archived_at ? "archived" : "restored"}`;
-      if (a.action === "update" && n.status !== o.status) return `${who}: quote ${STATUS_LABEL[String(n.status)]?.toLowerCase() ?? n.status}`;
+      if (a.action === "insert") return `${who}: quote request received (${money(Number(n.monthly_total ?? 0))}/mo)`;
+      if (a.action === "delete") return `${who}: quote request deleted (${money(Number(o.monthly_total ?? 0))}/mo)`;
+      if (archivedChange) return `${who}: quote request ${n.archived_at ? "archived" : "restored"}`;
+      if (a.action === "update" && n.status !== o.status) return `${who}: quote request ${STATUS_LABEL[String(n.status)]?.toLowerCase() ?? n.status}`;
       if (a.action === "update" && Array.isArray(n.items) && Array.isArray(o.items)) {
         const names = (xs: unknown[]) => new Map(xs.map((x) => [String((x as { id: string }).id), String((x as { name: string }).name)]));
         const before = names(o.items), after = names(n.items);
@@ -189,9 +189,9 @@
           rem.length ? `removed ${rem.join(", ")}` : "",
           n.workstations !== o.workstations || n.servers !== o.servers ? `devices ${o.workstations}+${o.servers} → ${n.workstations}+${n.servers}` : "",
         ].filter(Boolean);
-        if (parts.length) return `${who}: quote edited, ${parts.join("; ")} (now ${money(Number(n.monthly_total ?? 0))}/mo)`;
+        if (parts.length) return `${who}: quote request edited, ${parts.join("; ")} (now ${money(Number(n.monthly_total ?? 0))}/mo)`;
       }
-      return `${who}: quote updated`;
+      return `${who}: quote request updated`;
     }
     if (a.table_name === "projects") return describeProject(a);
     if (a.table_name === "clients") return a.action === "insert" ? `${who}: converted to a client` : a.action === "delete" ? `${who}: client deleted` : `${who}: client details updated`;
@@ -242,11 +242,11 @@
       {#each activeQuotes as q (q.id)}
         {@render quoteCard(q)}
       {:else}
-        <section class="card"><p class="empty">{archivedQuotes.length ? "All quotes for this lead are archived." : "No quotes for this lead."}</p></section>
+        <section class="card"><p class="empty">{archivedQuotes.length ? "All quote requests for this lead are archived." : "No quote requests from the website for this lead."}</p></section>
       {/each}
       {#if archivedQuotes.length}
         <button class="btn ghost sm toggle" onclick={() => (showArchived = !showArchived)}>
-          {showArchived ? "Hide" : "Show"} archived quotes ({archivedQuotes.length})
+          {showArchived ? "Hide" : "Show"} archived quote requests ({archivedQuotes.length})
         </button>
         {#if showArchived}
           {#each archivedQuotes as q (q.id)}{@render quoteCard(q)}{/each}
@@ -291,17 +291,17 @@
   <section class="card quote" class:archived={!!q.archived_at}>
     <div class="card-head">
       <div>
-        <h2>Quote · {dateTime(q.created_at)}{#if q.archived_at}<span class="tag">Archived</span>{/if}</h2>
+        <h2>Quote request · {dateTime(q.created_at)}{#if q.archived_at}<span class="tag">Archived</span>{/if}</h2>
         <p class="sub">{q.workstations} workstations · {q.servers} servers</p>
       </div>
       <div class="qacts">
-        <select class="input sel" aria-label="Quote status" value={q.status} onchange={(e) => setQuoteStatus(q, e.currentTarget.value as QuoteStatus)}>
+        <select class="input sel" aria-label="Quote request status" value={q.status} onchange={(e) => setQuoteStatus(q, e.currentTarget.value as QuoteStatus)}>
           {#each QUOTE_STATUSES as s (s)}<option value={s}>{STATUS_LABEL[s]}</option>{/each}
         </select>
         {#if !editing[q.id]}<button class="btn sm" onclick={() => (editing[q.id] = true)}>Edit</button>{/if}
-        <Menu label="More actions for the quote from {dateTime(q.created_at)}" items={[
-          { label: q.archived_at ? "Restore quote" : "Archive quote", onselect: () => toggleArchiveQuote(q) },
-          { label: "Delete quote", danger: true, onselect: () => deleteQuote(q) },
+        <Menu label="More actions for the quote request from {dateTime(q.created_at)}" items={[
+          { label: q.archived_at ? "Restore quote request" : "Archive quote request", onselect: () => toggleArchiveQuote(q) },
+          { label: "Delete quote request", danger: true, onselect: () => deleteQuote(q) },
         ]} />
       </div>
     </div>

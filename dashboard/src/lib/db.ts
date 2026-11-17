@@ -4,7 +4,7 @@
 import { createClient, FunctionsHttpError, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
 import { catalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, Quote, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalRow, ProposalTemplate, ProposalVersion, ProjectService, Quote, QuoteSettings, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -562,7 +562,153 @@ const db: Db = {
     const ch = sb.channel("reports").on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => cb()).subscribe();
     return () => void sb.removeChannel(ch);
   },
+
+  async createLead(l) {
+    const { data, error } = await sb.from("leads").insert({ ...l, email: l.email.trim().toLowerCase(), source: "manual" }).select("id").single();
+    if (error?.code === "23505") throw new Error("A lead with that email already exists. Pick it from the list instead.");
+    fail(friendly(error));
+    return (data as { id: string }).id;
+  },
+
+  async proposals() {
+    const { data, error } = await sb.from("proposals").select(PROPOSAL_LIST).order("number", { ascending: false }).limit(5000);
+    fail(error);
+    return (data ?? []).map(normProposal) as ProposalRow[];
+  },
+
+  async proposal(id) {
+    if (!UUID.test(id)) return null;
+    const { data, error } = await sb.from("proposals").select(`${PROPOSAL_LIST}, internal, internal_notes`).eq("id", id).maybeSingle();
+    fail(error);
+    return data ? (normProposal(data) as Proposal) : null;
+  },
+
+  async createProposal(p) {
+    const { data, error } = await sb.from("proposals").insert(p).select("id").single();
+    fail(proposalError(error));
+    return (data as { id: string }).id;
+  },
+
+  async updateProposal(id, patch) {
+    const { error, count } = await sb.from("proposals").update(patch, { count: "exact" }).eq("id", id);
+    fail(proposalError(error));
+    if (count === 0) throw new Error("Nothing was saved. Reload and try again.");
+  },
+
+  async deleteProposal(id) {
+    const { error, count } = await sb.from("proposals").delete({ count: "exact" }).eq("id", id);
+    fail(proposalError(error));
+    if (count === 0) throw new Error("Nothing was deleted. Reload and try again.");
+  },
+
+  async proposalEvents(id) {
+    const { data, error } = await sb.from("proposal_events").select("*").eq("proposal_id", id).order("at", { ascending: false }).order("id", { ascending: false }).limit(300);
+    fail(error);
+    return (data ?? []) as ProposalEvent[];
+  },
+
+  async recentProposalEvents(limit) {
+    const { data, error } = await sb.from("proposal_events").select("*").not("kind", "in", "(edited)").order("at", { ascending: false }).limit(limit);
+    fail(error);
+    return (data ?? []) as ProposalEvent[];
+  },
+
+  async proposalVersions(id) {
+    const { data, error } = await sb.from("proposal_versions").select("id, proposal_id, version, sent_at, header, content").eq("proposal_id", id).order("version", { ascending: false });
+    fail(error);
+    return (data ?? []) as ProposalVersion[];
+  },
+
+  async proposalAcceptances(id) {
+    const { data, error } = await sb.from("proposal_acceptances")
+      .select("id, proposal_id, version, accepted_at, tier, addons, lines, once_total, monthly_total, due_now, signer_name, signer_title, signer_email, signature, doc")
+      .eq("proposal_id", id).order("accepted_at", { ascending: false });
+    fail(error);
+    return (data ?? []).map((a) => ({ ...(a as ProposalAcceptance), once_total: Number(a.once_total), monthly_total: Number(a.monthly_total), due_now: Number(a.due_now) }));
+  },
+
+  async proposalRpc(fn, args) {
+    const { data, error } = await sb.rpc(fn, args);
+    fail(proposalError(error));
+    return data;
+  },
+
+  async quoteAction(body) {
+    const { data, error } = await sb.functions.invoke("quote-action", { body });
+    if (error) {
+      let message = "Couldn't reach the quote service. Try again.";
+      if (error instanceof FunctionsHttpError) {
+        try {
+          message = String((await error.context.json()).error ?? message);
+        } catch {
+          // keep the generic message
+        }
+      }
+      throw new Error(message);
+    }
+    return data as Record<string, unknown>;
+  },
+
+  async templates() {
+    const { data, error } = await sb.from("proposal_templates").select("*").order("name");
+    fail(error);
+    return (data ?? []) as ProposalTemplate[];
+  },
+
+  async saveTemplate(t, id) {
+    const { data, error } = id
+      ? await sb.from("proposal_templates").update(t).eq("id", id).select("id").single()
+      : await sb.from("proposal_templates").insert(t).select("id").single();
+    if (error?.code === "23505") throw new Error("A template with that name already exists. Pick another name.");
+    fail(proposalError(error));
+    return (data as { id: string }).id;
+  },
+
+  async deleteTemplate(id) {
+    const { error } = await sb.from("proposal_templates").delete().eq("id", id);
+    fail(error);
+  },
+
+  async quoteSettings() {
+    const { data, error } = await sb.from("quote_settings").select("notify_email, reply_to, from_name, default_valid_days, remind_unviewed_days, remind_expiry_days, stripe_mode, stripe_checked_at, cron_seen_at, updated_at").eq("id", 1).single();
+    fail(error);
+    return data as QuoteSettings;
+  },
+
+  async saveQuoteSettings(patch) {
+    const { error, count } = await sb.from("quote_settings").update(patch, { count: "exact" }).eq("id", 1);
+    fail(friendly(error));
+    if (count === 0) throw new Error("Nothing was saved. Try signing in again.");
+  },
+
+  async payments() {
+    const { data, error } = await sb.from("payments").select("id, created_at, proposal_id, acceptance_id, project_id, kind, amount, status, livemode, stripe_session_id, stripe_payment_intent, paid_at").order("created_at", { ascending: false }).limit(2000);
+    fail(error);
+    return (data ?? []).map((p) => ({ ...(p as Payment), amount: Number(p.amount) }));
+  },
+
+  subscribeProposals(cb) {
+    const ch = sb.channel("proposals")
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposals" }, () => cb())
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposal_events" }, () => cb())
+      .subscribe();
+    return () => void sb.removeChannel(ch);
+  },
 };
+
+const PROPOSAL_LIST = "id, number, created_at, updated_at, lead_id, client_id, title, status, recipient_name, recipient_email, cc, prepared_on, valid_until, content, token, version, revising, scheduled_at, send_subject, send_note, reminders, sent_at, last_sent_at, first_viewed_at, last_viewed_at, view_count, changes_requested_at, accepted_at, accepted_version, accepted_once, accepted_monthly, archived_at";
+
+function normProposal(r: Record<string, unknown>) {
+  return { ...r, accepted_once: r.accepted_once === null ? null : Number(r.accepted_once), accepted_monthly: r.accepted_monthly === null ? null : Number(r.accepted_monthly) };
+}
+
+/** The database's own messages for quotes are already plain sentences. */
+function proposalError(e: { message: string; code?: string } | null) {
+  if (!e) return null;
+  if (e.code === "23514") return { message: "Something in the quote isn't valid. Check the prices, the required names, and the lengths." };
+  if (e.code === "42501") return { message: "That change isn't allowed here. Sign in again if this keeps happening." };
+  return e;
+}
 
 const REPORT_LIST = "id, created_at, updated_at, client_id, period, period_key, period_start, period_end, is_test, status, send_at, recipients, cc, subject, failure_count, warnings, content_version, rendered_version, rendered_at, render_error, claimed_at, attempts, sent_at, error, cleared_at, clients(company, contact_name)";
 
