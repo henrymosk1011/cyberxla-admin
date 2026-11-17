@@ -15,3 +15,18 @@ verify_jwt = false
 # (public.is_admin() with the caller's token).
 [functions.quote-action]
 verify_jwt = false
+
+# The quote page's Accept, Request changes and Pay buttons. Public, so it does
+# its own checks (origin, Turnstile, rate limits, totals) like submit-quote.
+[functions.quote-public]
+verify_jwt = false
+
+# The scheduler's worker. Called by pg_cron with a key from Vault, which the
+# function checks against the database; browsers are refused.
+[functions.quote-cron]
+verify_jwt = false
+
+# Stripe's webhook. Stripe signs each event; the function checks the signature
+# with STRIPE_WEBHOOK_SECRET before reading anything.
+[functions.stripe-webhook]
+verify_jwt = false

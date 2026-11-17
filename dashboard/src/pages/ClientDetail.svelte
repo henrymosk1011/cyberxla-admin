@@ -10,6 +10,7 @@
   import Modal from "../components/Modal.svelte";
   import Menu from "../components/Menu.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
+  import QuotesCard from "../components/QuotesCard.svelte";
   import ServiceLines from "../components/ServiceLines.svelte";
   import ClientReportsCard from "../components/ClientReportsCard.svelte";
   import LoadState from "../components/LoadState.svelte";
@@ -18,9 +19,9 @@
   import { describeLine, describeProject, describeReport } from "../lib/activity.ts";
   import { money, num, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { EMAIL } from "../lib/reports.ts";
-  import { CLIENT_STATUSES, type AuditEntry, type Client, type ClientService, type ClientStatus, type Project, type ProjectService } from "../lib/types.ts";
+  import { CLIENT_STATUSES, type AuditEntry, type Client, type ClientService, type ClientStatus, type Project, type ProjectService, type ProposalRow } from "../lib/types.ts";
 
-  let { id, version, projects, projectLines }: { id: string; version: number; projects: Project[]; projectLines: ProjectService[] } = $props();
+  let { id, version, projects, projectLines, proposals = [] }: { id: string; version: number; projects: Project[]; projectLines: ProjectService[]; proposals?: ProposalRow[] } = $props();
 
   let client = $state<Client | null | undefined>(undefined);
   let lines = $state<ClientService[]>([]);
@@ -189,6 +190,7 @@
         onremove={(l) => run(() => db.deleteClientService(l.id))} />
 
       <ProjectsCard {projects} lines={projectLines} owner={{ lead_id: null, client_id: id }} noun="client" />
+      <QuotesCard {proposals} owner="client:{id}" noun="client" />
 
       <section class="card">
         <div class="card-head"><h2 id="client-notes-h">Notes</h2></div>

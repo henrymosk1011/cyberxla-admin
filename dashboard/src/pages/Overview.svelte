@@ -5,11 +5,34 @@
   import ColumnChart from "../components/ColumnChart.svelte";
   import BarList from "../components/BarList.svelte";
   import StatusPill from "../components/StatusPill.svelte";
+  import db from "$db";
   import { kpis, stages, topServices, weekly } from "../lib/stats.ts";
   import { ago, money, moneyCompact, num, shortDate, STATUS_LABEL } from "../lib/format.ts";
-  import type { Client, ClientService, Lead, Quote } from "../lib/types.ts";
+  import { describeEvent, ownerOf, quoteStats } from "../lib/quotes.ts";
+  import { usd } from "../../../supabase/functions/_shared/proposal.ts";
+  import type { Client, ClientService, Lead, ProposalEvent, ProposalRow, Quote } from "../lib/types.ts";
 
-  let { leads, quotes, clients = [], clientLines = [] }: { leads: Lead[]; quotes: Quote[]; clients?: Client[]; clientLines?: ClientService[] } = $props();
+  let { leads, quotes, clients = [], clientLines = [], proposals = [] }: { leads: Lead[]; quotes: Quote[]; clients?: Client[]; clientLines?: ClientService[]; proposals?: ProposalRow[] } = $props();
+
+  // Outgoing quotes: the numbers, recent activity, and card payments this month.
+  const qs = $derived(quoteStats(proposals));
+  const quoteById = $derived(new Map(proposals.map((p) => [p.id, p])));
+  let events = $state<ProposalEvent[]>([]);
+  let paidThisMonth = $state(0);
+  $effect(() => {
+    void proposals;
+    let gone = false;
+    Promise.all([db.recentProposalEvents(6), db.payments()])
+      .then(([e, pays]) => {
+        if (gone) return;
+        events = e;
+        const n = new Date(), start = new Date(n.getFullYear(), n.getMonth(), 1).getTime();
+        paidThisMonth = pays.filter((m) => m.status === "paid" && m.kind !== "test" && m.paid_at && new Date(m.paid_at).getTime() >= start).reduce((s, m) => s + Math.round(m.amount * 100), 0);
+      })
+      .catch(() => { /* the numbers above still show; activity just stays empty */ });
+    return () => { gone = true; };
+  });
+  const who = (p: ProposalRow | undefined) => (p ? ownerOf(p, clients, leads)?.label ?? p.recipient_name : "");
 
   const activeClients = $derived(new Set(clients.filter((c) => c.status === "active").map((c) => c.id)));
   const mrr = $derived(clientLines.filter((l) => l.billing === "monthly" && activeClients.has(l.client_id)).reduce((s, l) => s + l.amount, 0));
@@ -53,6 +76,36 @@
   <section class="card"><Kpi label="Quote requests" value={num(k.quotes)} delta={k.quotes - k.quotesPrev} deltaLabel="vs prior" spark={wk.map((w) => w.count)} /></section>
   <section class="card"><Kpi label="Win rate" value={k.winRate === null ? "None yet" : Math.round(k.winRate * 100) + "%"} hint="{moneyCompact(k.wonMonthly)}/mo won in range" /></section>
   <section class="card"><Kpi label="Average request" value={k.avgMonthly === null ? "None yet" : money(k.avgMonthly) + "/mo"} hint="monthly, quote requests in range" /></section>
+
+  <section class="card wide quotes">
+    <div class="card-head"><div><h2>Quotes</h2><p class="sub">Quotes you've sent</p></div><a class="more" href="#/quotes">All quotes <Icon name="arrow-right" size={14} /></a></div>
+    <div class="qk">
+      <Kpi label="Open quotes" value={num(qs.open)} hint={qs.open ? `${usd(qs.openValue)} one time${qs.openMonthly ? `, ${usd(qs.openMonthly)}/mo` : ""}` : "None waiting on a client"} />
+      <Kpi label="Sent this month" value={num(qs.sentThisMonth)} />
+      <Kpi label="Quote win rate" value={qs.winRate === null ? "None yet" : Math.round(qs.winRate * 100) + "%"} hint="accepted, of accepted, declined and expired" />
+      <Kpi label="Time to accept" value={qs.avgDaysToAccept === null ? "None yet" : `${qs.avgDaysToAccept} ${qs.avgDaysToAccept === 1 ? "day" : "days"}`} hint="average, from sent to accepted" />
+      <Kpi label="Paid this month" value={usd(paidThisMonth)} hint="card payments through Stripe" />
+    </div>
+  </section>
+
+  <section class="card side">
+    <div class="card-head"><div><h2>Quote activity</h2></div></div>
+    {#if events.length}
+      <ul class="qact">
+        {#each events as e (e.id)}
+          {@const p = quoteById.get(e.proposal_id)}
+          <li>
+            <a href="#/quotes/{e.proposal_id}">
+              <span class="who"><strong>{p ? `Q${p.number}` : "Quote"} {who(p)}</strong><span class="muted">{describeEvent(e)}</span></span>
+              <span class="muted when">{ago(e.at)}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="empty">Sends, views and acceptances will appear here.</p>
+    {/if}
+  </section>
 
   <section class="card wide">
     <div class="card-head">
@@ -142,6 +195,13 @@
   .who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .who span { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .amt { font-weight: 600; }
+  .qk { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 18px 20px; }
+  .qact { list-style: none; }
+  .qact a { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px; margin: 0 -8px; border-radius: var(--radius-md); text-decoration: none; }
+  .qact a:hover { background: var(--surface-2); }
+  .qact li + li a { border-top: 1px solid var(--line); border-radius: 0; }
+  .qact .who span { white-space: normal; }
+  .when { font-size: var(--fs-xs); white-space: nowrap; }
   .amt small { font-size: var(--fs-xs); color: var(--muted); font-weight: 500; }
   @media (max-width: 1180px) {
     .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "../components/Icon.svelte";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import db from "$db";
   import EmptyState from "../components/EmptyState.svelte";
   import Field from "../components/Field.svelte";
@@ -20,7 +20,11 @@
   import { blankDoc, usd } from "../../../supabase/functions/_shared/proposal.ts";
   import { PROPOSAL_STATUSES, type Client, type Lead, type ProposalRow, type ProposalStatus, type ProposalTemplate } from "../lib/types.ts";
 
-  let { proposals, clients, leads, onchanged }: { proposals: ProposalRow[]; clients: Client[]; leads: Lead[]; onchanged: () => void } = $props();
+  let { proposals, clients, leads, onchanged, newFor = "" }: {
+    proposals: ProposalRow[]; clients: Client[]; leads: Lead[]; onchanged: () => void;
+    /** "lead:<id>" or "client:<id>" from a lead's or client's New quote button: opens the dialog for them. */
+    newFor?: string;
+  } = $props();
 
   let q = $state("");
   let filter = $state<ProposalStatus | "open" | "all" | "archived">("all");
@@ -101,6 +105,13 @@
     const t = templates.find((x) => x.id === id);
     if (t && (!form.title || templates.some((x) => x.title === form.title))) form.title = t.title;
   }
+  // From a lead's or client's page: open New quote for them, once.
+  $effect(() => {
+    const start = untrack(() => newFor);
+    if (!parseOwner(start)) return;
+    history.replaceState(history.state, "", "#/quotes");
+    untrack(() => startNew().then(() => { form.owner = start; }));
+  });
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   async function create(e: SubmitEvent) {
     e.preventDefault();
