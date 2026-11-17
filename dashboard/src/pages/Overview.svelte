@@ -50,13 +50,13 @@
     </div>
   </section>
   <section class="card"><Kpi label="New leads" value={num(k.newLeads)} delta={k.newLeads - k.newLeadsPrev} deltaLabel="vs prior" hint="last {rangeLabel}" /></section>
-  <section class="card"><Kpi label="Quotes received" value={num(k.quotes)} delta={k.quotes - k.quotesPrev} deltaLabel="vs prior" spark={wk.map((w) => w.count)} /></section>
+  <section class="card"><Kpi label="Quote requests" value={num(k.quotes)} delta={k.quotes - k.quotesPrev} deltaLabel="vs prior" spark={wk.map((w) => w.count)} /></section>
   <section class="card"><Kpi label="Win rate" value={k.winRate === null ? "None yet" : Math.round(k.winRate * 100) + "%"} hint="{moneyCompact(k.wonMonthly)}/mo won in range" /></section>
-  <section class="card"><Kpi label="Average quote" value={k.avgMonthly === null ? "None yet" : money(k.avgMonthly) + "/mo"} hint="monthly, in range" /></section>
+  <section class="card"><Kpi label="Average request" value={k.avgMonthly === null ? "None yet" : money(k.avgMonthly) + "/mo"} hint="monthly, quote requests in range" /></section>
 
   <section class="card wide">
     <div class="card-head">
-      <div><h2>Quotes per week</h2><p class="sub">Last {rangeLabel}</p></div>
+      <div><h2>Quote requests per week</h2><p class="sub">Last {rangeLabel}</p></div>
       <div class="seg" role="group" aria-label="View">
         <button aria-pressed={!tableView} onclick={() => (tableView = false)}>Chart</button>
         <button aria-pressed={tableView} onclick={() => (tableView = true)}>Table</button>
@@ -65,7 +65,7 @@
     {#if tableView}
       <div class="scroll">
         <table class="table">
-          <thead><tr><th>Week of</th><th class="r">Quotes</th><th class="r">Monthly quoted</th><th class="r">One time quoted</th></tr></thead>
+          <thead><tr><th>Week of</th><th class="r">Quote requests</th><th class="r">Monthly quoted</th><th class="r">One time quoted</th></tr></thead>
           <tbody>
             {#each [...wk].reverse() as w (w.start.getTime())}
               <tr><td>{shortDate(w.start)}</td><td class="r num">{w.count}</td><td class="r num">{money(w.monthly)}</td><td class="r num">{money(w.oneTime)}</td></tr>
@@ -75,7 +75,7 @@
       </div>
     {:else}
       <ColumnChart
-        label="Quotes per week"
+        label="Quote requests per week"
         integer
         data={wk.map((w) => ({ label: shortDate(w.start), value: w.count, detail: `${money(w.monthly)}/mo quoted` }))}
       />
@@ -92,7 +92,7 @@
   </section>
 
   <section class="card half">
-    <div class="card-head"><div><h2>Most requested services</h2><p class="sub">Share of quotes, last {rangeLabel}</p></div></div>
+    <div class="card-head"><div><h2>Most requested services</h2><p class="sub">Share of quote requests, last {rangeLabel}</p></div></div>
     {#if svc.length}
       <BarList label="Most requested services" rows={svc.map((s) => ({ key: s.id, label: s.name, value: s.count, display: `${s.count} · ${Math.round(s.share * 100)}%` }))} />
     {:else}
@@ -101,7 +101,7 @@
   </section>
 
   <section class="card half">
-    <div class="card-head"><div><h2>Latest quotes</h2></div><a class="more" href="#/leads">All leads <Icon name="arrow-right" size={14} /></a></div>
+    <div class="card-head"><div><h2>Latest quote requests</h2></div><a class="more" href="#/leads">All leads <Icon name="arrow-right" size={14} /></a></div>
     {#if latest.length}
       <ul class="latest">
         {#each latest as q (q.id)}
@@ -116,7 +116,7 @@
         {/each}
       </ul>
     {:else}
-      <p class="empty">Quotes from the website will appear here.</p>
+      <p class="empty">Quote requests from the website will appear here.</p>
     {/if}
   </section>
 </div>

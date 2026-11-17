@@ -41,6 +41,8 @@ access to any table.
 | `supabase/migrations/0018_workspace_services.sql` | Google Workspace migration: Essentials, Pro and Complete tiers, plus their add ons |
 | `supabase/migrations/0019_proposals.sql` | Outgoing quotes ("Quotes" in the dashboard, `proposals` in the database): versions, timeline, acceptances, templates, payments, settings, and the public `proposal_view(token)` the quote page reads |
 | `supabase/functions/_shared/proposal.ts` | The quote document format, its checks, the totals math (discounts, deposits), and placeholders, shared by the dashboard and the Edge Functions |
+| `supabase/functions/quote-action/` | The dashboard's Send now, Resend, Send me a test, and the Payments page's status (emails through Resend) |
+| `supabase/functions/_shared/emails.ts` | Every quote email (to clients and to you), shared with the dashboard's email preview |
 | `supabase/functions/report-action/` | The dashboard's Send now, Send me a copy and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
@@ -308,3 +310,45 @@ Every change to leads, quotes, notes, clients, projects and patch reports is wri
 database trigger and can't be edited or deleted, even by the admin. "Remove
 from timeline" in the dashboard only hides an entry (`activity_hidden`); the
 original record stays, and "Show removed" brings it back.
+
+## Quotes
+
+**Quotes** (in the menu under Sales) are the quotes you send. The website's
+Build Your Quote submissions are **quote requests**, shown on each lead's page;
+they're separate things (`public.quotes` in the database is the requests,
+`public.proposals` is the quotes you send).
+
+- **Numbers**: Q1001, Q1002, ... taken when a quote is created and never reused
+  (a deleted quote's number stays unused).
+- **Editor**: client and recipient, details, tiers (one tier makes a simple
+  quote), comparison rows with a checkbox per tier (and optional text like
+  "1 week"), add ons (can add, included, or not offered, per tier), discounts on
+  any price or on the total (the page shows the old price struck through),
+  deposit or full payment, fine print shown per tier or per add on, follow ups,
+  and internal notes and costs (your margin per tier). It saves as you type.
+  The preview beside it is the real quote page from cyberx.la, desktop or phone.
+- **Placeholders** in any text: `{company}`, `{contact_first_name}`,
+  `{quote_number}`, `{valid_until}`. They're filled in when a version is sent.
+- **Catalog**: tiers, rows and add ons can come from the Services catalog with
+  its price and description; editing them never changes the catalog unless you
+  press Update catalog price.
+- **Templates**: Save as template from any quote, start new quotes from one.
+- **Sending**: Send shows the email first (Send me a test emails it to the
+  Notify me address in Quotes, Settings), then sends now or later. Each send
+  freezes a version; the client always sees the latest sent version at the same
+  link. A sent quote is locked: Revise opens a new version, and the client keeps
+  seeing the old one until you send it. Accepted quotes are locked the same way.
+- **The client's page** is `https://cyberx.la/proposal/?k=<token>` (in the
+  website repo). The token is 192 random bits; Make a new link replaces it and
+  Turn off the link makes the page say "This quote isn't available". Views are
+  counted once per half hour; your preview and View as client don't count.
+- **Statuses**: draft, scheduled, sent, viewed, changes requested, accepted,
+  declined, expired, revoked. Sending moves a lead to Proposal.
+
+### Setup for sending
+
+`quote-action` reads `RESEND_API_KEY` (already used by submit-quote). Deploy it
+like report-action: `npm run bundle-quote-action`, then paste
+`dist/quote-action.ts` into a new Edge Function named `quote-action` with
+"Verify JWT" off.
+

@@ -10,6 +10,7 @@
   import Projects from "./pages/Projects.svelte";
   import ProjectDetail from "./pages/ProjectDetail.svelte";
   import Services from "./pages/Services.svelte";
+  import Quotes from "./pages/Quotes.svelte";
   import { catalog } from "./lib/store.svelte.ts";
   import { lock } from "./lib/vault.svelte.ts";
   import Toast from "./components/Toast.svelte";
@@ -23,7 +24,7 @@
   import { arrival, leave, pageHeading } from "./lib/nav.svelte.ts";
   import { ms } from "./lib/motion.ts";
   import { messageOf, toast } from "./lib/toast.svelte.ts";
-  import type { AuthState, Client, ClientService, Lead, LeadStatus, Project, ProjectService, Quote } from "./lib/types.ts";
+  import type { AuthState, Client, ClientService, Lead, LeadStatus, Project, ProjectService, ProposalRow, Quote } from "./lib/types.ts";
 
   const IDLE_MS = 30 * 60 * 1000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,6 +36,7 @@
   let clientLines = $state<ClientService[]>([]);
   let projects = $state<Project[]>([]);
   let projectLines = $state<ProjectService[]>([]);
+  let proposals = $state<ProposalRow[]>([]);
   let loaded = $state(false);
   let stale = $state(false);
   let loadError = $state("");
@@ -45,7 +47,15 @@
   let navOpen = $state(false);
 
   const route = $derived.by(() => {
-    const h = hash.replace(/^#/, "") || "/";
+    const full = hash.replace(/^#/, "") || "/";
+    const h = full.split("?")[0]!;
+    const query = new URLSearchParams(full.split("?")[1] ?? "");
+    if (h === "/quotes") return { page: "quotes" as const };
+    if (h === "/quotes/templates") return { page: "quote-templates" as const };
+    if (h === "/quotes/settings") return { page: "quote-settings" as const };
+    if (h === "/quotes/payments") return { page: "payments" as const };
+    const qd = h.match(/^\/quotes\/([^/]+)$/);
+    if (qd) return UUID.test(qd[1]!) ? { page: "quote" as const, id: qd[1]!, send: query.get("send") === "1" } : { page: "notfound" as const };
     const m = h.match(/^\/leads\/([^/]+)$/);
     if (m) return UUID.test(m[1]!) ? { page: "lead" as const, id: m[1]! } : { page: "notfound" as const };
     if (h === "/leads") return { page: "leads" as const };
@@ -121,8 +131,8 @@
   async function refresh() {
     stale = true;
     try {
-      [leads, quotes, clients, clientLines, projects, projectLines, catalog.categories, catalog.services] = await Promise.all([
-        db.leads(), db.quotes(), db.clients(), db.allClientServices(), db.projects(), db.allProjectServices(), db.categories(), db.services(),
+      [leads, quotes, clients, clientLines, projects, projectLines, catalog.categories, catalog.services, proposals] = await Promise.all([
+        db.leads(), db.quotes(), db.clients(), db.allClientServices(), db.projects(), db.allProjectServices(), db.categories(), db.services(), db.proposals(),
       ]);
       loaded = true;
       loadError = "";
@@ -143,14 +153,16 @@
       if (e.table === "quotes" && e.type === "INSERT") {
         unseen++;
         const lead = leads.find((l) => l.id === e.row.lead_id);
-        toast.info("New quote", `${lead?.company || lead?.name || "A new lead"} · ${money(Number(e.row.monthly_total ?? 0))}/mo`, e.row.lead_id ? { href: `#/leads/${e.row.lead_id}`, label: "Open lead" } : undefined);
+        toast.info("New quote request", `${lead?.company || lead?.name || "A new lead"} · ${money(Number(e.row.monthly_total ?? 0))}/mo`, e.row.lead_id ? { href: `#/leads/${e.row.lead_id}`, label: "Open lead" } : undefined);
       }
       clearTimeout(pending);
       pending = setTimeout(refresh, 400);
     });
+    // Quotes you send: a client opening, accepting or asking for changes refreshes the lists.
+    const unsubQuotes = db.subscribeProposals(() => { clearTimeout(pending); pending = setTimeout(refresh, 600); });
     live = true;
     const stopIdle = watchIdle(IDLE_MS, () => db.signOut());
-    return () => { unsub(); stopIdle(); clearTimeout(pending); live = false; };
+    return () => { unsub(); unsubQuotes(); stopIdle(); clearTimeout(pending); live = false; };
   });
 
   // The browser tab names the page you are on.
@@ -165,6 +177,11 @@
       case "projects": return "Projects";
       case "project": return projects.find((x) => x.id === route.id)?.name ?? "Project";
       case "services": return "Services";
+      case "quotes": return "Quotes";
+      case "quote": { const q = proposals.find((x) => x.id === route.id); return q ? `Q${q.number}` : "Quote"; }
+      case "quote-templates": return "Quote templates";
+      case "quote-settings": return "Quote settings";
+      case "payments": return "Payments";
       case "reports": return "Reports";
       case "report": return "Report";
       case "report-settings": return "Report settings";
@@ -202,6 +219,7 @@
     ] },
     { group: "Sales", items: [
       { href: "#/leads", label: "Leads", match: ["leads", "lead", "board"], icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19v-1a4 4 0 0 0-3-3.87M15.5 4.13a3 3 0 0 1 0 5.74" },
+      { href: "#/quotes", label: "Quotes", match: ["quotes", "quote", "quote-templates", "quote-settings", "payments"], icon: "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7M9 8h3" },
     ] },
     { group: "Client work", items: [
       { href: "#/clients", label: "Clients", match: ["clients", "client"], icon: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01" },
@@ -332,6 +350,16 @@
         <ProjectDetail id={route.id} {version} {clients} {leads} quotes={activeQuotes} />
       {:else if route.page === "services"}
         <Services />
+      {:else if route.page === "quotes"}
+        <Quotes {proposals} {clients} {leads} onchanged={refresh} />
+      {:else if route.page === "quote"}
+        {#await import("./pages/QuoteDetail.svelte")}{@render pageLoading()}{:then { default: QuoteDetail }}<QuoteDetail id={route.id} autosend={route.send} {version} {clients} {leads} {projects} onchanged={refresh} />{:catch}{@render pageFailed()}{/await}
+      {:else if route.page === "quote-templates"}
+        {#await import("./pages/QuoteTemplates.svelte")}{@render pageLoading()}{:then { default: QuoteTemplates }}<QuoteTemplates />{:catch}{@render pageFailed()}{/await}
+      {:else if route.page === "quote-settings"}
+        {#await import("./pages/QuoteSettings.svelte")}{@render pageLoading()}{:then { default: QuoteSettings }}<QuoteSettings />{:catch}{@render pageFailed()}{/await}
+      {:else if route.page === "payments"}
+        {#await import("./pages/Payments.svelte")}{@render pageLoading()}{:then { default: Payments }}<Payments {proposals} />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "reports"}
         <!-- The report pages load on first visit, so they don't slow down the rest. -->
         {#await import("./pages/Reports.svelte")}{@render pageLoading()}{:then { default: Reports }}<Reports />{:catch}{@render pageFailed()}{/await}

@@ -55,7 +55,8 @@ export type AuditEntry = {
   actor_role: string;
   action: "insert" | "update" | "delete";
   table_name: "leads" | "quotes" | "lead_notes" | "clients" | "client_services" | "services" | "service_categories"
-    | "projects" | "project_services" | "project_credentials" | "reports" | "report_settings";
+    | "projects" | "project_services" | "project_credentials" | "reports" | "report_settings"
+    | "proposals" | "proposal_versions" | "proposal_events" | "proposal_acceptances" | "proposal_templates" | "payments" | "quote_settings";
   row_id: string | null;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
@@ -178,7 +179,163 @@ export interface Db {
   saveReportSettings(patch: Partial<Omit<ReportSettings, "updated_at">>): Promise<void>;
   /** Called on any change to reports; refetch what you show. */
   subscribeReports(cb: () => void): () => void;
+
+  // Outgoing quotes ("Quotes"; proposals in the database)
+  createLead(l: { name: string; company: string | null; email: string; phone: string | null }): Promise<string>;
+  proposals(): Promise<ProposalRow[]>;
+  proposal(id: string): Promise<Proposal | null>;
+  createProposal(p: ProposalInput): Promise<string>;
+  /** Save edits (autosave). Fails when the database says the quote is locked. */
+  updateProposal(id: string, patch: Partial<ProposalInput> & { archived_at?: string | null }): Promise<void>;
+  deleteProposal(id: string): Promise<void>;
+  proposalEvents(id: string): Promise<ProposalEvent[]>;
+  /** Recent events on every quote, newest first (the Overview's activity). */
+  recentProposalEvents(limit: number): Promise<ProposalEvent[]>;
+  proposalVersions(id: string): Promise<ProposalVersion[]>;
+  proposalAcceptances(id: string): Promise<ProposalAcceptance[]>;
+  /** The buttons that change a quote's status, each a database function that checks you're the admin. */
+  proposalRpc(fn: ProposalFn, args: Record<string, unknown>): Promise<unknown>;
+  /** Send now, Resend, Send me a test, Payments status and test payment (the quote-action Edge Function). */
+  quoteAction(body: { action: "send" | "resend" | "test"; id: string; subject: string; note: string } | { action: "status" | "test_payment" }): Promise<Record<string, unknown>>;
+  templates(): Promise<ProposalTemplate[]>;
+  saveTemplate(t: Omit<ProposalTemplate, "id" | "created_at" | "updated_at">, id?: string): Promise<string>;
+  deleteTemplate(id: string): Promise<void>;
+  quoteSettings(): Promise<QuoteSettings>;
+  saveQuoteSettings(patch: Partial<Omit<QuoteSettings, "stripe_mode" | "stripe_checked_at" | "cron_seen_at" | "updated_at">>): Promise<void>;
+  payments(): Promise<Payment[]>;
+  /** Called on any change to quotes or their timelines. */
+  subscribeProposals(cb: () => void): () => void;
 }
+
+// ---------------------------------------------------------------------------
+// Outgoing quotes
+// ---------------------------------------------------------------------------
+
+export const PROPOSAL_STATUSES = ["draft", "scheduled", "sent", "viewed", "changes_requested", "accepted", "declined", "expired", "revoked"] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+/** Sent and waiting on the client. */
+export const OPEN_PROPOSAL_STATUSES: readonly ProposalStatus[] = ["sent", "viewed", "changes_requested"];
+
+export type ProposalFn = "proposal_schedule" | "proposal_unschedule" | "proposal_revise" | "proposal_discard_revision" | "proposal_revoke" | "proposal_new_link"
+  | "proposal_set_declined" | "proposal_duplicate" | "proposal_convert";
+
+export type ProposalRow = {
+  id: string;
+  number: number;
+  created_at: string;
+  updated_at: string;
+  lead_id: string | null;
+  client_id: string | null;
+  title: string;
+  status: ProposalStatus;
+  recipient_name: string;
+  recipient_email: string | null;
+  cc: string[];
+  prepared_on: string;
+  valid_until: string;
+  /** The working draft (see supabase/functions/_shared/proposal.ts). */
+  content: import("../../../supabase/functions/_shared/proposal.ts").ProposalDoc;
+  token: string;
+  version: number;
+  revising: boolean;
+  scheduled_at: string | null;
+  send_subject: string | null;
+  send_note: string | null;
+  reminders: boolean;
+  sent_at: string | null;
+  last_sent_at: string | null;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  view_count: number;
+  changes_requested_at: string | null;
+  accepted_at: string | null;
+  accepted_version: number | null;
+  accepted_once: number | null;
+  accepted_monthly: number | null;
+  archived_at: string | null;
+};
+
+export type Proposal = ProposalRow & {
+  internal: import("../../../supabase/functions/_shared/proposal.ts").ProposalInternal;
+  internal_notes: string | null;
+};
+
+export type ProposalInput = Pick<Proposal, "lead_id" | "client_id" | "title" | "recipient_name" | "recipient_email" | "cc" | "prepared_on" | "valid_until" | "content" | "internal" | "internal_notes" | "reminders">;
+
+export type ProposalEvent = {
+  id: number;
+  proposal_id: string;
+  at: string;
+  kind: string;
+  detail: Record<string, unknown>;
+  notify: string | null;
+  notified_at: string | null;
+};
+
+export type ProposalVersion = {
+  id: string;
+  proposal_id: string;
+  version: number;
+  sent_at: string;
+  header: { number: string; title: string; prepared_for: string; prepared_on: string; valid_until: string };
+  content: import("../../../supabase/functions/_shared/proposal.ts").ProposalDoc;
+};
+
+export type ProposalAcceptance = {
+  id: string;
+  proposal_id: string;
+  version: number;
+  accepted_at: string;
+  tier: string;
+  addons: string[];
+  lines: { key: string; name: string; billing: "once" | "monthly"; list: number; price: number; net: number; kind: string }[];
+  once_total: number;
+  monthly_total: number;
+  due_now: number;
+  signer_name: string;
+  signer_title: string;
+  signer_email: string;
+  signature: string;
+  doc: import("../../../supabase/functions/_shared/proposal.ts").ProposalDoc;
+};
+
+export type ProposalTemplate = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  name: string;
+  title: string;
+  content: import("../../../supabase/functions/_shared/proposal.ts").ProposalDoc;
+  internal: import("../../../supabase/functions/_shared/proposal.ts").ProposalInternal;
+};
+
+export type QuoteSettings = {
+  notify_email: string;
+  reply_to: string;
+  from_name: string;
+  default_valid_days: number;
+  remind_unviewed_days: number;
+  remind_expiry_days: number;
+  stripe_mode: "off" | "test" | "live";
+  stripe_checked_at: string | null;
+  cron_seen_at: string | null;
+  updated_at: string;
+};
+
+export type Payment = {
+  id: string;
+  created_at: string;
+  proposal_id: string | null;
+  acceptance_id: string | null;
+  project_id: string | null;
+  kind: "deposit" | "full" | "balance" | "test";
+  amount: number;
+  status: "pending" | "paid" | "failed" | "expired" | "refunded";
+  livemode: boolean;
+  stripe_session_id: string | null;
+  stripe_payment_intent: string | null;
+  paid_at: string | null;
+};
 
 export type Unit = "dev" | "mo" | "once" | "devonce";
 
@@ -265,9 +422,11 @@ export type Project = {
   status: ProjectStatus;
   due_on: string | null;
   notes: string | null;
+  /** The quote this project was made from, if any. */
+  proposal_id?: string | null;
 };
 
-export type ProjectInput = Omit<Project, "id" | "created_at" | "updated_at">;
+export type ProjectInput = Omit<Project, "id" | "created_at" | "updated_at" | "proposal_id">;
 export type ProjectService = ServiceLine & { project_id: string };
 
 /** The data key, wrapped under the vault passphrase (see lib/crypto.ts). */

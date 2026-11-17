@@ -9,3 +9,9 @@ verify_jwt = false
 # it doesn't depend on the gateway's JWT check.
 [functions.report-action]
 verify_jwt = false
+
+# Outgoing quotes: the dashboard's Send now, Resend, Send me a test and
+# Payments status. Like report-action, it checks the caller itself
+# (public.is_admin() with the caller's token).
+[functions.quote-action]
+verify_jwt = false

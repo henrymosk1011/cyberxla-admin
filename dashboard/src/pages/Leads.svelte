@@ -23,7 +23,7 @@
     { key: "stage", label: "Stage", first: "asc" },
     { key: "monthly", label: "Monthly", first: "desc", right: true },
     { key: "once", label: "One time", first: "desc", right: true },
-    { key: "quotes", label: "Quotes", first: "desc", right: true, hide: "sm" },
+    { key: "quotes", label: "Quote requests", first: "desc", right: true, hide: "sm" },
     { key: "recent", label: "Last activity", first: "desc", right: true, hide: "sm" },
   ];
   let sort = $state<Sort<LeadSort>>({ key: "recent", dir: "desc" });
@@ -127,7 +127,7 @@
       {#if filter === "archived" && !q}
         <EmptyState title="No archived leads" text="Archiving a lead (from its page) takes it out of your pipeline without deleting it." />
       {:else if !leads.length}
-        <EmptyState title="No leads yet" text="Quotes from the website will show up here." />
+        <EmptyState title="No leads yet" text="Quote requests from the website will show up here." />
       {:else}
         <EmptyState title="No leads match">
           {#if q}<button class="btn sm" onclick={() => (q = "")}>Clear search</button>{/if}

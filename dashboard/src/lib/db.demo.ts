@@ -8,7 +8,9 @@ import monthlyPage1 from "./demo/report-monthly-1.png";
 import monthlyPage2 from "./demo/report-monthly-2.png";
 import { priceQuote } from "./catalog.ts";
 import { catalog as liveCatalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Project, ProjectService, ProjectStatus, Quote, QuoteStatus, Report, ReportContent, ReportPage, ReportSettings, ServiceCategory, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
+import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalStatus, ProposalTemplate, ProposalVersion, ProjectService, ProjectStatus, Quote, QuoteSettings, QuoteStatus, Report, ReportContent, ReportPage, ReportSettings, ServiceCategory, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
+import templateSeed from "../../../tests/fixtures/workspace-template.json";
+import { normalizeDoc, resolveDoc, totals as quoteTotals, varsFor, type ProposalDoc } from "../../../supabase/functions/_shared/proposal.ts";
 
 const categories: ServiceCategory[] = catalogSeed.map((c, i) => ({ id: c.id, name: c.name, blurb: c.blurb, sort: i * 10 }));
 const services: ServiceRow[] = catalogSeed.flatMap((c) => c.services.map((s, j) => ({
@@ -651,6 +653,174 @@ const db: Db = {
     reportListeners.add(cb);
     return () => reportListeners.delete(cb);
   },
+
+  async createLead(l) {
+    if (leads.some((x) => x.email.toLowerCase() === l.email.trim().toLowerCase())) throw new Error("A lead with that email already exists. Pick it from the list instead.");
+    const id = uuid(), at = new Date().toISOString();
+    leads.push({ id, created_at: at, updated_at: at, ...l, email: l.email.trim().toLowerCase(), status: "new", source: "manual", value_monthly: 0, value_one_time: 0, archived_at: null });
+    log("leads", "insert", id, null, { status: "new" });
+    return id;
+  },
+  proposals: () => wait([...proposals].sort((a, b) => b.number - a.number)),
+  proposal: (id) => wait(proposals.find((p) => p.id === id) ?? null),
+  async createProposal(input) {
+    const id = uuid(), at = new Date().toISOString();
+    proposals.push({ ...input, content: normalizeDoc(input.content), id, number: nextNumber++, created_at: at, updated_at: at, status: "draft", token: uuid().replace(/-/g, ""), version: 0, revising: false,
+      scheduled_at: null, send_subject: null, send_note: null, sent_at: null, last_sent_at: null, first_viewed_at: null, last_viewed_at: null, view_count: 0,
+      changes_requested_at: null, accepted_at: null, accepted_version: null, accepted_once: null, accepted_monthly: null, archived_at: null });
+    event(id, "created", {});
+    return id;
+  },
+  async updateProposal(id, patch) {
+    const p = proposals.find((x) => x.id === id)!;
+    const docChange = ("content" in patch && JSON.stringify(patch.content) !== JSON.stringify(p.content)) || ("title" in patch && patch.title !== p.title);
+    if (docChange && !(p.status === "draft" || p.status === "scheduled" || p.revising)) {
+      throw new Error(p.status === "accepted" ? `Q${p.number} was accepted, so it's locked. Use Revise to make a new version for the client to accept.` : `Q${p.number} was sent. Use Revise to change it.`);
+    }
+    Object.assign(p, patch, { updated_at: new Date().toISOString() });
+    if (docChange) {
+      const last = proposalEvents.filter((e) => e.proposal_id === id).sort((a, b) => b.id - a.id)[0];
+      if (last?.kind === "edited") last.at = new Date().toISOString(); else event(id, "edited", {});
+    }
+    proposalsChanged();
+  },
+  async deleteProposal(id) {
+    const p = proposals.find((x) => x.id === id)!;
+    if (p.version > 0 && !p.archived_at) throw new Error(`Q${p.number} was sent, so it's kept for the record. Archive it first, then delete it.`);
+    proposals.splice(proposals.indexOf(p), 1);
+    proposalsChanged();
+  },
+  proposalEvents: (id) => wait(proposalEvents.filter((e) => e.proposal_id === id).sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
+  recentProposalEvents: (n) => wait(proposalEvents.filter((e) => e.kind !== "edited").sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id).slice(0, n)),
+  proposalVersions: (id) => wait(proposalVersions.filter((v) => v.proposal_id === id).sort((a, b) => b.version - a.version)),
+  proposalAcceptances: (id) => wait(proposalAcceptances.filter((a) => a.proposal_id === id)),
+  async proposalRpc(fn, args) {
+    const p = proposals.find((x) => x.id === args.p_id)!;
+    const set = (patch: Partial<Proposal>) => { Object.assign(p, patch, { updated_at: new Date().toISOString() }); proposalsChanged(); };
+    switch (fn) {
+      case "proposal_schedule": set({ scheduled_at: String(args.p_at), send_subject: String(args.p_subject), send_note: String(args.p_note ?? ""), status: p.status === "draft" ? "scheduled" : p.status }); event(p.id, "scheduled", { at: args.p_at }); return null;
+      case "proposal_unschedule": set({ scheduled_at: null, status: p.status === "scheduled" ? "draft" : p.status }); event(p.id, "unscheduled", {}); return null;
+      case "proposal_revise": set({ revising: true }); event(p.id, "revision_started", { version: p.version + 1 }); return null;
+      case "proposal_discard_revision": {
+        const v = proposalVersions.find((x) => x.proposal_id === p.id && x.version === p.version)!;
+        set({ revising: false, content: structuredClone(sources.get(v.id)!.content), title: sources.get(v.id)!.title }); event(p.id, "revision_discarded", {}); return null;
+      }
+      case "proposal_revoke": set({ status: "revoked" }); event(p.id, "revoked", {}); return null;
+      case "proposal_new_link": set({ token: uuid().replace(/-/g, ""), status: p.status === "revoked" ? (p.first_viewed_at ? "viewed" : "sent") : p.status }); event(p.id, "link_regenerated", {}); return null;
+      case "proposal_set_declined": set({ status: args.p_declined ? "declined" : p.first_viewed_at ? "viewed" : "sent" }); event(p.id, args.p_declined ? "declined" : "reopened", {}); return null;
+      case "proposal_duplicate": {
+        const id = await db.createProposal({ lead_id: p.lead_id, client_id: p.client_id, title: p.title, recipient_name: p.recipient_name, recipient_email: p.recipient_email, cc: p.cc,
+          prepared_on: new Date().toISOString().slice(0, 10), valid_until: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), content: structuredClone(p.content), internal: structuredClone(p.internal), internal_notes: p.internal_notes, reminders: p.reminders });
+        event(id, "duplicated", { from: `Q${p.number}` });
+        return id;
+      }
+      case "proposal_convert": {
+        const existing = projects.find((x) => x.proposal_id === p.id);
+        if (existing) return existing.id;
+        if (args.p_convert_lead && p.lead_id) { const cid = await db.convertLead(p.lead_id); for (const q of proposals.filter((x) => x.lead_id === p.lead_id)) Object.assign(q, { lead_id: null, client_id: cid }); }
+        const acc = proposalAcceptances.find((a) => a.proposal_id === p.id);
+        const lines = acc ? acc.lines : (args.p_lines as ProposalAcceptance["lines"]);
+        const id = await db.createProject({ lead_id: p.lead_id, client_id: p.client_id, name: p.title, status: acc ? "in_progress" : "proposed", due_on: null, notes: `From quote Q${p.number}.` });
+        projects.find((x) => x.id === id)!.proposal_id = p.id;
+        lines.forEach((l, i) => projectServices.push({ id: uuid(), project_id: id, service_id: null, name: l.name, billing: l.billing, unit_amount: l.net / 100, quantity: 1, amount: l.net / 100, notes: null, sort: i * 10 }));
+        event(p.id, "converted", { project_id: id });
+        return id;
+      }
+    }
+    return null;
+  },
+  async quoteAction(body) {
+    if (body.action === "status") return { ok: true, email: true, stripe: quoteSettings.stripe_mode, stripe_key: false, stripe_webhook: false, webhook_url: "https://YOUR-PROJECT.supabase.co/functions/v1/stripe-webhook" };
+    if (body.action === "test_payment") throw new Error("Stripe isn't connected yet. Add the two Stripe secrets first (see README, Connect Stripe).");
+    const qid = "id" in body ? body.id : "";
+    const p = proposals.find((x) => x.id === qid)!;
+    if (body.action === "test") { event(p.id, "test_sent", { to: [quoteSettings.notify_email] }); return { ok: true, to: [quoteSettings.notify_email], cc: [] }; }
+    if (body.action === "resend") { event(p.id, "resent", { to: [p.recipient_email] }); return { ok: true, to: [p.recipient_email], cc: p.cc }; }
+    if (!(p.status === "draft" || p.status === "scheduled" || p.revising)) throw new Error(`Q${p.number} was already sent. Use Revise to send a new version, or Resend to email it again.`);
+    if (!p.recipient_email) throw new Error("Add the recipient's email first.");
+    freeze(p);
+    return { ok: true, to: [p.recipient_email], cc: p.cc, version: p.version };
+  },
+  templates: () => wait(templates),
+  async saveTemplate(t, id) {
+    if (templates.some((x) => x.name.toLowerCase() === t.name.toLowerCase() && x.id !== id)) throw new Error("A template with that name already exists. Pick another name.");
+    const at = new Date().toISOString();
+    if (id) { Object.assign(templates.find((x) => x.id === id)!, t, { updated_at: at }); return id; }
+    const nid = uuid();
+    templates.push({ ...structuredClone(t), id: nid, created_at: at, updated_at: at });
+    return nid;
+  },
+  async deleteTemplate(id) { templates.splice(templates.findIndex((t) => t.id === id), 1); },
+  quoteSettings: () => wait(quoteSettings),
+  async saveQuoteSettings(patch) { Object.assign(quoteSettings, patch, { updated_at: new Date().toISOString() }); },
+  payments: () => wait(payments),
+  subscribeProposals(cb) { proposalListeners.add(cb); return () => proposalListeners.delete(cb); },
 };
+
+// ---------------------------------------------------------------------------
+// Outgoing quotes in the demo: a template, a draft, a sent one and an
+// accepted one, all for made up clients on the reserved .example domain.
+// ---------------------------------------------------------------------------
+function freeze(p: Proposal) {
+  const owner = p.client_id ? clients.find((c) => c.id === p.client_id) : undefined;
+  const lead = p.lead_id ? leads.find((l) => l.id === p.lead_id) : undefined;
+  const vars = varsFor({ number: p.number, company: owner?.company ?? lead?.company ?? null, contact_name: p.recipient_name || owner?.contact_name || lead?.name || null, valid_until: p.valid_until });
+  const vid = uuid();
+  p.version += 1;
+  proposalVersions.push({ id: vid, proposal_id: p.id, version: p.version, sent_at: new Date().toISOString(),
+    header: { number: `Q${p.number}`, title: p.title, prepared_for: vars.company, prepared_on: p.prepared_on, valid_until: p.valid_until }, content: resolveDoc(normalizeDoc(p.content), vars) });
+  sources.set(vid, { title: p.title, content: structuredClone(p.content) });
+  Object.assign(p, { status: "sent" as ProposalStatus, revising: false, scheduled_at: null, sent_at: p.sent_at ?? new Date().toISOString(), last_sent_at: new Date().toISOString(), accepted_at: null, accepted_once: null, accepted_monthly: null });
+  if (lead && (lead.status === "new" || lead.status === "contacted")) lead.status = "proposal";
+  event(p.id, "sent", { version: p.version, to: p.recipient_email });
+  proposalsChanged();
+}
+function event(proposalId: string, kind: string, detail: Record<string, unknown>, at = new Date().toISOString()) {
+  proposalEvents.push({ id: ++eventId, proposal_id: proposalId, at, kind, detail, notify: null, notified_at: null });
+}
+const proposalsChanged = () => proposalListeners.forEach((cb) => cb());
+const proposalListeners = new Set<() => void>();
+const proposals: Proposal[] = [];
+const proposalEvents: ProposalEvent[] = [];
+const proposalVersions: ProposalVersion[] = [];
+const proposalAcceptances: ProposalAcceptance[] = [];
+const sources = new Map<string, { title: string; content: ProposalDoc }>();
+const payments: Payment[] = [];
+let nextNumber = 1001, eventId = 0;
+const quoteSettings: QuoteSettings = { notify_email: "henry@cyberx.la", reply_to: "henry@cyberx.la", from_name: "Henry at cyberxLA", default_valid_days: 30, remind_unviewed_days: 3, remind_expiry_days: 2, stripe_mode: "off", stripe_checked_at: null, cron_seen_at: null, updated_at: new Date().toISOString() };
+const templates: ProposalTemplate[] = [{ id: uuid(), created_at: new Date(now - 5 * 86400000).toISOString(), updated_at: new Date(now - 5 * 86400000).toISOString(), name: "Google Workspace migration", title: "Google Workspace migration", content: normalizeDoc(templateSeed), internal: {} }];
+{
+  const day = (n: number) => new Date(now + n * 86400000).toISOString().slice(0, 10);
+  const target = clients.find((c) => c.company === "Starlight Hospice")!;
+  const open = leads.filter((l) => ["new", "contacted", "proposal"].includes(l.status));
+  const make = (o: { owner: { lead_id?: string; client_id?: string }; name: string; email: string; title: string; ago: number; costs?: Record<string, number> }) => {
+    const id = uuid(), at = new Date(now - o.ago * 86400000).toISOString();
+    const p: Proposal = { id, number: nextNumber++, created_at: at, updated_at: at, lead_id: o.owner.lead_id ?? null, client_id: o.owner.client_id ?? null, title: o.title, status: "draft",
+      recipient_name: o.name, recipient_email: o.email, cc: [], prepared_on: day(-o.ago), valid_until: day(30 - o.ago), content: normalizeDoc(templateSeed), token: uuid().replace(/-/g, ""),
+      version: 0, revising: false, scheduled_at: null, send_subject: null, send_note: null, reminders: false, sent_at: null, last_sent_at: null, first_viewed_at: null, last_viewed_at: null,
+      view_count: 0, changes_requested_at: null, accepted_at: null, accepted_version: null, accepted_once: null, accepted_monthly: null, archived_at: null,
+      internal: { costs: o.costs ?? {} }, internal_notes: null };
+    proposals.push(p);
+    event(id, "created", {}, at);
+    return p;
+  };
+  const a = make({ owner: { client_id: target.id }, name: "Dana Ortiz", email: "dana@starlighthospice.example", title: "Google Workspace migration", ago: 9, costs: { "tier:pro": 1200 } });
+  freeze(a);
+  Object.assign(a, { status: "accepted", first_viewed_at: new Date(now - 8 * 86400000).toISOString(), last_viewed_at: new Date(now - 7 * 86400000).toISOString(), view_count: 3 });
+  const t = quoteTotals(proposalVersions.at(-1)!.content, "pro", ["usb"]);
+  const accId = uuid();
+  proposalAcceptances.push({ id: accId, proposal_id: a.id, version: 1, accepted_at: new Date(now - 7 * 86400000).toISOString(), tier: "pro", addons: ["usb"], lines: t.lines,
+    once_total: t.once_total / 100, monthly_total: t.monthly_total / 100, due_now: 0, signer_name: "Dana Ortiz", signer_title: "Administrator", signer_email: "dana@starlighthospice.example", signature: "Dana Ortiz", doc: proposalVersions.at(-1)!.content });
+  Object.assign(a, { accepted_at: new Date(now - 7 * 86400000).toISOString(), accepted_version: 1, accepted_once: t.once_total / 100, accepted_monthly: 0 });
+  event(a.id, "viewed", { count: 1 }, a.first_viewed_at!);
+  event(a.id, "accepted", { tier: "pro", addons: ["usb"], by: "Dana Ortiz", once_total: t.once_total / 100 }, a.accepted_at!);
+  if (open[0]) {
+    const b = make({ owner: { lead_id: open[0].id }, name: open[0].name, email: open[0].email, title: "Google Workspace migration", ago: 3 });
+    freeze(b);
+    Object.assign(b, { status: "viewed", first_viewed_at: new Date(now - 2 * 86400000).toISOString(), last_viewed_at: new Date(now - 86400000).toISOString(), view_count: 2 });
+    event(b.id, "viewed", { count: 1 }, b.first_viewed_at!);
+  }
+  if (open[1]) make({ owner: { lead_id: open[1].id }, name: open[1].name, email: open[1].email, title: "Office email move", ago: 1 });
+}
 
 export default db;
