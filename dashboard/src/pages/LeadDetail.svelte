@@ -4,6 +4,7 @@
   import Confirm from "../components/Confirm.svelte";
   import Menu from "../components/Menu.svelte";
   import ProjectsCard from "../components/ProjectsCard.svelte";
+  import QuotesCard from "../components/QuotesCard.svelte";
   import QuoteEditor from "../components/QuoteEditor.svelte";
   import ActivityCard from "../components/ActivityCard.svelte";
   import PageHeader from "../components/PageHeader.svelte";
@@ -13,12 +14,14 @@
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeProject } from "../lib/activity.ts";
   import { dateTime, money, phone, shortDate, STATUS_LABEL } from "../lib/format.ts";
-  import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Project, type ProjectService, type Quote, type QuoteStatus } from "../lib/types.ts";
+  import { LEAD_STATUSES, QUOTE_STATUSES, type AuditEntry, type Lead, type LeadStatus, type Note, type Project, type ProjectService, type ProposalRow, type Quote, type QuoteStatus } from "../lib/types.ts";
 
-  let { id, version, onstatus, clientFor = null, onconverted, projects, projectLines }: {
+  let { id, version, onstatus, clientFor = null, onconverted, projects, projectLines, proposals = [] }: {
     id: string; version: number; onstatus: (id: string, s: LeadStatus) => Promise<void>;
     clientFor?: string | null; onconverted?: () => void;
     projects: Project[]; projectLines: ProjectService[];
+    /** Outgoing quotes for this lead. */
+    proposals?: ProposalRow[];
   } = $props();
   let converting = $state(false);
 
@@ -259,6 +262,14 @@
         </section>
       {:else}
         <ProjectsCard {projects} lines={projectLines} owner={{ lead_id: id, client_id: null }} noun="lead" />
+      {/if}
+      {#if clientFor && !proposals.length}
+        <section class="card">
+          <div class="card-head"><h2>Quotes</h2></div>
+          <p class="muted moved">This lead is a client now, so its quotes are on the <a href="#/clients/{clientFor}">client's page</a>.</p>
+        </section>
+      {:else}
+        <QuotesCard {proposals} owner="lead:{id}" noun="lead" />
       {/if}
     </div>
 

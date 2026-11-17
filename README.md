@@ -43,13 +43,18 @@ access to any table.
 | `supabase/functions/_shared/proposal.ts` | The quote document format, its checks, the totals math (discounts, deposits), and placeholders, shared by the dashboard and the Edge Functions |
 | `supabase/functions/quote-action/` | The dashboard's Send now, Resend, Send me a test, and the Payments page's status (emails through Resend) |
 | `supabase/functions/_shared/emails.ts` | Every quote email (to clients and to you), shared with the dashboard's email preview |
+| `supabase/migrations/0020_quote_flows.sql` | Accepting and Request changes from the quote page, the scheduler (Send later, follow ups, notices to you, expiry), and Stripe payments |
+| `supabase/functions/quote-public/` | The quote page's Accept, Request changes and Pay buttons (Turnstile, rate limits, totals checked on the server, Stripe Checkout) |
+| `supabase/functions/quote-cron/` | The scheduler's worker, woken by pg_cron: Send later, follow ups, emails to you, Stripe on or off |
+| `supabase/functions/stripe-webhook/` | Stripe's payment events, signature checked, each applied once |
+| `supabase/functions/_shared/stripe.ts`, `mail.ts` | Stripe (mode, Checkout Sessions, webhook signatures) and sending through Resend |
 | `supabase/functions/report-action/` | The dashboard's Send now, Send me a copy and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |
 | `supabase/functions/submit-quote/index.ts` | The public endpoint |
 | `supabase/functions/submit-quote/lib.ts` | Validation and pricing (catalog passed in from the database) |
 | `tests/` | Unit tests: `npm test` |
-| `scripts/bundle-function.mjs` | `npm run bundle-function` writes `dist/submit-quote.ts` (`npm run bundle-report-action` writes `dist/report-action.ts`), one file to paste into the Supabase editor |
+| `scripts/bundle-function.mjs` | `npm run bundle-function` writes `dist/submit-quote.ts` (`npm run bundle-report-action` writes `dist/report-action.ts`, and the same for `bundle-quote-action`, `bundle-quote-public`, `bundle-quote-cron`, `bundle-stripe-webhook`), one file to paste into the Supabase editor |
 
 ## One-time setup
 
@@ -344,11 +349,100 @@ they're separate things (`public.quotes` in the database is the requests,
   counted once per half hour; your preview and View as client don't count.
 - **Statuses**: draft, scheduled, sent, viewed, changes requested, accepted,
   declined, expired, revoked. Sending moves a lead to Proposal.
+- **Accepting**: the client picks a tier and add ons, then Accept asks for their
+  name, title, email, a typed signature and the terms checkbox (with a
+  Cloudflare Turnstile check). The server recomputes every total from the
+  version they saw and refuses one that doesn't match. The acceptance is a
+  snapshot that can't be changed, the quote locks, the lead moves to Won and
+  its value follows the accepted total. You get an email right away; the client
+  gets a confirmation with what they accepted (and Pay when Stripe is
+  connected, otherwise "We'll send you an invoice").
+- **Request changes**: a short form on the quote page. The quote shows Changes
+  requested and you get an email with their message. Revise and send again.
+- **Emails to you** (to the Notify me address): first open, changes requested,
+  accepted, payment received, and any email that didn't send. If one fails it's
+  retried by the scheduler.
+- **Follow ups** (per quote): a reminder if it isn't opened after a few days,
+  and one a couple of days before it expires (the days are in Quotes,
+  Settings). Reminders go out between 9 AM and 5 PM Pacific.
+- **Convert to project** (on an accepted quote, or by hand on a sent one): makes
+  a project named after the quote with a line per accepted item (net of any
+  discount) and the scope in its notes, and can convert the lead to a client.
+  The project shows "From quote Q1001" with what was accepted and whether it's
+  paid; the Projects list has a Quote column; lead and client pages list their
+  quotes; the Overview shows open quotes, sent this month, win rate, time to
+  accept, payments, and recent quote activity.
 
 ### Setup for sending
 
-`quote-action` reads `RESEND_API_KEY` (already used by submit-quote). Deploy it
-like report-action: `npm run bundle-quote-action`, then paste
-`dist/quote-action.ts` into a new Edge Function named `quote-action` with
-"Verify JWT" off.
+Four Edge Functions, each with "Verify JWT" off (they check callers
+themselves; `supabase/config.toml` says the same for the CLI):
+
+| Function | Called by | Secrets it reads |
+|---|---|---|
+| `quote-action` | The dashboard (your login, checked with `is_admin()`) | `RESEND_API_KEY`, `STRIPE_*` (optional) |
+| `quote-public` | The quote page on cyberx.la | `INTAKE_DB_URL`, `TURNSTILE_SECRET_KEY`, `IP_HASH_SALT`, `RESEND_API_KEY`, `STRIPE_*` (optional) |
+| `quote-cron` | pg_cron, with a key kept in Vault | `INTAKE_DB_URL`, `RESEND_API_KEY`, `STRIPE_*` (optional) |
+| `stripe-webhook` | Stripe, signed | `INTAKE_DB_URL`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY` |
+
+All of these secrets except the Stripe ones are the ones submit-quote already
+uses. To deploy one from the dashboard: `npm run bundle-quote-public` (or
+`bundle-quote-action`, `bundle-quote-cron`, `bundle-stripe-webhook`), then paste
+the file from `dist/` into an Edge Function of the same name. With the CLI:
+`supabase functions deploy quote-public --project-ref <ref>`.
+
+**The scheduler.** Migration 0020 turns on pg_cron and pg_net, stores a random
+key in Vault (`quote_cron_key`), and schedules `quote-tick` every minute. Each
+tick expires quotes past their date and calls `quote-cron` only when something
+is due (a Send later, a notice to you) or at least once an hour (follow ups).
+Quotes, Settings shows when it last ran. To check it in the SQL Editor:
+
+```sql
+select jobname, schedule, active from cron.job where jobname = 'quote-tick';
+select cron_seen_at from public.quote_settings;
+```
+
+### Connect Stripe
+
+Payments are built in and stay off until both Stripe secrets exist. Until then
+the quote page and the emails say "We'll send you an invoice", Pay buttons
+don't show, and the Payments page says Stripe not connected. Start in test
+mode, then switch to live.
+
+1. **Get the secret key.** In the Stripe Dashboard, turn on Test mode
+   (top right), then Developers, API keys. Copy the **Secret key**
+   (`sk_test_...`). A restricted key (`rk_test_...`) works too if it can write
+   Checkout Sessions.
+2. **Add the webhook.** Developers, Webhooks, Add endpoint:
+   - Endpoint URL:
+     `https://onpdkqzcgnoepwiqcgtv.supabase.co/functions/v1/stripe-webhook`
+     (the Payments page shows it too)
+   - Events: `checkout.session.completed`,
+     `checkout.session.async_payment_succeeded`,
+     `checkout.session.async_payment_failed`, `checkout.session.expired`,
+     `charge.refunded`
+   - Save, then Reveal the **Signing secret** (`whsec_...`).
+3. **Add both secrets.** Supabase, Edge Functions, Secrets:
+   | Name | Value |
+   |---|---|
+   | `STRIPE_SECRET_KEY` | The key from step 1 |
+   | `STRIPE_WEBHOOK_SECRET` | The signing secret from step 2 |
+
+   Secrets apply to the functions right away; nothing needs redeploying.
+4. **Check it.** In the admin, Quotes, Payments: it should say
+   Connected (test mode). Press **Send test payment**: it opens a $1 Stripe
+   Checkout. Pay with card `4242 4242 4242 4242`, any future date, any CVC and
+   ZIP. The payment shows on the Payments page within a few seconds, marked
+   Test. A real quote's payment also emails you.
+5. **Turn a quote's payment on.** In a quote, under Payment at acceptance, pick
+   Deposit (a percent or an amount) or Full. After the client accepts, the page
+   and their confirmation email show Pay deposit or Pay now. The amount always
+   comes from the server.
+6. **Go live.** Turn off Test mode in Stripe and repeat steps 1 to 3 with the
+   live key (`sk_live_...`) and a live webhook endpoint (same URL and events,
+   its own `whsec_...`), replacing both secrets. Payments then says Connected
+   (live). Test payments made before stay marked as tests.
+
+To turn payments off again, delete `STRIPE_SECRET_KEY` in Supabase. Quotes
+already accepted keep showing what's due, as an invoice.
 

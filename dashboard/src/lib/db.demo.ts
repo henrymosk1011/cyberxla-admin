@@ -775,6 +775,13 @@ function freeze(p: Proposal) {
   event(p.id, "sent", { version: p.version, to: p.recipient_email });
   proposalsChanged();
 }
+/** Demo only: move a just frozen quote's send back in time. */
+function backdate(p: Proposal, days: number) {
+  const at = new Date(now - days * 86400000).toISOString();
+  Object.assign(p, { sent_at: at, last_sent_at: at });
+  for (const v of proposalVersions) if (v.proposal_id === p.id) v.sent_at = at;
+  for (const e of proposalEvents) if (e.proposal_id === p.id && e.kind === "sent") e.at = at;
+}
 function event(proposalId: string, kind: string, detail: Record<string, unknown>, at = new Date().toISOString()) {
   proposalEvents.push({ id: ++eventId, proposal_id: proposalId, at, kind, detail, notify: null, notified_at: null });
 }
@@ -806,6 +813,7 @@ const templates: ProposalTemplate[] = [{ id: uuid(), created_at: new Date(now - 
   };
   const a = make({ owner: { client_id: target.id }, name: "Dana Ortiz", email: "dana@starlighthospice.example", title: "Google Workspace migration", ago: 9, costs: { "tier:pro": 1200 } });
   freeze(a);
+  backdate(a, 9);
   Object.assign(a, { status: "accepted", first_viewed_at: new Date(now - 8 * 86400000).toISOString(), last_viewed_at: new Date(now - 7 * 86400000).toISOString(), view_count: 3 });
   const t = quoteTotals(proposalVersions.at(-1)!.content, "pro", ["usb"]);
   const accId = uuid();
@@ -814,9 +822,17 @@ const templates: ProposalTemplate[] = [{ id: uuid(), created_at: new Date(now - 
   Object.assign(a, { accepted_at: new Date(now - 7 * 86400000).toISOString(), accepted_version: 1, accepted_once: t.once_total / 100, accepted_monthly: 0 });
   event(a.id, "viewed", { count: 1 }, a.first_viewed_at!);
   event(a.id, "accepted", { tier: "pro", addons: ["usb"], by: "Dana Ortiz", once_total: t.once_total / 100 }, a.accepted_at!);
+  // Converted into a project, the way the Convert button does it.
+  {
+    const pid = uuid(), at = a.accepted_at!;
+    projects.push({ id: pid, created_at: at, updated_at: at, lead_id: null, client_id: target.id, name: a.title, status: "in_progress", due_on: null, notes: `From quote Q${a.number}.`, proposal_id: a.id });
+    t.lines.forEach((l, i) => projectServices.push({ id: uuid(), project_id: pid, service_id: null, name: l.name, billing: l.billing, unit_amount: l.net / 100, quantity: 1, amount: l.net / 100, notes: null, sort: i * 10 }));
+    event(a.id, "converted", { project_id: pid }, at);
+  }
   if (open[0]) {
     const b = make({ owner: { lead_id: open[0].id }, name: open[0].name, email: open[0].email, title: "Google Workspace migration", ago: 3 });
     freeze(b);
+    backdate(b, 3);
     Object.assign(b, { status: "viewed", first_viewed_at: new Date(now - 2 * 86400000).toISOString(), last_viewed_at: new Date(now - 86400000).toISOString(), view_count: 2 });
     event(b.id, "viewed", { count: 1 }, b.first_viewed_at!);
   }

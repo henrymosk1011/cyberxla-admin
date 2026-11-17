@@ -14,9 +14,9 @@
   import { localDay, money, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { totalsBy, valueLabel } from "../lib/lines.ts";
   import { clientLabel, leadLabel, ownerOptions, parseOwner } from "../lib/projects.ts";
-  import { OPEN_PROJECT_STATUSES, PROJECT_STATUSES, type Client, type Lead, type Project, type ProjectService, type ProjectStatus } from "../lib/types.ts";
+  import { OPEN_PROJECT_STATUSES, PROJECT_STATUSES, type Client, type Lead, type Project, type ProjectService, type ProjectStatus, type ProposalRow } from "../lib/types.ts";
 
-  let { projects, lines, clients, leads }: { projects: Project[]; lines: ProjectService[]; clients: Client[]; leads: Lead[] } = $props();
+  let { projects, lines, clients, leads, proposals = [] }: { projects: Project[]; lines: ProjectService[]; clients: Client[]; leads: Lead[]; proposals?: ProposalRow[] } = $props();
 
   let q = $state("");
   let filter = $state<ProjectStatus | "open" | "all">("open");
@@ -47,6 +47,9 @@
   const choices = $derived(ownerOptions(clients, leads));
   const totals = $derived(totalsBy(lines, (l) => l.project_id));
   const isOpen = (p: Project) => OPEN_PROJECT_STATUSES.includes(p.status);
+  // The quote each project was made from, if any.
+  const quoteById = $derived(new Map(proposals.map((q) => [q.id, q])));
+  const quoteOf = (p: Project) => (p.proposal_id ? quoteById.get(p.proposal_id) : undefined);
 
   const searched = $derived.by(() => {
     const s = q.trim().toLowerCase();
@@ -55,10 +58,11 @@
   });
   const counts = $derived(Object.fromEntries(PROJECT_STATUSES.map((st) => [st, searched.filter((p) => p.status === st).length])) as Record<ProjectStatus, number>);
   // Column headings sort the list: soonest due first to start with.
-  type ProjectSort = "name" | "status" | "value" | "due";
+  type ProjectSort = "name" | "status" | "quote" | "value" | "due";
   const COLUMNS: { key: ProjectSort; label: string; first: SortDir; right?: boolean; hide?: "sm" }[] = [
     { key: "name", label: "Project", first: "asc" },
     { key: "status", label: "Status", first: "asc" },
+    { key: "quote", label: "Quote", first: "desc", hide: "sm" },
     { key: "value", label: "Value", first: "desc", right: true },
     { key: "due", label: "Due", first: "asc", right: true, hide: "sm" },
   ];
@@ -70,6 +74,7 @@
     const cmp: Record<ProjectSort, (a: Project, b: Project) => number> = {
       name: (a, b) => text(a.name, b.name),
       status: (a, b) => PROJECT_STATUSES.indexOf(a.status) - PROJECT_STATUSES.indexOf(b.status),
+      quote: (a, b) => (quoteOf(a)?.number ?? 0) - (quoteOf(b)?.number ?? 0),
       value: (a, b) => worth(a) - worth(b),
       due: (a, b) => (a.due_on ?? "").localeCompare(b.due_on ?? ""),
     };
@@ -150,6 +155,7 @@
         {#each rows as p (p.id)}
           {@const o = ownerOf(p)}
           {@const late = isOpen(p) && !!p.due_on && p.due_on < today}
+          {@const fq = quoteOf(p)}
           <tr class="link" onclick={() => open(p.id)}>
             <td class="p-name c-main">
               <a class="who" href="#/projects/{p.id}" onclick={(e) => e.stopPropagation()}>
@@ -158,6 +164,7 @@
               </a>
             </td>
             <td class="p-status"><StatusPill status={p.status} /></td>
+            <td class="hide-sm">{#if fq}<a class="qlink" href="#/quotes/{fq.id}" onclick={(e) => e.stopPropagation()}>Q{fq.number}</a>{/if}</td>
             <td class="r num p-val c-strong">{valueLabel(totals.get(p.id))}</td>
             <td class="r hide-sm" class:late class:muted={!late}>{p.due_on ? shortDate(p.due_on + "T12:00:00") : "No date"}</td>
           </tr>
@@ -215,6 +222,7 @@
   .filters { display: flex; flex-direction: column; gap: 10px; }
   .phonesort { display: none; }
   .p-val { white-space: nowrap; }
+  .qlink { font-weight: 600; font-variant-numeric: tabular-nums; }
   .form { display: flex; flex-direction: column; gap: 14px; }
   .form .input { width: 100%; min-width: 0; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

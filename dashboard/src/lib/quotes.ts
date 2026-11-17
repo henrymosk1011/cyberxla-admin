@@ -94,7 +94,7 @@ export function quoteStats(list: ProposalRow[], nowMs = Date.now()) {
   const sentThisMonth = live.filter((p) => p.sent_at && new Date(p.sent_at).getTime() >= monthStart).length;
   const decided = live.filter((p) => ["accepted", "declined", "expired"].includes(p.status));
   const won = decided.filter((p) => p.status === "accepted");
-  const days = won.filter((p) => p.sent_at && p.accepted_at).map((p) => daysBetween(p.sent_at!, p.accepted_at!));
+  const days = won.filter((p) => p.sent_at && p.accepted_at).map((p) => Math.max(0, daysBetween(p.sent_at!, p.accepted_at!)));
   return {
     open: open.length, openValue, openMonthly, sentThisMonth,
     winRate: decided.length ? won.length / decided.length : null,

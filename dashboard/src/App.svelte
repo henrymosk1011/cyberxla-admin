@@ -50,7 +50,7 @@
     const full = hash.replace(/^#/, "") || "/";
     const h = full.split("?")[0]!;
     const query = new URLSearchParams(full.split("?")[1] ?? "");
-    if (h === "/quotes") return { page: "quotes" as const };
+    if (h === "/quotes") return { page: "quotes" as const, newFor: query.get("new") ?? "" };
     if (h === "/quotes/templates") return { page: "quote-templates" as const };
     if (h === "/quotes/settings") return { page: "quote-settings" as const };
     if (h === "/quotes/payments") return { page: "payments" as const };
@@ -334,24 +334,24 @@
       {#key pageKey}
       <div class="page" in:fly={{ y: 6, duration: ms(160), easing: cubicOut }}>
       {#if route.page === "overview"}
-        <Overview leads={activeLeads} quotes={activeQuotes} {clients} {clientLines} />
+        <Overview leads={activeLeads} quotes={activeQuotes} {clients} {clientLines} {proposals} />
       {:else if route.page === "leads" || route.page === "board"}
         <Leads {leads} quotes={activeQuotes} {clients} view={route.page === "board" ? "board" : "list"} onstatus={setStatus} />
       {:else if route.page === "lead"}
         <LeadDetail id={route.id} {version} onstatus={setStatus} clientFor={clients.find((c) => c.lead_id === route.id)?.id ?? null} onconverted={refresh}
-          projects={projects.filter((p) => p.lead_id === route.id)} {projectLines} />
+          projects={projects.filter((p) => p.lead_id === route.id)} {projectLines} proposals={proposals.filter((p) => p.lead_id === route.id)} />
       {:else if route.page === "clients"}
         <Clients {clients} services={clientLines} />
       {:else if route.page === "client"}
-        <ClientDetail id={route.id} {version} projects={projects.filter((p) => p.client_id === route.id)} {projectLines} />
+        <ClientDetail id={route.id} {version} projects={projects.filter((p) => p.client_id === route.id)} {projectLines} proposals={proposals.filter((p) => p.client_id === route.id)} />
       {:else if route.page === "projects"}
-        <Projects {projects} lines={projectLines} {clients} {leads} />
+        <Projects {projects} lines={projectLines} {clients} {leads} {proposals} />
       {:else if route.page === "project"}
-        <ProjectDetail id={route.id} {version} {clients} {leads} quotes={activeQuotes} />
+        <ProjectDetail id={route.id} {version} {clients} {leads} quotes={activeQuotes} {proposals} />
       {:else if route.page === "services"}
         <Services />
       {:else if route.page === "quotes"}
-        <Quotes {proposals} {clients} {leads} onchanged={refresh} />
+        <Quotes {proposals} {clients} {leads} onchanged={refresh} newFor={route.newFor} />
       {:else if route.page === "quote"}
         {#await import("./pages/QuoteDetail.svelte")}{@render pageLoading()}{:then { default: QuoteDetail }}<QuoteDetail id={route.id} autosend={route.send} {version} {clients} {leads} {projects} onchanged={refresh} />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "quote-templates"}

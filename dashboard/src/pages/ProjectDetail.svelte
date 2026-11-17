@@ -10,14 +10,15 @@
   import PageHeader from "../components/PageHeader.svelte";
   import StageButtons from "../components/StageButtons.svelte";
   import LoadState from "../components/LoadState.svelte";
+  import FromQuoteCard from "../components/FromQuoteCard.svelte";
   import { guardUnsaved } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { describeCredential, describeLine, describeProject } from "../lib/activity.ts";
   import { dateTime, money, shortDate, STATUS_LABEL } from "../lib/format.ts";
   import { clientLabel, leadLabel, ownerOptions, ownerValue, parseOwner } from "../lib/projects.ts";
-  import { PROJECT_STATUSES, type AuditEntry, type Client, type Lead, type Project, type ProjectService, type ProjectStatus, type Quote } from "../lib/types.ts";
+  import { PROJECT_STATUSES, type AuditEntry, type Client, type Lead, type Project, type ProjectService, type ProjectStatus, type ProposalRow, type Quote } from "../lib/types.ts";
 
-  let { id, version, clients, leads, quotes }: { id: string; version: number; clients: Client[]; leads: Lead[]; quotes: Quote[] } = $props();
+  let { id, version, clients, leads, quotes, proposals = [] }: { id: string; version: number; clients: Client[]; leads: Lead[]; quotes: Quote[]; proposals?: ProposalRow[] } = $props();
 
   let project = $state<Project | null | undefined>(undefined);
   let lines = $state<ProjectService[]>([]);
@@ -66,6 +67,8 @@
     const lid = project?.lead_id;
     return lid ? leads.find((l) => l.id === lid) : undefined;
   });
+  // The quote this project was made from (Convert to project on a quote).
+  const fromQuote = $derived(project?.proposal_id ? proposals.find((p) => p.id === project!.proposal_id) ?? null : null);
   const owner = $derived(client ? { kind: "Client", label: clientLabel(client), href: `#/clients/${client.id}` }
     : lead ? { kind: "Lead", label: leadLabel(lead), href: `#/leads/${lead.id}` } : null);
   // Per-device services start at the client's device count, or the lead's newest quote.
@@ -150,6 +153,7 @@
   <PageHeader eyebrow={`Project${project.due_on ? ` · due ${shortDate(project.due_on + "T12:00:00")}` : ""}`} title={project.name}>
     {#snippet meta()}
       {#if owner}<p class="contact"><span>{owner.kind}</span><a href={owner.href}>{owner.label} <Icon name="arrow-right" size={14} /></a></p>{/if}
+      {#if fromQuote}<p class="contact"><a class="qchip" href="#/quotes/{fromQuote.id}">From quote Q{fromQuote.number}{fromQuote.accepted_at ? `, accepted ${shortDate(fromQuote.accepted_at)}` : ""}</a></p>{/if}
     {/snippet}
     <div class="headvalue">
       <span class="big num">{money(once)}<small> one time</small></span>
@@ -181,6 +185,7 @@
     </div>
 
     <aside class="side">
+      {#if fromQuote}<FromQuoteCard quote={fromQuote} />{/if}
       <section class="card">
         <div class="card-head"><h2>Details</h2></div>
         <form class="form" onsubmit={saveDetails} novalidate>
@@ -207,6 +212,8 @@
 
 <style>
   textarea.input { width: 100%; }
+  .qchip { display: inline-flex; align-items: center; padding: 3px 10px; border: 1px solid var(--line-2); border-radius: 999px; font-size: var(--fs-sm); font-weight: 600; text-decoration: none; }
+  .qchip:hover { background: var(--surface-2); }
   .row { display: flex; justify-content: flex-end; margin-top: 10px; }
   .form { display: flex; flex-direction: column; gap: 10px; }
   .form :global(.input) { height: var(--control-md); width: 100%; min-width: 0; }
