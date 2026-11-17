@@ -39,6 +39,8 @@ access to any table.
 | `supabase/migrations/0016_report_delete.sql` | Deleting archived reports for good (a sent client report must be archived first) |
 | `supabase/migrations/0017_report_copy.sql` | Send me a copy: the reports repo reads one report as it stands, without claiming it |
 | `supabase/migrations/0018_workspace_services.sql` | Google Workspace migration: Essentials, Pro and Complete tiers, plus their add ons |
+| `supabase/migrations/0019_proposals.sql` | Outgoing quotes ("Quotes" in the dashboard, `proposals` in the database): versions, timeline, acceptances, templates, payments, settings, and the public `proposal_view(token)` the quote page reads |
+| `supabase/functions/_shared/proposal.ts` | The quote document format, its checks, the totals math (discounts, deposits), and placeholders, shared by the dashboard and the Edge Functions |
 | `supabase/functions/report-action/` | The dashboard's Send now, Send me a copy and preview refresh for patch reports |
 | `.github/workflows/keepalive.yml` | Pings the database every 6 hours so the free plan never pauses |
 | `dashboard/` | The admin dashboard (Svelte + Vite, static site) |

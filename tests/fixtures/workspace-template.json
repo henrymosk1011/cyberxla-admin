@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "intro": "Pick a tier, add anything extra, and accept your selection online. Tap any service in the table to see what it includes.",
+  "tiers": [
+    { "key": "essentials", "name": "Essentials", "price": 4200, "discount": null, "monthly": null, "monthly_discount": null, "summary": "Everything you need to move over, done simply." },
+    { "key": "pro", "name": "Pro", "price": 5500, "discount": null, "monthly": null, "monthly_discount": null, "summary": "Organized shared drives, spoofing blocked, and a tested backup." },
+    { "key": "complete", "name": "Complete", "price": 8400, "discount": null, "monthly": null, "monthly_discount": null, "summary": "Business Plus with Vault legal holds, USB keys, and every add on included." }
+  ],
+  "recommended": "pro",
+  "default_tier": "pro",
+  "rows": [
+    { "key": "plan", "label": "Plan", "explain": "The Google Workspace license {company} pays Google for. Standard is the most affordable plan with room for all of your files; Plus adds Google Vault for legal holds and retention.", "values": { "essentials": "Standard", "pro": "Standard", "complete": "Plus" } },
+    { "key": "tenant", "label": "Tenant, Users", "explain": "We create your Google Workspace, verify your domain, set baseline security, and set up an account for each person.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "email", "label": "Email Migration", "explain": "All the email in your current inbox is copied into a shared office mailbox on your own domain.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "forward", "label": "Old Gmail Forwarding", "explain": "The old Gmail address forwards new mail to the new mailbox and auto replies with your new address. Then its password is reset and every device is signed out.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "drive", "label": "Drive Migration", "explain": "Essentials moves your files as is into one shared drive. Pro and Complete organize them into four separate shared drives, each with its own permissions.", "values": { "essentials": "1 shared drive folder", "pro": "4 shared drive folders", "complete": "4 shared drive folders" } },
+    { "key": "mfa", "label": "MFA", "explain": "Everyone signs in with a password plus a code from an authenticator app on their phone. Complete adds USB security keys for up to 3 people, including the admin account.", "values": { "essentials": "Authenticator App Only", "pro": "Authenticator App Only", "complete": "Authenticator App plus USB Keys" } },
+    { "key": "desktop", "label": "Drive Desktop", "explain": "Google Drive for desktop on each PC, signed in for each person, with their Desktop, Documents, and Downloads folders backed up.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "cutover", "label": "Domain Cutover", "explain": "Your domain’s email moves over to Google, any existing mailboxes come along, and the old email subscription is cancelled.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "contacts", "label": "Contacts/Calendar Migration", "explain": "Contacts and calendar events move from the old account into Google Workspace.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "scanner", "label": "Scanner Email Setup", "explain": "Your copier’s scan to email, and anything else that sends from the old account, is switched to send from your domain.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "training", "label": "Staff Training", "explain": "A one hour session for your team on their new logins, the shared inbox, shared drives, and MFA.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "runbook", "label": "Runbook", "explain": "A written record of your setup: DNS records, drive structure, admin access, and how to add or remove a user.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "dmarc", "label": "SPF DKIM DMARC", "explain": "Email security records that stop scammers from sending email as your domain. Monitor reports spoofing attempts; Enforce actively blocks them after 2 to 4 weeks of reports.", "values": { "essentials": "Monitor", "pro": "Enforce", "complete": "Enforce" } },
+    { "key": "backup", "label": "Backup Reconfiguration", "explain": "Your existing backup is moved to the new Workspace, covering every person’s email and files and all shared drives. Pro and Complete add a test restore and email alerts if a backup fails.", "values": { "essentials": true, "pro": true, "complete": true } },
+    { "key": "winlogin", "label": "Windows Synced User Logins", "explain": "Each person signs into their PC with their Google Workspace login and MFA, so one login covers everything.", "values": { "essentials": false, "pro": false, "complete": true } },
+    { "key": "vault", "label": "Vault Retention Policies", "explain": "Google Vault retention rules and legal holds, so email and files can’t be permanently deleted and can be searched or exported when you need them.", "values": { "essentials": false, "pro": false, "complete": true } },
+    { "key": "phone", "label": "Phone Policies", "explain": "A screen lock is required, and remote wipe is ready, on any phone with company email.", "values": { "essentials": false, "pro": false, "complete": true } },
+    { "key": "policies", "label": "IT Policies", "explain": "Written policies for acceptable use, passwords and MFA, and onboarding and offboarding staff.", "values": { "essentials": false, "pro": false, "complete": true } },
+    { "key": "hypercare", "label": "Hypercare", "explain": "Support after cutover, with any issues fixed at no extra charge.", "values": { "essentials": "1 week", "pro": "2 weeks", "complete": "30 days" } }
+  ],
+  "addons": [
+    { "key": "usb", "name": "USB Security Keys", "description": "Physical keys for up to 3 people, the strongest protection against phishing. Keys billed at cost.", "price": 400, "billing": "once", "discount": null, "tiers": { "essentials": "available", "pro": "available", "complete": "included" } },
+    { "key": "win", "name": "Windows Synced User Logins", "description": "Each person signs into their PC with their Workspace login and MFA.", "price": 750, "billing": "once", "discount": null, "tiers": { "essentials": "available", "pro": "available", "complete": "included" } },
+    { "key": "phone", "name": "Phone Policies", "description": "Screen lock required and remote wipe ready on every phone with company email.", "price": 400, "billing": "once", "discount": null, "tiers": { "essentials": "available", "pro": "available", "complete": "included" } },
+    { "key": "policies", "name": "Basic IT Policies", "description": "Short written policies for acceptable use, passwords and MFA, and onboarding and offboarding.", "price": 750, "billing": "once", "discount": null, "tiers": { "essentials": "available", "pro": "available", "complete": "included" } },
+    { "key": "hyper", "name": "Extended Hypercare, 30 Days", "description": "Support after cutover extended to 30 days, with fixes at no extra charge.", "price": 500, "billing": "once", "discount": null, "tiers": { "essentials": "available", "pro": "available", "complete": "included" } }
+  ],
+  "discount": null,
+  "payment": { "mode": "none", "deposit_kind": "percent", "deposit_value": 50 },
+  "fine_print": [
+    { "key": "lic1", "text": "Google Workspace Standard licenses are billed separately by Google, about $14 per user per month on an annual plan.", "tiers": ["essentials", "pro"], "addon": null },
+    { "key": "lic2", "text": "Google Workspace Plus licenses are billed separately by Google, about $22 per user per month on an annual plan.", "tiers": ["complete"], "addon": null },
+    { "key": "keys", "text": "USB keys are billed at cost.", "tiers": [], "addon": "usb" }
+  ],
+  "terms": true
+}
