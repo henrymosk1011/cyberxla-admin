@@ -529,7 +529,7 @@
     m.push({ label: "Copy client link", onselect: copyLink });
     m.push({ label: "Duplicate", onselect: duplicate });
     m.push({ label: "Save as template", onselect: () => { templateName = draft?.title ?? ""; templating = true; } });
-    if (p.version && p.status !== "accepted" && p.status !== "revoked") m.push({ label: "Email it again", onselect: () => openSend("resend") });
+    if (p.version && p.status !== "accepted" && p.status !== "revoked") m.push({ label: p.link_only ? "Email it to the client" : "Email it again", onselect: () => openSend("resend") });
     if (["sent", "viewed", "changes_requested", "expired"].includes(p.status)) m.push({ label: "Mark declined", onselect: () => rpc("proposal_set_declined", { p_declined: true }, "Marked declined.") });
     if (p.version && p.status !== "revoked") m.push({ label: "Make a new link", hint: "The old link stops working", onselect: async () => { if (await confirm.ask({ title: "Make a new link?", body: "The link the client has stops working. Send or copy the new one.", action: "Make a new link" })) rpc("proposal_new_link", {}, "New link made."); } });
     if (p.version && p.status !== "revoked") m.push({ label: "Turn off the link", danger: true, onselect: async () => { if (await confirm.ask({ title: "Turn off the link?", body: "The client will see \"This quote isn't available\". You can make a new link later.", action: "Turn off", danger: true })) rpc("proposal_revoke", {}, "Link turned off."); } });
