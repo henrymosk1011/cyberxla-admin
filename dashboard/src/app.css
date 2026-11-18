@@ -276,8 +276,9 @@ select:hover { border-color: var(--line-2); }
 .picker .none { padding: 8px 4px; font-size: var(--fs-sm); }
 
 /* A note above the content: something to know or check. */
-.callout { border: 1px solid var(--line-2); border-left: 3px solid var(--text-2); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 12px; font-size: var(--fs-md); background: var(--surface); }
-.callout.warn { border-left-color: var(--warning); }
+/* No colored stripe down one side: a plain border, tinted all round for a warning. */
+.callout { border: 1px solid var(--line-2); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 12px; font-size: var(--fs-md); background: var(--surface); }
+.callout.warn { border-color: rgba(250, 178, 25, 0.5); background: rgba(250, 178, 25, 0.07); }
 .callout p { margin-top: 2px; color: var(--text-2); }
 
 /* The line of contact details under a record's name, and its headline number on the right. */

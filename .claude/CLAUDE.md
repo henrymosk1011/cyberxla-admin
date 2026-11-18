@@ -9,3 +9,4 @@ The admin dashboard for cyberx.la (admin.cyberx.la, Svelte, built by Cloudflare 
 - Keep it at WCAG 2.1 AA or better on phone and desktop: keyboard access, visible focus, contrast, and reduced motion.
 - House rules: no dashes as punctuation in UI copy, docs, or comments; the wordmark is always cyberxLA.
 - This repo is public. Never commit secrets, or client names and email addresses (demo data uses made up names and the reserved `.example` domain).
+- Never style a card, callout, notice, toast, banner or quote with a colored stripe down one side (a thick one sided border such as `border-left`). Use a plain full border, a tinted background, or an icon instead. This applies to every site and app built for the owner, front end or admin.

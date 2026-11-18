@@ -23,9 +23,7 @@
   .toasts { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; flex-direction: column; gap: 10px; width: min(380px, calc(100vw - 40px)); }
   /* Pages with a save bar along the bottom: sit above it. */
   :global(:root:has(.savebar)) .toasts { bottom: 96px; }
-  .toast { display: flex; gap: 12px; align-items: flex-start; background: var(--surface-3); border: 1px solid var(--line-2); border-left: 3px solid var(--lime); border-radius: var(--radius-md); padding: 14px 14px 14px 16px; box-shadow: var(--shadow-md); animation: in 0.3s ease; }
-  .t-success { border-left-color: var(--good-text); }
-  .t-error { border-left-color: var(--critical); }
+  .toast { display: flex; gap: 12px; align-items: flex-start; background: var(--surface-3); border: 1px solid var(--line-2); border-radius: var(--radius-md); padding: 14px; box-shadow: var(--shadow-md); animation: in 0.3s ease; }
   .mark { flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 800; line-height: 1; background: var(--lime); color: var(--on-lime); }
   .t-info .mark { width: 8px; height: 8px; margin-top: 6px; }
   .t-success .mark { background: var(--good-text); }

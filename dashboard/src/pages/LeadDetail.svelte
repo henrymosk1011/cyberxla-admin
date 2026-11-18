@@ -356,7 +356,7 @@
   .quote .card-head { flex-wrap: wrap; }
   .quote .card-head > div:first-child { flex: 1 1 200px; min-width: 0; }
   .small { font-size: var(--fs-xs); }
-  blockquote { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--lime); background: var(--ink); border-radius: 0 8px 8px 0; color: var(--text-2); font-size: var(--fs-md); white-space: pre-wrap; overflow-wrap: anywhere; }
+  blockquote { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line-2); background: var(--ink); border-radius: 8px; color: var(--text-2); font-size: var(--fs-md); white-space: pre-wrap; overflow-wrap: anywhere; }
   form { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
   form textarea { width: 100%; }
   .notes { list-style: none; margin-top: 16px; display: flex; flex-direction: column; }
