@@ -191,6 +191,17 @@
     inflight = null;
     return ok;
   }
+  // Save draft: the same save, right now, with a word on what the client sees.
+  async function saveDraft() {
+    if (!(await save())) {
+      toast.error(problem ? `Fix this first: ${problem}` : saveError || "Couldn't save. Try again.");
+      return;
+    }
+    if (!p) return;
+    toast.success(p.revising ? `Draft saved. The client still sees version ${p.version} until you send or publish this revision.`
+      : p.scheduled_at ? `Draft saved. It goes out as scheduled, ${dateTime(p.scheduled_at)}.`
+      : "Draft saved. The client can't see it until you send or publish it.");
+  }
   $effect(() => {
     if (!draft || !p) return;
     const k = keyOf(draft);
@@ -564,9 +575,11 @@
     <div class="acts">
       <span class="saved" class:bad={!!problem || !!saveError} role="status">{saveText}</span>
       {#if p.status === "draft" || p.status === "scheduled"}
+        <button class="btn" disabled={busy || saving} onclick={saveDraft}>Save draft</button>
         <button class="btn primary" disabled={busy} onclick={() => openSend("send")}>{p.status === "scheduled" ? "Send now" : "Send"}</button>
       {:else if p.revising}
         <button class="btn" disabled={busy} onclick={() => rpc("proposal_discard_revision", {}, "Revision discarded.")}>Discard revision</button>
+        <button class="btn" disabled={busy || saving} onclick={saveDraft}>Save draft</button>
         <button class="btn primary" disabled={busy} onclick={() => openSend("send")}>Send revision</button>
       {:else if p.status === "revoked"}
         <button class="btn primary" disabled={busy} onclick={() => rpc("proposal_new_link", {}, "New link made. The quote is back on.")}>Make a new link</button>
