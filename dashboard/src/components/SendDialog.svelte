@@ -103,7 +103,7 @@
     <p class="to"><span class="muted">To</span> <strong>{proposal.recipient_email ?? "No recipient yet"}</strong>{#if proposal.cc.length}<span class="muted"> cc</span> {proposal.cc.join(", ")}{/if}
       <span class="muted">· from {settings?.from_name ?? "Henry at cyberxLA"}, replies go to {settings?.reply_to ?? "henry@cyberx.la"}</span></p>
     {#if noEmail}
-      <p class="callout warn" role="status">Email isn't set up yet, so this can't be emailed. {mode === "send" ? "Publish it without emailing, then copy the link and send it yourself." : "Copy the link and send it yourself."} To turn email on, add the RESEND_API_KEY secret in Supabase (README, Setup for sending).</p>
+      <p class="callout warn" role="status">Email isn't set up yet, so this can't be emailed. {mode === "send" ? "Publish it instead, then send the link yourself." : "Copy the link and send it yourself."} To turn email on, add the RESEND_API_KEY secret in Supabase (README, Setup for sending).</p>
     {/if}
     {#if mode === "send" && proposal.revising}
       <p class="callout">The client sees version {proposal.version} until this goes out. Same link, same number.</p>
@@ -136,8 +136,8 @@
     {#if done}<p class="ok" role="status">{done}</p>{/if}
     <div class="row">
       {#if !noEmail}<button type="button" class="btn" disabled={busy !== ""} onclick={test}>{busy === "test" ? "Sending test…" : `Send me a test`}</button>{/if}
-      {#if mode === "send" && !later}
-        <button type="button" class={noEmail ? "btn primary" : "btn ghost"} disabled={busy !== "" || !proposal.recipient_email} onclick={publish}>{busy === "publish" ? "Publishing…" : "Publish without emailing"}</button>
+      {#if mode === "send" && noEmail}
+        <button type="button" class="btn primary" disabled={busy !== "" || !proposal.recipient_email} onclick={publish}>{busy === "publish" ? "Publishing…" : "Publish"}</button>
       {/if}
       <span class="grow"></span>
       <button type="button" class="btn ghost" disabled={busy !== ""} onclick={onclose}>Cancel</button>

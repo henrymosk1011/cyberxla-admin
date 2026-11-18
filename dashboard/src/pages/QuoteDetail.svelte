@@ -8,6 +8,7 @@
   import LoadState from "../components/LoadState.svelte";
   import QuotePreview from "../components/QuotePreview.svelte";
   import SendDialog from "../components/SendDialog.svelte";
+  import { emailStatus } from "../lib/email.ts";
   import { tick, untrack } from "svelte";
   import { leave, pageHeading } from "../lib/nav.svelte.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
@@ -19,7 +20,7 @@
   import { clientLink, statusLabel, describeEvent, isEditable, ownerOf, previewModel, projectLines, quoteNo, safeDoc, selectionText, viewAsClient } from "../lib/quotes.ts";
   import type { Client, Lead, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalVersion, QuoteSettings, ServiceRow } from "../lib/types.ts";
 
-  let { id, version, clients, leads, projects, onchanged, autosend = false }: { id: string; version: number; clients: Client[]; leads: Lead[]; projects: Project[]; onchanged: () => void; autosend?: boolean } = $props();
+  let { id, version, clients, leads, projects, onchanged, autoact = "" }: { id: string; version: number; clients: Client[]; leads: Lead[]; projects: Project[]; onchanged: () => void; autoact?: "" | "send" | "publish" } = $props();
 
   type Draft = {
     owner: string; title: string; recipient_name: string; recipient_email: string; cc: string; prepared_on: string; valid_until: string;
@@ -114,14 +115,20 @@
     }
   }
   $effect(() => { void id; load(true); });
-  // From the list's Send: open the Send dialog once the quote is in.
+  // From the list's Send or Publish: open it once the quote is in.
   let autoDone = false;
   $effect(() => {
-    if (!autosend || autoDone || !p || !settings) return;
+    if (!autoact || autoDone || !p || !settings) return;
     autoDone = true;
     history.replaceState(history.state, "", `#/quotes/${id}`);
-    openSend(isEditable(p) ? "send" : "resend");
+    const editable = isEditable(p);
+    untrack(() => { if (autoact === "publish" && editable) publishNow(); else openSend(editable ? "send" : "resend"); });
   });
+  // Is email set up? Until it is, there's Publish and no Send.
+  let emailReady = $state<boolean | null>(null);
+  $effect(() => { void id; let gone = false; emailStatus().then((r) => { if (!gone) emailReady = r; }); return () => { gone = true; }; });
+  /** What makes a draft visible to the client, for messages. */
+  const goLive = $derived(emailReady ? "publish or send" : "publish");
   // The app's lists refreshed: refresh this quote too (reading p untracked, or each load would start another).
   $effect(() => { void version; untrack(() => { if (p) load(); }); });
   $effect(() => db.subscribeProposals(() => { if (!saving) load(); }));
@@ -198,9 +205,9 @@
       return;
     }
     if (!p) return;
-    toast.success(p.revising ? `Draft saved. The client still sees version ${p.version} until you send or publish this revision.`
+    toast.success(p.revising ? `Draft saved. The client still sees version ${p.version} until you ${goLive} this revision.`
       : p.scheduled_at ? `Draft saved. It goes out as scheduled, ${dateTime(p.scheduled_at)}.`
-      : "Draft saved. The client can't see it until you send or publish it.");
+      : `Draft saved. The client can't see it until you ${goLive} it.`);
   }
   $effect(() => {
     if (!draft || !p) return;
@@ -424,10 +431,28 @@
     if (mode === "send" && !(await save())) { toast.error(problem ? `Fix this first: ${problem}` : "Your edits haven't saved yet. Try again in a moment."); return; }
     if (!p?.recipient_email) { toast.error("Add the recipient's email first."); showField("client", "q-email"); return; }
     sending = mode;
-    // Is email set up? The dialog offers Publish without emailing when it isn't.
-    db.quoteAction({ action: "status" }).then((s) => (emailReady = s.email === true)).catch(() => (emailReady = null));
+    // Check again: the dialog says so if email isn't set up.
+    emailStatus().then((r) => (emailReady = r));
   }
-  let emailReady = $state<boolean | null>(null);
+  // Publish: the client's link goes live with this version, and nobody is emailed.
+  async function publishNow() {
+    if (!(await save())) { toast.error(problem ? `Fix this first: ${problem}` : "Your edits haven't saved yet. Try again in a moment."); return; }
+    if (!p) return;
+    if (!p.recipient_email) { toast.error("Add the recipient's email first."); showField("client", "q-email"); return; }
+    const n = quoteNo(p);
+    const ok = await confirm.ask({
+      title: p.revising ? `Publish version ${p.version + 1} of ${n}?` : `Publish ${n}?`,
+      body: p.revising
+        ? `The client's link shows version ${p.version + 1} right away, in place of version ${p.version}. Nobody is emailed.`
+        : `The client's link goes live with this version${p.scheduled_at ? `, and the email scheduled for ${dateTime(p.scheduled_at)} won't go out` : ""}. Nobody is emailed. The link is copied so you can send it yourself.`,
+      action: "Publish",
+    });
+    if (!ok) return;
+    busy = true;
+    try { await doPublish(); }
+    catch (e) { toast.error(messageOf(e, "That didn't go through. Try again.")); }
+    finally { busy = false; }
+  }
   async function doPublish() {
     await db.proposalRpc("proposal_publish", { p_id: id });
     sending = "";
@@ -576,17 +601,19 @@
       <span class="saved" class:bad={!!problem || !!saveError} role="status">{saveText}</span>
       {#if p.status === "draft" || p.status === "scheduled"}
         <button class="btn" disabled={busy || saving} onclick={saveDraft}>Save draft</button>
-        <button class="btn primary" disabled={busy} onclick={() => openSend("send")}>{p.status === "scheduled" ? "Send now" : "Send"}</button>
+        <button class="btn" class:primary={!emailReady} disabled={busy} onclick={publishNow}>Publish</button>
+        {#if emailReady}<button class="btn primary" disabled={busy} onclick={() => openSend("send")}>{p.status === "scheduled" ? "Send now" : "Send"}</button>{/if}
       {:else if p.revising}
         <button class="btn" disabled={busy} onclick={() => rpc("proposal_discard_revision", {}, "Revision discarded.")}>Discard revision</button>
         <button class="btn" disabled={busy || saving} onclick={saveDraft}>Save draft</button>
-        <button class="btn primary" disabled={busy} onclick={() => openSend("send")}>Send revision</button>
+        <button class="btn" class:primary={!emailReady} disabled={busy} onclick={publishNow}>Publish revision</button>
+        {#if emailReady}<button class="btn primary" disabled={busy} onclick={() => openSend("send")}>Send revision</button>{/if}
       {:else if p.status === "revoked"}
         <button class="btn primary" disabled={busy} onclick={() => rpc("proposal_new_link", {}, "New link made. The quote is back on.")}>Make a new link</button>
       {:else if p.status === "declined"}
         <button class="btn" disabled={busy} onclick={() => rpc("proposal_set_declined", { p_declined: false }, "Reopened.")}>Reopen</button>
       {:else}
-        <button class="btn" disabled={busy} onclick={() => rpc("proposal_revise", {}, "Revising. The client sees the sent version until you send this one.")}>Revise</button>
+        <button class="btn" disabled={busy} onclick={() => rpc("proposal_revise", {}, `Revising. The client sees version ${p!.version} until you ${goLive} this one.`)}>Revise</button>
         {#if !project && ["accepted", "sent", "viewed", "changes_requested"].includes(p.status)}
           <button class="btn" class:primary={p.status === "accepted"} disabled={busy} onclick={openConvert}>Convert to project</button>
         {/if}
@@ -599,11 +626,11 @@
     <div class="callout" role="note"><strong>Scheduled to send {dateTime(p.scheduled_at)}.</strong> <p>To {p.recipient_email}. <button class="linkbtn" disabled={busy} onclick={() => rpc("proposal_unschedule", {}, "Schedule cancelled.")}>Cancel the schedule</button></p></div>
   {/if}
   {#if p.revising}
-    <div class="callout warn" role="note"><strong>You're revising {quoteNo(p)}.</strong> <p>The client still sees version {p.version} until you send this revision. Same link, same number.</p></div>
+    <div class="callout warn" role="note"><strong>You're revising {quoteNo(p)}.</strong> <p>The client still sees version {p.version} until you {goLive} this revision. Same link, same number.</p></div>
   {:else if p.status === "accepted"}
-    <div class="callout" role="note"><strong>Accepted {p.accepted_at ? shortDate(p.accepted_at) : ""}{accepted ? ` by ${accepted.signer_name}` : ""}.</strong> <p>It's locked, so it always matches what was accepted. Revise to send a new version for the client to accept again.</p></div>
+    <div class="callout" role="note"><strong>Accepted {p.accepted_at ? shortDate(p.accepted_at) : ""}{accepted ? ` by ${accepted.signer_name}` : ""}.</strong> <p>It's locked, so it always matches what was accepted. Revise to make a new version for the client to accept again.</p></div>
   {:else if !editable && p.status !== "revoked"}
-    <div class="callout" role="note"><strong>{p.link_only ? "Published quotes are locked." : "Sent quotes are locked."}</strong> <p>The client sees exactly what you {p.link_only ? "published" : "sent"}. To change the quote itself, press Revise: the client keeps seeing version {p.version} until you send or publish the revision, at the same link. Recipient, Valid until, follow ups and internal notes stay editable now.</p></div>
+    <div class="callout" role="note"><strong>{p.link_only ? "Published quotes are locked." : "Sent quotes are locked."}</strong> <p>The client sees exactly what you {p.link_only ? "published" : "sent"}. To change the quote itself, press Revise: the client keeps seeing version {p.version} until you {goLive} the revision, at the same link. Recipient, Valid until, follow ups and internal notes stay editable now.</p></div>
   {/if}
   {#if p.status === "changes_requested" && lastChange}
     <div class="callout warn" role="note"><strong>{String(lastChange.detail.name ?? "The client")} asked for changes {shortDate(lastChange.at)}.</strong> <p>{String(lastChange.detail.message ?? "")}</p></div>
