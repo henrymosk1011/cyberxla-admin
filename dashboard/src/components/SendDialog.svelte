@@ -94,7 +94,8 @@
       busy = "";
     }
   }
-  const heading = $derived(mode === "resend" ? `Email ${number} again` : proposal.revising ? `Send version ${proposal.version + 1} of ${number}` : `Send ${number}`);
+  // A quote only published (never emailed) is emailed for the first time, not again.
+  const heading = $derived(mode === "resend" ? (proposal.link_only ? `Email ${number} to the client` : `Email ${number} again`) : proposal.revising ? `Send version ${proposal.version + 1} of ${number}` : `Send ${number}`);
 </script>
 
 <Modal {open} title={heading} onclose={onclose} wide persistent={busy !== ""}>
@@ -142,7 +143,7 @@
       <button type="button" class="btn ghost" disabled={busy !== ""} onclick={onclose}>Cancel</button>
       {#if !noEmail}
         <button type="button" class="btn primary" disabled={busy !== "" || !proposal.recipient_email} onclick={go}>
-          {busy === "send" ? (later ? "Scheduling…" : "Sending…") : later ? "Schedule" : mode === "resend" ? "Send again" : "Send now"}
+          {busy === "send" ? (later ? "Scheduling…" : "Sending…") : later ? "Schedule" : mode === "resend" ? (proposal.link_only ? "Send email" : "Send again") : "Send now"}
         </button>
       {/if}
     </div>
