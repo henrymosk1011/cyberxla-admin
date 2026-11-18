@@ -20,6 +20,10 @@ export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = {
   accepted: "Accepted", declined: "Declined", expired: "Expired", revoked: "Revoked",
 };
 
+/** The status in words: "Published, not emailed" when the link went out without an email. */
+export const statusLabel = (p: Pick<ProposalRow, "status" | "link_only">) =>
+  p.status === "sent" && p.link_only ? "Published, not emailed" : PROPOSAL_STATUS_LABEL[p.status];
+
 /** Can the client facing document be edited right now? */
 export const isEditable = (p: Pick<ProposalRow, "status" | "revising">) => p.status === "draft" || p.status === "scheduled" || p.revising;
 

@@ -16,7 +16,7 @@
   import { unitPrice, isMonthly } from "../lib/catalog.ts";
   import { ownerOptions, parseOwner, ownerValue } from "../lib/projects.ts";
   import { BadDoc, addonsFor, newKey, normalizeDoc, resolveDoc, tierMargin, totals, usd, varsFor, cents, longDate, PLACEHOLDERS, type Addon, type ProposalDoc, type Row, type Tier } from "../../../supabase/functions/_shared/proposal.ts";
-  import { PROPOSAL_STATUS_LABEL, clientLink, describeEvent, isEditable, ownerOf, previewModel, projectLines, quoteNo, safeDoc, selectionText, viewAsClient } from "../lib/quotes.ts";
+  import { clientLink, statusLabel, describeEvent, isEditable, ownerOf, previewModel, projectLines, quoteNo, safeDoc, selectionText, viewAsClient } from "../lib/quotes.ts";
   import type { Client, Lead, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalVersion, QuoteSettings, ServiceRow } from "../lib/types.ts";
 
   let { id, version, clients, leads, projects, onchanged, autosend = false }: { id: string; version: number; clients: Client[]; leads: Lead[]; projects: Project[]; onchanged: () => void; autosend?: boolean } = $props();
@@ -467,7 +467,7 @@
     if (!p) return "";
     const parts = [quoteNo(p)];
     if (p.version) parts.push(`version ${p.version}${p.revising ? `, revising version ${p.version + 1}` : ""}`);
-    if (p.last_sent_at) parts.push(`sent ${shortDate(p.last_sent_at)}`);
+    if (p.last_sent_at) parts.push(`${p.link_only ? "published" : "sent"} ${shortDate(p.last_sent_at)}`);
     if (p.view_count) parts.push(`viewed ${p.view_count} ${p.view_count === 1 ? "time" : "times"}${p.last_viewed_at ? `, last ${shortDate(p.last_viewed_at)}` : ""}`);
     return parts.join(" · ");
   });
@@ -504,7 +504,7 @@
       <p class="eyebrow">{head}</p>
       <h1 use:pageHeading>{titleFilled || "Untitled quote"}</h1>
       <div class="state">
-        <span class="pill st-{p.status}"><i aria-hidden="true"></i>{PROPOSAL_STATUS_LABEL[p.status]}</span>
+        <span class="pill st-{p.status}"><i aria-hidden="true"></i>{statusLabel(p)}</span>
         {#if p.revising}<span class="tag">Revising</span>{/if}
         {#if p.archived_at}<span class="tag">Archived</span>{/if}
         {#if owner}<a class="owner" href={owner.href}>{owner.kind}: {owner.label}</a>{/if}
@@ -540,7 +540,7 @@
   {:else if p.status === "accepted"}
     <div class="callout" role="note"><strong>Accepted {p.accepted_at ? shortDate(p.accepted_at) : ""}{accepted ? ` by ${accepted.signer_name}` : ""}.</strong> <p>It's locked, so it always matches what was accepted. Revise to send a new version for the client to accept again.</p></div>
   {:else if !editable && p.status !== "revoked"}
-    <div class="callout" role="note"><strong>Sent quotes are locked.</strong> <p>The client sees exactly what you sent. Revise to change it; recipient, dates, follow ups and internal notes stay editable.</p></div>
+    <div class="callout" role="note"><strong>{p.link_only ? "Published quotes are locked." : "Sent quotes are locked."}</strong> <p>The client sees exactly what you {p.link_only ? "published" : "sent"}. To change the quote itself, press Revise: the client keeps seeing version {p.version} until you send or publish the revision, at the same link. Recipient, Valid until, follow ups and internal notes stay editable now.</p></div>
   {/if}
   {#if p.status === "changes_requested" && lastChange}
     <div class="callout warn" role="note"><strong>{String(lastChange.detail.name ?? "The client")} asked for changes {shortDate(lastChange.at)}.</strong> <p>{String(lastChange.detail.message ?? "")}</p></div>
@@ -586,16 +586,17 @@
         </div>
       </section>
 
-      <fieldset class="plain" disabled={!editable}>
-        <section class="card">
+      <section class="card">
           <div class="card-head"><h2>Details</h2><span class="sub">Placeholders: {PLACEHOLDERS.map((x) => `{${x}}`).join(" ")}</span></div>
           <div class="grid">
-            <Field id="q-title" label="Title" required wide hint="The last word gets the lime highlight on the page.">{#snippet children(a)}<input {...a} class="input" maxlength="120" bind:value={d.title} />{/snippet}</Field>
-            <Field id="q-prepared" label="Prepared">{#snippet children(a)}<input {...a} class="input" type="date" bind:value={d.prepared_on} />{/snippet}</Field>
+            <Field id="q-title" label="Title" required wide hint="The last word gets the lime highlight on the page.">{#snippet children(a)}<input {...a} class="input" maxlength="120" disabled={!editable} bind:value={d.title} />{/snippet}</Field>
+            <Field id="q-prepared" label="Prepared">{#snippet children(a)}<input {...a} class="input" type="date" disabled={!editable} bind:value={d.prepared_on} />{/snippet}</Field>
             <Field id="q-valid" label="Valid until" hint={p!.status === "expired" ? "A later date reopens it." : ""}>{#snippet children(a)}<input {...a} class="input" type="date" disabled={p!.status === "accepted" && !p!.revising} bind:value={d.valid_until} />{/snippet}</Field>
-            <Field id="q-intro" label="Intro" wide hint="A short paragraph under the title.">{#snippet children(a)}<textarea {...a} class="input" rows="3" maxlength="1500" bind:value={d.content.intro}></textarea>{/snippet}</Field>
+            <Field id="q-intro" label="Intro" wide hint="A short paragraph under the title.">{#snippet children(a)}<textarea {...a} class="input" rows="3" maxlength="1500" disabled={!editable} bind:value={d.content.intro}></textarea>{/snippet}</Field>
           </div>
         </section>
+
+      <fieldset class="plain" disabled={!editable}>
 
         <section class="card">
           <div class="card-head"><div><h2>Tiers</h2><p class="sub">{d.content.tiers.length === 1 ? "One tier shows as a simple quote: what's included and the total." : "The client picks one."}</p></div></div>

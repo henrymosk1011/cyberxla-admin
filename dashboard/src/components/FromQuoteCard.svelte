@@ -44,7 +44,7 @@
 <section class="card">
   <div class="card-head"><div><h2>From quote</h2><p class="sub">This project was made from {quoteNo(quote)}.</p></div></div>
   <dl class="factlist">
-    <div><dt>Quote</dt><dd><a href="#/quotes/{quote.id}">{quoteNo(quote)}, {quote.title}</a> <QuotePill status={quote.status} /></dd></div>
+    <div><dt>Quote</dt><dd><a href="#/quotes/{quote.id}">{quoteNo(quote)}, {quote.title}</a> <QuotePill status={quote.status} linkOnly={quote.link_only} /></dd></div>
     {#if acc}
       <div><dt>Accepted</dt><dd>{dateTime(acc.accepted_at)} by {acc.signer_name}</dd></div>
       <div><dt>Selection</dt><dd>{selectionText(acc.doc, acc.tier, acc.addons)}</dd></div>

@@ -45,6 +45,7 @@ access to any table.
 | `supabase/functions/_shared/emails.ts` | Every quote email (to clients and to you), shared with the dashboard's email preview |
 | `supabase/migrations/0020_quote_flows.sql` | Accepting and Request changes from the quote page, the scheduler (Send later, follow ups, notices to you, expiry), and Stripe payments |
 | `supabase/migrations/0021_quote_publish.sql` | Publish without emailing |
+| `supabase/migrations/0022_quote_link_only.sql` | Remembers when a quote was published without an email ("Published, not emailed") |
 | `supabase/functions/quote-public/` | The quote page's Accept, Request changes and Pay buttons (Turnstile, rate limits, totals checked on the server, Stripe Checkout) |
 | `supabase/functions/quote-cron/` | The scheduler's worker, woken by pg_cron: Send later, follow ups, emails to you, Stripe on or off |
 | `supabase/functions/stripe-webhook/` | Stripe's payment events, signature checked, each applied once |
@@ -349,7 +350,13 @@ they're separate things (`public.quotes` in the database is the requests,
   Turn off the link makes the page say "This quote isn't available". Views are
   counted once per half hour; your preview and View as client don't count.
 - **Statuses**: draft, scheduled, sent, viewed, changes requested, accepted,
-  declined, expired, revoked. Sending moves a lead to Proposal.
+  declined, expired, revoked. Sending moves a lead to Proposal. A quote
+  published without an email shows **Published, not emailed** in place of
+  Sent, until a version of it is emailed.
+- **Changing a sent quote**: it's locked so the client always sees what you
+  sent. Press **Revise** to edit; the client keeps seeing the sent version
+  until you send or publish the revision, at the same link. Recipient, Valid
+  until, follow ups and internal notes stay editable without revising.
 - **Accepting**: the client picks a tier and add ons, then Accept asks for their
   name, title, email, a typed signature and the terms checkbox (with a
   Cloudflare Turnstile check). The server recomputes every total from the

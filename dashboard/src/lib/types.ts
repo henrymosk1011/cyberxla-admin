@@ -238,6 +238,8 @@ export type ProposalRow = {
   token: string;
   version: number;
   revising: boolean;
+  /** The latest version was published without an email, and none has gone since. Set by the database. */
+  link_only: boolean;
   scheduled_at: string | null;
   send_subject: string | null;
   send_note: string | null;
