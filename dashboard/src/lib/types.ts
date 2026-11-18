@@ -217,7 +217,7 @@ export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 export const OPEN_PROPOSAL_STATUSES: readonly ProposalStatus[] = ["sent", "viewed", "changes_requested"];
 
 export type ProposalFn = "proposal_schedule" | "proposal_unschedule" | "proposal_revise" | "proposal_discard_revision" | "proposal_revoke" | "proposal_new_link"
-  | "proposal_set_declined" | "proposal_duplicate" | "proposal_convert";
+  | "proposal_set_declined" | "proposal_duplicate" | "proposal_convert" | "proposal_publish";
 
 export type ProposalRow = {
   id: string;

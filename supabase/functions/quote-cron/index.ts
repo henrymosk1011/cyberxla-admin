@@ -11,7 +11,8 @@
 //    accepted, payment) with retries, follow up reminders (9 AM to 5 PM
 //    Pacific), and keeping the Stripe on/off flag in step with the secrets.
 //
-// Secrets: INTAKE_DB_URL, RESEND_API_KEY (shared), STRIPE_* (optional).
+// Secrets: INTAKE_DB_URL, RESEND_API_KEY (shared; without it, scheduled sends
+// and notices wait), STRIPE_* (optional).
 
 import postgres from "npm:postgres@3.4.5";
 import { fromHeader, ownerNotice, quoteEmail, type MailContext, type NoticeKind } from "../_shared/emails.ts";
@@ -47,6 +48,13 @@ Deno.serve(async (req) => {
     const done = { sent: 0, reminders: 0, notices: 0, failed: 0 };
 
     await db()`select proposal_api.set_stripe_mode(${stripeMode(env)})`;
+
+    // Without the Resend key, hold everything that emails: scheduled sends stay
+    // scheduled and notices keep their tries, until the key is added.
+    if (!env("RESEND_API_KEY")) {
+      await db()`select proposal_api.cron_seen()`;
+      return reply(200, { ok: true, email: false, ...done });
+    }
 
     const [{ list: due }] = await db()`select proposal_api.claim_scheduled() as list`;
     for (const ctx of due as MailContext[]) {

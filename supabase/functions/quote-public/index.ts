@@ -164,15 +164,18 @@ Deno.serve(async (req) => {
     const pay = mode !== "off" && t.due_now > 0;
     const sel = selectionText(doc, t.tier, t.addons);
     await notify(ctx.event_id, ownerNotice("accepted", ctx, { by: r.name, selection: sel, once_cents: t.once_total, monthly_cents: t.monthly_total, due_cents: t.due_now }), ctx.settings.notify_email);
+    // Whether the confirmation went, so the page only says so when it did.
+    let emailed = false;
     try {
       const mail = acceptedEmail(ctx, acceptedSummary(doc, t, r.name, pay));
       const cc = ctx.to && ctx.to.toLowerCase() !== r.email ? [ctx.to] : [];
       await sendEmail(env("RESEND_API_KEY"), { from: fromHeader(ctx.settings.from_name), to: [r.email], cc, reply_to: ctx.settings.reply_to, subject: mail.subject, html: mail.html, text: mail.text, tag: "quote_accepted" });
+      emailed = true;
     } catch (e) {
       console.error("confirmation email", (e as Error).message);
       await db()`select proposal_api.log_email_failed(${ctx.id}::uuid, ${db().json({ what: "confirmation", error: (e as Error).message })})`.catch(() => null);
     }
-    return reply(200, { ok: true, due_now: t.due_now, pay }, headers);
+    return reply(200, { ok: true, due_now: t.due_now, pay, emailed }, headers);
   } catch (e) {
     if (e instanceof BadRequest) return reply(400, { error: "invalid", field: e.message }, headers);
     if (e instanceof Mismatch) return reply(409, { error: "total" }, headers);

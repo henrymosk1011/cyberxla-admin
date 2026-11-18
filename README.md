@@ -44,6 +44,7 @@ access to any table.
 | `supabase/functions/quote-action/` | The dashboard's Send now, Resend, Send me a test, and the Payments page's status (emails through Resend) |
 | `supabase/functions/_shared/emails.ts` | Every quote email (to clients and to you), shared with the dashboard's email preview |
 | `supabase/migrations/0020_quote_flows.sql` | Accepting and Request changes from the quote page, the scheduler (Send later, follow ups, notices to you, expiry), and Stripe payments |
+| `supabase/migrations/0021_quote_publish.sql` | Publish without emailing |
 | `supabase/functions/quote-public/` | The quote page's Accept, Request changes and Pay buttons (Turnstile, rate limits, totals checked on the server, Stripe Checkout) |
 | `supabase/functions/quote-cron/` | The scheduler's worker, woken by pg_cron: Send later, follow ups, emails to you, Stripe on or off |
 | `supabase/functions/stripe-webhook/` | Stripe's payment events, signature checked, each applied once |
@@ -385,8 +386,24 @@ themselves; `supabase/config.toml` says the same for the CLI):
 | `quote-cron` | pg_cron, with a key kept in Vault | `INTAKE_DB_URL`, `RESEND_API_KEY`, `STRIPE_*` (optional) |
 | `stripe-webhook` | Stripe, signed | `INTAKE_DB_URL`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY` |
 
-All of these secrets except the Stripe ones are the ones submit-quote already
-uses. To deploy one from the dashboard: `npm run bundle-quote-public` (or
+**Email has to be set up once** before quotes can be emailed (the
+`RESEND_API_KEY` secret was never added, and `notify.cyberx.la` isn't in the
+connected Resend account yet):
+
+1. Resend, Domains, Add domain: `notify.cyberx.la`. Add the DNS records it
+   shows in Cloudflare (DNS for cyberx.la, proxy off), then Verify.
+2. Resend, API Keys, Create: name it `cyberxLA quotes`, Sending access, domain
+   `notify.cyberx.la`. Copy the key.
+3. Supabase, Edge Functions, Secrets: add `RESEND_API_KEY` with that key. It
+   works right away. Quotes, Payments says "Quote emails: set up".
+
+Until then, Send shows **Publish without emailing**: it freezes the version,
+makes the link live and copies it, so you can send it yourself. Send later,
+follow ups and the emails to you wait (nothing is lost; notices from the last
+3 days go out once the key is there). Publish without emailing is also there
+once email works, for quotes you'd rather send yourself.
+
+The other secrets are the ones submit-quote already uses. To deploy one from the dashboard: `npm run bundle-quote-public` (or
 `bundle-quote-action`, `bundle-quote-cron`, `bundle-stripe-webhook`), then paste
 the file from `dist/` into an Edge Function of the same name. With the CLI:
 `supabase functions deploy quote-public --project-ref <ref>`.

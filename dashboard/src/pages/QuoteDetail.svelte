@@ -363,6 +363,18 @@
     if (mode === "send" && !(await save())) { toast.error(problem ? `Fix this first: ${problem}` : "Your edits haven't saved yet. Try again in a moment."); return; }
     if (!p?.recipient_email) { toast.error("Add the recipient's email first."); document.getElementById("q-email")?.focus(); return; }
     sending = mode;
+    // Is email set up? The dialog offers Publish without emailing when it isn't.
+    db.quoteAction({ action: "status" }).then((s) => (emailReady = s.email === true)).catch(() => (emailReady = null));
+  }
+  let emailReady = $state<boolean | null>(null);
+  async function doPublish() {
+    await db.proposalRpc("proposal_publish", { p_id: id });
+    sending = "";
+    let copied = false;
+    try { await navigator.clipboard.writeText(clientLink(p!.token)); copied = true; } catch { /* the toast says how to copy it */ }
+    toast.success(copied ? `${quoteNo(p!)} is live and its link is copied, ready to send.` : `${quoteNo(p!)} is live. Use Copy link to send it yourself.`);
+    await load(true);
+    onchanged();
   }
   async function doSend(subject: string, note: string) {
     const out = await db.quoteAction({ action: sending === "resend" ? "resend" : "send", id, subject, note });
@@ -852,7 +864,7 @@
 
   {#if settings}
     <SendDialog open={sending !== ""} mode={sending === "resend" ? "resend" : "send"} proposal={p} company={vars?.company ?? ""} firstName={vars?.contact_first_name ?? "there"} title={titleFilled}
-      {settings} onclose={() => (sending = "")} onsend={doSend} onschedule={doSchedule} ontest={doTest} />
+      {settings} {emailReady} onclose={() => (sending = "")} onsend={doSend} onschedule={doSchedule} ontest={doTest} onpublish={doPublish} />
   {/if}
 
   <Modal open={converting} title="Convert {quoteNo(p)} to a project" onclose={() => (converting = false)}>
