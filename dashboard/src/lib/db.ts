@@ -696,7 +696,7 @@ const db: Db = {
   },
 };
 
-const PROPOSAL_LIST = "id, number, created_at, updated_at, lead_id, client_id, title, status, recipient_name, recipient_email, cc, prepared_on, valid_until, content, token, version, revising, scheduled_at, send_subject, send_note, reminders, sent_at, last_sent_at, first_viewed_at, last_viewed_at, view_count, changes_requested_at, accepted_at, accepted_version, accepted_once, accepted_monthly, archived_at";
+const PROPOSAL_LIST = "id, number, created_at, updated_at, lead_id, client_id, title, status, recipient_name, recipient_email, cc, prepared_on, valid_until, content, token, version, revising, link_only, scheduled_at, send_subject, send_note, reminders, sent_at, last_sent_at, first_viewed_at, last_viewed_at, view_count, changes_requested_at, accepted_at, accepted_version, accepted_once, accepted_monthly, archived_at";
 
 function normProposal(r: Record<string, unknown>) {
   return { ...r, accepted_once: r.accepted_once === null ? null : Number(r.accepted_once), accepted_monthly: r.accepted_monthly === null ? null : Number(r.accepted_monthly) };

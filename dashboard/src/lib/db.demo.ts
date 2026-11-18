@@ -665,7 +665,7 @@ const db: Db = {
   proposal: (id) => wait(proposals.find((p) => p.id === id) ?? null),
   async createProposal(input) {
     const id = uuid(), at = new Date().toISOString();
-    proposals.push({ ...input, content: normalizeDoc(input.content), id, number: nextNumber++, created_at: at, updated_at: at, status: "draft", token: uuid().replace(/-/g, ""), version: 0, revising: false,
+    proposals.push({ ...input, content: normalizeDoc(input.content), id, number: nextNumber++, created_at: at, updated_at: at, status: "draft", token: uuid().replace(/-/g, ""), version: 0, revising: false, link_only: false,
       scheduled_at: null, send_subject: null, send_note: null, sent_at: null, last_sent_at: null, first_viewed_at: null, last_viewed_at: null, view_count: 0,
       changes_requested_at: null, accepted_at: null, accepted_version: null, accepted_once: null, accepted_monthly: null, archived_at: null });
     event(id, "created", {});
@@ -703,6 +703,7 @@ const db: Db = {
         if (!(p.status === "draft" || p.status === "scheduled" || p.revising)) throw new Error(`Q${p.number} was already sent. Use Revise to send a new version.`);
         if (!p.recipient_email) throw new Error("Add the recipient's email first.");
         freeze(p);
+        p.link_only = true;
         const sent = proposalEvents.filter((e) => e.proposal_id === p.id && e.kind === "sent").at(-1);
         if (sent) sent.detail = { ...sent.detail, emailed: false };
         return null;
@@ -746,7 +747,7 @@ const db: Db = {
     const qid = "id" in body ? body.id : "";
     const p = proposals.find((x) => x.id === qid)!;
     if (body.action === "test") { event(p.id, "test_sent", { to: [quoteSettings.notify_email] }); return { ok: true, to: [quoteSettings.notify_email], cc: [] }; }
-    if (body.action === "resend") { event(p.id, "resent", { to: [p.recipient_email] }); return { ok: true, to: [p.recipient_email], cc: p.cc }; }
+    if (body.action === "resend") { p.link_only = false; event(p.id, "resent", { to: [p.recipient_email] }); return { ok: true, to: [p.recipient_email], cc: p.cc }; }
     if (!(p.status === "draft" || p.status === "scheduled" || p.revising)) throw new Error(`Q${p.number} was already sent. Use Revise to send a new version, or Resend to email it again.`);
     if (!p.recipient_email) throw new Error("Add the recipient's email first.");
     freeze(p);
@@ -781,7 +782,7 @@ function freeze(p: Proposal) {
   proposalVersions.push({ id: vid, proposal_id: p.id, version: p.version, sent_at: new Date().toISOString(),
     header: { number: `Q${p.number}`, title: p.title, prepared_for: vars.company, prepared_on: p.prepared_on, valid_until: p.valid_until }, content: resolveDoc(normalizeDoc(p.content), vars) });
   sources.set(vid, { title: p.title, content: structuredClone(p.content) });
-  Object.assign(p, { status: "sent" as ProposalStatus, revising: false, scheduled_at: null, sent_at: p.sent_at ?? new Date().toISOString(), last_sent_at: new Date().toISOString(), accepted_at: null, accepted_once: null, accepted_monthly: null });
+  Object.assign(p, { status: "sent" as ProposalStatus, revising: false, link_only: false, scheduled_at: null, sent_at: p.sent_at ?? new Date().toISOString(), last_sent_at: new Date().toISOString(), accepted_at: null, accepted_once: null, accepted_monthly: null });
   if (lead && (lead.status === "new" || lead.status === "contacted")) lead.status = "proposal";
   event(p.id, "sent", { version: p.version, to: p.recipient_email });
   proposalsChanged();
@@ -815,7 +816,7 @@ const templates: ProposalTemplate[] = [{ id: uuid(), created_at: new Date(now - 
     const id = uuid(), at = new Date(now - o.ago * 86400000).toISOString();
     const p: Proposal = { id, number: nextNumber++, created_at: at, updated_at: at, lead_id: o.owner.lead_id ?? null, client_id: o.owner.client_id ?? null, title: o.title, status: "draft",
       recipient_name: o.name, recipient_email: o.email, cc: [], prepared_on: day(-o.ago), valid_until: day(30 - o.ago), content: normalizeDoc(templateSeed), token: uuid().replace(/-/g, ""),
-      version: 0, revising: false, scheduled_at: null, send_subject: null, send_note: null, reminders: false, sent_at: null, last_sent_at: null, first_viewed_at: null, last_viewed_at: null,
+      version: 0, revising: false, link_only: false, scheduled_at: null, send_subject: null, send_note: null, reminders: false, sent_at: null, last_sent_at: null, first_viewed_at: null, last_viewed_at: null,
       view_count: 0, changes_requested_at: null, accepted_at: null, accepted_version: null, accepted_once: null, accepted_monthly: null, archived_at: null,
       internal: { costs: o.costs ?? {} }, internal_notes: null };
     proposals.push(p);

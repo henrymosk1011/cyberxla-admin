@@ -31,7 +31,7 @@
         <li>
           <a href="#/quotes/{p.id}">
             <span class="qname"><strong>{quoteNo(p)}</strong> {p.title}</span>
-            <QuotePill status={p.status} />
+            <QuotePill status={p.status} linkOnly={p.link_only} />
             <span class="qval num">{valueText(quoteValue(p))}</span>
             <span class="qwhen muted">{when(p)}</span>
           </a>

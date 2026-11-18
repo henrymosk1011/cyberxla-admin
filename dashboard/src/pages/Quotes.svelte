@@ -195,7 +195,7 @@
             <td class="c-main"><span class="who"><strong>{o?.label ?? "Unknown"}</strong><span class="muted t2">{p.title}</span></span></td>
             <td class="hide-md">{p.title}</td>
             <td class="r num nowrap">{valueText(v)}{#if !v.accepted && p.content.tiers.length > 1}<span class="u">default tier</span>{/if}</td>
-            <td><QuotePill status={p.status} /></td>
+            <td><QuotePill status={p.status} linkOnly={p.link_only} /></td>
             <td class="hide-sm muted">{p.last_sent_at ? shortDate(p.last_sent_at) : p.scheduled_at ? `Scheduled ${shortDate(p.scheduled_at)}` : "Not sent"}</td>
             <td class="hide-md muted">{p.last_viewed_at ? shortDate(p.last_viewed_at) : ""}</td>
             <td class="hide-sm" class:late class:muted={!late}>{shortDate(p.valid_until + "T12:00:00")}</td>
