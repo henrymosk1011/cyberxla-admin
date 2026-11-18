@@ -41,6 +41,36 @@
   let busy = $state(false);
   let confirm: Confirm;
   let tab = $state<"edit" | "preview">("edit");
+
+  // The editor's sections, one tab each. The last one used is remembered while you work.
+  const SECTIONS = [
+    { id: "client", label: "Client" }, { id: "details", label: "Details" }, { id: "tiers", label: "Tiers" },
+    { id: "rows", label: "Comparison rows" }, { id: "addons", label: "Add ons" }, { id: "pricing", label: "Pricing" },
+    { id: "fine", label: "Fine print" }, { id: "notes", label: "Notes" }, { id: "history", label: "History" },
+  ] as const;
+  type SectionId = (typeof SECTIONS)[number]["id"];
+  const savedSection = (() => { try { const v = sessionStorage.getItem("quote.section"); return SECTIONS.some((x) => x.id === v) ? (v as SectionId) : null; } catch { return null; } })();
+  let sec = $state<SectionId>(savedSection ?? "client");
+  function pickSection(id: SectionId) {
+    sec = id;
+    try { sessionStorage.setItem("quote.section", id); } catch { /* not remembered; fine */ }
+  }
+  // Arrow keys, Home and End move between the tabs (the ARIA tabs pattern).
+  function sectionKeys(e: KeyboardEvent) {
+    const i = SECTIONS.findIndex((x) => x.id === sec);
+    const next = e.key === "ArrowRight" ? (i + 1) % SECTIONS.length : e.key === "ArrowLeft" ? (i - 1 + SECTIONS.length) % SECTIONS.length
+      : e.key === "Home" ? 0 : e.key === "End" ? SECTIONS.length - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    pickSection(SECTIONS[next]!.id);
+    document.getElementById(`qt-${SECTIONS[next]!.id}`)?.focus();
+  }
+  /** Show a section's tab, then focus a field in it. */
+  async function showField(id: SectionId, elId: string) {
+    pickSection(id);
+    await tick();
+    document.getElementById(elId)?.focus();
+  }
   let sending = $state<"" | "send" | "resend">("");
   let converting = $state(false);
   let templating = $state(false);
@@ -381,7 +411,7 @@
   }
   async function openSend(mode: "send" | "resend") {
     if (mode === "send" && !(await save())) { toast.error(problem ? `Fix this first: ${problem}` : "Your edits haven't saved yet. Try again in a moment."); return; }
-    if (!p?.recipient_email) { toast.error("Add the recipient's email first."); document.getElementById("q-email")?.focus(); return; }
+    if (!p?.recipient_email) { toast.error("Add the recipient's email first."); showField("client", "q-email"); return; }
     sending = mode;
     // Is email set up? The dialog offers Publish without emailing when it isn't.
     db.quoteAction({ action: "status" }).then((s) => (emailReady = s.email === true)).catch(() => (emailReady = null));
@@ -576,6 +606,15 @@
 
   <div class="qd">
     <div class="ed" id="qp-edit" class:hide={tab !== "edit"}>
+      <div class="sections" role="tablist" aria-label="Quote sections" tabindex="-1" onkeydown={sectionKeys}>
+        {#each SECTIONS as x (x.id)}
+          <button type="button" role="tab" id="qt-{x.id}" aria-selected={sec === x.id} aria-controls="qs-{x.id}" tabindex={sec === x.id ? 0 : -1} onclick={() => pickSection(x.id)}>
+            {x.id === "rows" && d.content.tiers.length <= 1 ? "What's included" : x.label}
+          </button>
+        {/each}
+      </div>
+
+      <div role="tabpanel" id="qs-client" aria-labelledby="qt-client" hidden={sec !== "client"}>
       <section class="card">
         <div class="card-head"><h2>Client</h2></div>
         <div class="grid">
@@ -605,7 +644,9 @@
           <Field id="q-cc" label="Cc" hint="Optional. Up to 5, separated by commas." wide>{#snippet children(a)}<input {...a} class="input" autocomplete="off" bind:value={d.cc} />{/snippet}</Field>
         </div>
       </section>
+      </div>
 
+      <div role="tabpanel" id="qs-details" aria-labelledby="qt-details" hidden={sec !== "details"}>
       <section class="card">
           <div class="card-head"><h2>Details</h2><span class="sub">Placeholders: {PLACEHOLDERS.map((x) => `{${x}}`).join(" ")}</span></div>
           <div class="grid">
@@ -615,9 +656,11 @@
             <Field id="q-intro" label="Intro" wide hint="A short paragraph under the title.">{#snippet children(a)}<textarea {...a} class="input" rows="3" maxlength="1500" disabled={!editable} bind:value={d.content.intro}></textarea>{/snippet}</Field>
           </div>
         </section>
+      </div>
 
       <fieldset class="plain" disabled={!editable}>
 
+        <div role="tabpanel" id="qs-tiers" aria-labelledby="qt-tiers" hidden={sec !== "tiers"}>
         <section class="card">
           <div class="card-head"><div><h2>Tiers</h2><p class="sub">{d.content.tiers.length === 1 ? "One tier shows as a simple quote: what's included and the total." : "The client picks one."}</p></div></div>
           <ol class="list">
@@ -676,7 +719,9 @@
           </div>
           {#if picking === "tier"}{@render picker()}{/if}
         </section>
+        </div>
 
+        <div role="tabpanel" id="qs-rows" aria-labelledby="qt-rows" hidden={sec !== "rows"}>
         <section class="card">
           <div class="card-head">
             <div><h2>{d.content.tiers.length > 1 ? "Comparison rows" : "What's included"}</h2><p class="sub">Tick the tiers each item is in. Text shows instead of a check, like "1 week".</p></div>
@@ -724,7 +769,9 @@
           </div>
           {#if picking === "row"}{@render picker()}{/if}
         </section>
+        </div>
 
+        <div role="tabpanel" id="qs-addons" aria-labelledby="qt-addons" hidden={sec !== "addons"}>
         <section class="card">
           <div class="card-head"><div><h2>Add ons</h2><p class="sub">Extras the client can tick. Per tier: can add, already included, or not offered.</p></div></div>
           <ol class="list">
@@ -771,7 +818,9 @@
           </div>
           {#if picking === "addon"}{@render picker()}{/if}
         </section>
+        </div>
 
+        <div role="tabpanel" id="qs-pricing" aria-labelledby="qt-pricing" hidden={sec !== "pricing"}>
         <section class="card">
           <div class="card-head"><h2>Pricing and payment</h2></div>
           <label class="check"><input type="checkbox" checked={!!d.content.discount} onchange={(e) => (d.content.discount = e.currentTarget.checked ? { kind: "percent", value: 10, label: "Discount", applies_to: "once" } : null)} /> Discount the total</label>
@@ -798,7 +847,9 @@
             <p class="muted sum">With {tierName(doc.default_tier, doc)} selected: {t.once_total || !t.monthly_total ? `one time ${usd(t.once_total)}` : ""}{t.once_total && t.monthly_total ? ", " : ""}{t.monthly_total ? `monthly ${usd(t.monthly_total)}` : ""}{t.savings_once + t.savings_monthly ? `, saving ${usd(t.savings_once)}` : ""}{t.due_now ? `, ${usd(t.due_now)} due at acceptance` : ""}.</p>
           {/if}
         </section>
+        </div>
 
+        <div role="tabpanel" id="qs-fine" aria-labelledby="qt-fine" hidden={sec !== "fine"}>
         <section class="card">
           <div class="card-head"><div><h2>Fine print</h2><p class="sub">Notes under the total. Each can show for some tiers, or only when an add on is chosen.</p></div></div>
           <ol class="list">
@@ -833,8 +884,10 @@
           <div class="adds"><button type="button" class="btn sm" disabled={d.content.fine_print.length >= 12} onclick={addFine}><Icon name="plus" size={14} /> Add note</button></div>
           <label class="check"><input type="checkbox" bind:checked={d.content.terms} /> Link to the Terms and Conditions (cyberx.la/terms)</label>
         </section>
+        </div>
       </fieldset>
 
+      <div role="tabpanel" id="qs-notes" aria-labelledby="qt-notes" hidden={sec !== "notes"}>
       <section class="card">
         <div class="card-head"><h2>Follow ups</h2></div>
         <label class="check"><input type="checkbox" bind:checked={d.reminders} /> Remind the client automatically</label>
@@ -845,7 +898,9 @@
         <div class="card-head"><div><h2>Internal notes</h2><p class="sub">Only you see these. Never on the client's page.</p></div></div>
         <textarea class="input" rows="3" maxlength="5000" aria-label="Internal notes" bind:value={d.internal_notes}></textarea>
       </section>
+      </div>
 
+      <div role="tabpanel" id="qs-history" aria-labelledby="qt-history" hidden={sec !== "history"}>
       {#if accepted}
         <section class="card">
           <div class="card-head"><h2>Acceptance</h2><span class="sub">Version {accepted.version}, {dateTime(accepted.accepted_at)}</span></div>
@@ -888,6 +943,7 @@
           </ol>
         </section>
       {/if}
+      </div>
     </div>
 
     <aside class="pvcol" id="qp-preview" aria-label="Preview" class:hide={tab !== "preview"}>
@@ -1081,4 +1137,10 @@
     .cell { width: calc(50% - 7px); }
     .saved { width: 100%; }
   }
+  .sections { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+  .sections button { min-height: 36px; padding: 0 14px; border-radius: var(--radius-pill); border: 1px solid var(--line-2); background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+  .sections button:hover { color: var(--text); background: var(--surface-2); }
+  .sections button[aria-selected="true"] { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
+  [role="tabpanel"] { display: flex; flex-direction: column; gap: var(--gap, 16px); }
+  [role="tabpanel"][hidden] { display: none; }
 </style>
