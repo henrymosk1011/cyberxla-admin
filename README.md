@@ -328,7 +328,8 @@ they're separate things (`public.quotes` in the database is the requests,
 - **Numbers**: Q1001, Q1002, ... taken when a quote is created and never reused
   (a deleted quote's number stays unused).
 - **Editor**: client and recipient, details, tiers (one tier makes a simple
-  quote), comparison rows with a checkbox per tier (and optional text like
+  quote; each is billed one time, monthly, or one time plus monthly, and a
+  monthly tier shows its price per month), comparison rows with a checkbox per tier (and optional text like
   "1 week"), add ons (can add, included, or not offered, per tier), discounts on
   any price or on the total (the page shows the old price struck through),
   deposit or full payment, fine print shown per tier or per add on, follow ups,

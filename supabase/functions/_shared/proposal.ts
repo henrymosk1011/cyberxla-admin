@@ -273,6 +273,17 @@ export type Totals = {
   due_now: number;
 };
 
+/**
+ * How a tier is billed, from its prices: one time (no monthly price), monthly
+ * (a monthly price and no one time price), or both. The editor's Billing
+ * choice sets the prices to match, so no separate field is stored.
+ */
+export type TierBilling = "once" | "monthly" | "both";
+export function tierBilling(t: Pick<Tier, "price" | "monthly">): TierBilling {
+  if (t.monthly === null) return "once";
+  return t.price === 0 ? "monthly" : "both";
+}
+
 /** Which add ons can be ticked on a tier (available), are already in it (included), or neither. */
 export function addonsFor(doc: Pick<ProposalDoc, "addons">, tier: string) {
   return {
@@ -290,7 +301,8 @@ export function totals(doc: ProposalDoc, tierKey: string, addonKeys: string[]): 
   const tl = cents(tier.price);
   // One tier: its own name. Several: "Pro tier", like the page's summary.
   const tierName = doc.tiers.length > 1 ? `${tier.name} tier` : tier.name;
-  push({ key: tier.key, name: tierName, billing: "once", list: tl, price: tl - discountCents(tl, tier.discount), kind: "tier" });
+  // A monthly tier has no one time line (not a $0 one), once its monthly price is set.
+  if (!(tierBilling(tier) === "monthly" && (tier.monthly ?? 0) > 0)) push({ key: tier.key, name: tierName, billing: "once", list: tl, price: tl - discountCents(tl, tier.discount), kind: "tier" });
   if (tier.monthly !== null && tier.monthly > 0) {
     const ml = cents(tier.monthly);
     push({ key: `${tier.key}:monthly`, name: `${tier.name}, monthly`, billing: "monthly", list: ml, price: ml - discountCents(ml, tier.monthly_discount), kind: "tier" });

@@ -50,6 +50,10 @@ export const usd = (c: number) => {
   return `${c < 0 ? "−" : ""}$${Math.floor(a / 100).toLocaleString("en-US")}${r ? `.${String(r).padStart(2, "0")}` : ""}`;
 };
 
+/** "$5,900", "$350/mo", or "$4,200 plus $350/mo", from cents. */
+export const amountText = (once: number, monthly: number) =>
+  monthly > 0 ? (once > 0 ? `${usd(once)} plus ${usd(monthly)}/mo` : `${usd(monthly)}/mo`) : usd(once);
+
 export const defaultSubject = (number: string, title: string) => oneLine(`Your quote ${number}: ${title}`);
 export const defaultNote = (firstName: string, title: string) =>
   `Hi ${firstName || "there"},\n\nHere's your quote for ${title}. You can pick what fits, add anything extra, and accept it online.\n\nAny questions, just reply to this email.`;
@@ -143,7 +147,8 @@ function selectionRows(s: AcceptedSummary): [string, string][] {
   return r;
 }
 function totalRows(s: AcceptedSummary): [string, string][] {
-  const r: [string, string][] = [["One time total", usd(s.once_total)]];
+  // A monthly only selection has no one time total to show.
+  const r: [string, string][] = s.once_total > 0 || s.monthly_total === 0 ? [["One time total", usd(s.once_total)]] : [];
   if (s.monthly_total > 0) r.push(["Monthly", `${usd(s.monthly_total)}/mo`]);
   if (s.due_now > 0) r.push([s.deposit === "full" ? "Due now" : "Deposit due", usd(s.due_now)]);
   return r;
@@ -158,7 +163,7 @@ export function acceptedEmail(c: MailContext, s: AcceptedSummary): Email {
   const payLine = s.due_now <= 0 ? "" : s.pay ? `You can pay the ${s.deposit === "full" ? "total" : "deposit"} of ${usd(s.due_now)} securely by card.` : `We'll send you an invoice for the ${s.deposit === "full" ? "total" : "deposit"} of ${usd(s.due_now)}.`;
   const intro = `Thank you, ${s.signer.split(/\s+/)[0] || "and welcome"}. Your quote is accepted, and we'll be in touch shortly to schedule the work. Here's what you accepted:`;
   const html = shell({
-    subject, preheader: `Quote ${c.number} accepted: ${s.tier_name}, ${usd(s.once_total)}.`, eyebrow: `Quote ${c.number} accepted`, heading: c.title,
+    subject, preheader: `Quote ${c.number} accepted: ${s.tier_name}, ${amountText(s.once_total, s.monthly_total)}.`, eyebrow: `Quote ${c.number} accepted`, heading: c.title,
     body: paragraphs(intro) + rows([...sel, ...tot], sel.length) + (payLine ? paragraphs(payLine) : "") +
       (s.pay && s.due_now > 0 ? button(quoteLink(c.token, "&pay=1"), s.deposit === "full" ? "Pay now" : "Pay deposit") : button(link, "View your quote")) +
       (s.pay && s.due_now > 0 ? `<p style="${SMALL}"><a href="${esc(link)}" style="color:#111315">View your accepted quote</a></p>` : ""),
@@ -188,8 +193,9 @@ export function ownerNotice(kind: NoticeKind, c: MailContext, detail: Record<str
       lines = [`${String(detail.name ?? "The client")} (${String(detail.email ?? "no email")}) asked for ${detail.expired ? "an updated quote" : "changes"} on ${c.number}, ${c.title}:`, "", String(detail.message ?? "")];
       break;
     case "accepted":
-      subject = `${who} accepted ${c.number}: ${usd(Number(detail.once_cents ?? 0))}`;
-      lines = [`${String(detail.by ?? "The client")} accepted ${c.number}, ${c.title}.`, "", `Selection: ${String(detail.selection ?? "")}`, `One time total: ${usd(Number(detail.once_cents ?? 0))}`,
+      subject = `${who} accepted ${c.number}: ${amountText(Number(detail.once_cents ?? 0), Number(detail.monthly_cents ?? 0))}`;
+      lines = [`${String(detail.by ?? "The client")} accepted ${c.number}, ${c.title}.`, "", `Selection: ${String(detail.selection ?? "")}`,
+        Number(detail.once_cents ?? 0) > 0 || !(Number(detail.monthly_cents ?? 0) > 0) ? `One time total: ${usd(Number(detail.once_cents ?? 0))}` : "",
         Number(detail.monthly_cents ?? 0) > 0 ? `Monthly: ${usd(Number(detail.monthly_cents))}/mo` : "", Number(detail.due_cents ?? 0) > 0 ? `Due now: ${usd(Number(detail.due_cents))}` : ""].filter(Boolean);
       break;
     case "payment":
