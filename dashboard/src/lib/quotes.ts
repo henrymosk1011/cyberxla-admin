@@ -55,7 +55,8 @@ export function quoteValue(p: Pick<ProposalRow, "status" | "accepted_once" | "ac
   const t = totals(d, d.default_tier, []);
   return { once: t.once_total, monthly: t.monthly_total, accepted: false };
 }
-export const valueText = (v: { once: number; monthly: number }) => (v.monthly ? `${usd(v.once)} + ${usd(v.monthly)}/mo` : usd(v.once));
+export const valueText = (v: { once: number; monthly: number }) =>
+  v.monthly ? (v.once ? `${usd(v.once)} + ${usd(v.monthly)}/mo` : `${usd(v.monthly)}/mo`) : usd(v.once);
 
 /** The model the quote page renders, built from the draft exactly as Send would freeze it. */
 export function previewModel(o: {

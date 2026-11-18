@@ -15,7 +15,7 @@
   import { dateTime, shortDate } from "../lib/format.ts";
   import { unitPrice, isMonthly } from "../lib/catalog.ts";
   import { ownerOptions, parseOwner, ownerValue } from "../lib/projects.ts";
-  import { BadDoc, addonsFor, newKey, normalizeDoc, resolveDoc, tierMargin, totals, usd, varsFor, cents, longDate, PLACEHOLDERS, type Addon, type ProposalDoc, type Row, type Tier } from "../../../supabase/functions/_shared/proposal.ts";
+  import { BadDoc, addonsFor, newKey, normalizeDoc, resolveDoc, tierBilling, tierMargin, totals, usd, varsFor, cents, longDate, PLACEHOLDERS, type Addon, type ProposalDoc, type Row, type Tier, type TierBilling } from "../../../supabase/functions/_shared/proposal.ts";
   import { clientLink, statusLabel, describeEvent, isEditable, ownerOf, previewModel, projectLines, quoteNo, safeDoc, selectionText, viewAsClient } from "../lib/quotes.ts";
   import type { Client, Lead, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalVersion, QuoteSettings, ServiceRow } from "../lib/types.ts";
 
@@ -239,7 +239,9 @@
   }
   function addTier(from?: ServiceRow) {
     const c = draft!.content, key = mkKey();
-    c.tiers.push({ key, name: from?.name.replace(/^.*?,\s*/, "") ?? `Tier ${c.tiers.length + 1}`, price: from?.price ?? 0, discount: null, monthly: null, monthly_discount: null, summary: from?.description.slice(0, 240) ?? "" });
+    // A monthly catalog service makes a monthly tier.
+    const mo = !!from && isMonthly(from.unit);
+    c.tiers.push({ key, name: from?.name.replace(/^.*?,\s*/, "") ?? `Tier ${c.tiers.length + 1}`, price: mo ? 0 : from?.price ?? 0, discount: null, monthly: mo ? from!.price : null, monthly_discount: null, summary: from?.description.slice(0, 240) ?? "" });
     for (const r of c.rows) r.values[key] = false;
     for (const a of c.addons) a.tiers[key] = "available";
     if (from) draft!.links[`tier:${key}`] = from.id;
@@ -280,6 +282,24 @@
   const isOn = (v: unknown) => v === true || (typeof v === "string" && v !== "");
 
   /** Turn a discount on or off for an item. */
+  // How each tier is billed. It follows from the prices (tierBilling); what you
+  // pick here wins while you type, so a monthly price of 0 doesn't flip it back.
+  let billingPick = $state<Record<string, TierBilling>>({});
+  const billingOf = (t: Tier) => billingPick[t.key] ?? tierBilling(t);
+  function setBilling(t: Tier, b: TierBilling) {
+    billingPick[t.key] = b;
+    if (b === "once") {
+      t.monthly = null;
+      t.monthly_discount = null;
+      return;
+    }
+    if (t.monthly === null) t.monthly = 0;
+    if (b === "monthly") {
+      t.price = 0;
+      t.discount = null;
+    }
+  }
+
   function toggleDiscount(obj: { discount: Tier["discount"] } | { monthly_discount: Tier["discount"] }, field: "discount" | "monthly_discount", on: boolean) {
     (obj as Record<string, unknown>)[field] = on ? { kind: "percent", value: 10 } : null;
   }
@@ -615,10 +635,23 @@
                   </div>
                 </div>
                 <div class="grid">
-                  {@render money(`tier-${t.key}-price`, "One time price", t, "price")}
-                  {@render discount(`tier-${t.key}-disc`, t, "discount", t.price)}
-                  <Field id="tier-{t.key}-mo" label="Monthly price" hint="Optional">{#snippet children(a)}<div class="amt"><span aria-hidden="true">$</span><input {...a} type="number" min="0" step="0.01" inputmode="decimal" value={t.monthly ?? ""} oninput={(e) => (t.monthly = e.currentTarget.value === "" ? null : e.currentTarget.valueAsNumber)} /></div>{/snippet}</Field>
-                  {#if t.monthly}{@render discount(`tier-${t.key}-mdisc`, t, "monthly_discount", t.monthly)}{:else}<span></span>{/if}
+                  <Field id="tier-{t.key}-billing" label="Billing" wide>
+                    {#snippet children(a)}
+                      <select {...a} class="input" value={billingOf(t)} onchange={(e) => setBilling(t, e.currentTarget.value as TierBilling)}>
+                        <option value="once">One time</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="both">One time plus monthly</option>
+                      </select>
+                    {/snippet}
+                  </Field>
+                  {#if billingOf(t) !== "monthly"}
+                    {@render money(`tier-${t.key}-price`, "One time price", t, "price")}
+                    {@render discount(`tier-${t.key}-disc`, t, "discount", t.price)}
+                  {/if}
+                  {#if billingOf(t) !== "once"}
+                    <Field id="tier-{t.key}-mo" label="Monthly price" required>{#snippet children(a)}<div class="amt"><span aria-hidden="true">$</span><input {...a} type="number" min="0" step="0.01" inputmode="decimal" value={t.monthly ?? ""} oninput={(e) => (t.monthly = e.currentTarget.value === "" ? 0 : e.currentTarget.valueAsNumber)} /></div>{/snippet}</Field>
+                    {@render discount(`tier-${t.key}-mdisc`, t, "monthly_discount", t.monthly)}
+                  {/if}
                   <Field id="tier-{t.key}-sum" label="One line summary" wide>{#snippet children(a)}<input {...a} class="input" maxlength="240" bind:value={t.summary} />{/snippet}</Field>
                 </div>
                 <div class="flags">
@@ -762,7 +795,7 @@
           </div>
           {#if doc}
             {@const t = totals(doc, doc.default_tier, [])}
-            <p class="muted sum">With {tierName(doc.default_tier, doc)} selected: one time {usd(t.once_total)}{t.monthly_total ? `, monthly ${usd(t.monthly_total)}` : ""}{t.savings_once + t.savings_monthly ? `, saving ${usd(t.savings_once)}` : ""}{t.due_now ? `, ${usd(t.due_now)} due at acceptance` : ""}.</p>
+            <p class="muted sum">With {tierName(doc.default_tier, doc)} selected: {t.once_total || !t.monthly_total ? `one time ${usd(t.once_total)}` : ""}{t.once_total && t.monthly_total ? ", " : ""}{t.monthly_total ? `monthly ${usd(t.monthly_total)}` : ""}{t.savings_once + t.savings_monthly ? `, saving ${usd(t.savings_once)}` : ""}{t.due_now ? `, ${usd(t.due_now)} due at acceptance` : ""}.</p>
           {/if}
         </section>
 

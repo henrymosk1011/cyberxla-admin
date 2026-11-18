@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  BadDoc, addonsFor, blankDoc, discountCents, docProblem, fill, longDate, newKey, normalizeDoc, resolveDoc, tierMargin, totals, usd, varsFor,
+  BadDoc, addonsFor, blankDoc, discountCents, docProblem, fill, longDate, newKey, normalizeDoc, resolveDoc, tierBilling, tierMargin, totals, usd, varsFor,
   type ProposalDoc,
 } from "../supabase/functions/_shared/proposal.ts";
 
@@ -159,4 +159,36 @@ test("new keys are unique", () => {
   const k2 = newKey([k1], () => seq[i++]!);
   assert.notEqual(k1, k2);
   assert.match(k1, /^k[0-9a-z]{6}$/);
+});
+
+test("a tier's billing follows its prices: one time, monthly, or both", () => {
+  assert.equal(tierBilling({ price: 4200, monthly: null }), "once");
+  assert.equal(tierBilling({ price: 0, monthly: 350 }), "monthly");
+  assert.equal(tierBilling({ price: 4200, monthly: 350 }), "both");
+  // Just switched to monthly, price not typed yet.
+  assert.equal(tierBilling({ price: 0, monthly: 0 }), "monthly");
+});
+
+test("a monthly tier has no $0 one time line, and nothing is due at acceptance", () => {
+  const d = doc();
+  d.tiers[1] = { ...d.tiers[1]!, price: 0, monthly: 350 };
+  d.payment = { mode: "deposit", deposit_kind: "percent", deposit_value: 50 };
+  const t = totals(d, d.tiers[1]!.key, []);
+  assert.deepEqual(t.lines.map((l) => [l.name, l.billing, l.price]), [[`${d.tiers[1]!.name}, monthly`, "monthly", 35000]]);
+  assert.equal(t.once_total, 0);
+  assert.equal(t.monthly_total, 35000);
+  assert.equal(t.due_now, 0);
+  // A one time add on still adds a one time total, and the deposit is on that.
+  const withAddon = totals(d, d.tiers[1]!.key, [d.addons[0]!.key]);
+  assert.equal(withAddon.once_total, Math.round(d.addons[0]!.price * 100));
+  assert.equal(withAddon.due_now, Math.round(withAddon.once_total / 2));
+});
+
+test("one time plus monthly keeps both lines", () => {
+  const d = doc();
+  d.tiers[0] = { ...d.tiers[0]!, monthly: 350 };
+  const t = totals(d, d.tiers[0]!.key, []);
+  assert.deepEqual(t.lines.map((l) => l.billing), ["once", "monthly"]);
+  assert.equal(t.once_total, Math.round(d.tiers[0]!.price * 100));
+  assert.equal(t.monthly_total, 35000);
 });
