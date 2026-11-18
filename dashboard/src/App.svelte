@@ -55,7 +55,7 @@
     if (h === "/quotes/settings") return { page: "quote-settings" as const };
     if (h === "/quotes/payments") return { page: "payments" as const };
     const qd = h.match(/^\/quotes\/([^/]+)$/);
-    if (qd) return UUID.test(qd[1]!) ? { page: "quote" as const, id: qd[1]!, send: query.get("send") === "1" } : { page: "notfound" as const };
+    if (qd) return UUID.test(qd[1]!) ? { page: "quote" as const, id: qd[1]!, act: query.get("send") === "1" ? ("send" as const) : query.get("publish") === "1" ? ("publish" as const) : ("" as const) } : { page: "notfound" as const };
     const m = h.match(/^\/leads\/([^/]+)$/);
     if (m) return UUID.test(m[1]!) ? { page: "lead" as const, id: m[1]! } : { page: "notfound" as const };
     if (h === "/leads") return { page: "leads" as const };
@@ -353,7 +353,7 @@
       {:else if route.page === "quotes"}
         <Quotes {proposals} {clients} {leads} onchanged={refresh} newFor={route.newFor} />
       {:else if route.page === "quote"}
-        {#await import("./pages/QuoteDetail.svelte")}{@render pageLoading()}{:then { default: QuoteDetail }}<QuoteDetail id={route.id} autosend={route.send} {version} {clients} {leads} {projects} onchanged={refresh} />{:catch}{@render pageFailed()}{/await}
+        {#await import("./pages/QuoteDetail.svelte")}{@render pageLoading()}{:then { default: QuoteDetail }}<QuoteDetail id={route.id} autoact={route.act} {version} {clients} {leads} {projects} onchanged={refresh} />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "quote-templates"}
         {#await import("./pages/QuoteTemplates.svelte")}{@render pageLoading()}{:then { default: QuoteTemplates }}<QuoteTemplates />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "quote-settings"}

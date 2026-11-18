@@ -44,7 +44,7 @@ access to any table.
 | `supabase/functions/quote-action/` | The dashboard's Send now, Resend, Send me a test, and the Payments page's status (emails through Resend) |
 | `supabase/functions/_shared/emails.ts` | Every quote email (to clients and to you), shared with the dashboard's email preview |
 | `supabase/migrations/0020_quote_flows.sql` | Accepting and Request changes from the quote page, the scheduler (Send later, follow ups, notices to you, expiry), and Stripe payments |
-| `supabase/migrations/0021_quote_publish.sql` | Publish without emailing |
+| `supabase/migrations/0021_quote_publish.sql` | Publish (link live, no email) |
 | `supabase/migrations/0022_quote_link_only.sql` | Remembers when a quote was published without an email ("Published, not emailed") |
 | `supabase/functions/quote-public/` | The quote page's Accept, Request changes and Pay buttons (Turnstile, rate limits, totals checked on the server, Stripe Checkout) |
 | `supabase/functions/quote-cron/` | The scheduler's worker, woken by pg_cron: Send later, follow ups, emails to you, Stripe on or off |
@@ -341,11 +341,16 @@ they're separate things (`public.quotes` in the database is the requests,
   its price and description; editing them never changes the catalog unless you
   press Update catalog price.
 - **Templates**: Save as template from any quote, start new quotes from one.
-- **Sending**: Send shows the email first (Send me a test emails it to the
-  Notify me address in Quotes, Settings), then sends now or later. Each send
-  freezes a version; the client always sees the latest sent version at the same
-  link. A sent quote is locked: Revise opens a new version, and the client keeps
-  seeing the old one until you send it. Accepted quotes are locked the same way.
+- **Save draft, Publish, Send**: a quote has three buttons. Save draft saves
+  your edits (it also saves as you type); the client sees nothing new. Publish
+  asks you to confirm, then makes the client's link live with this version and
+  copies the link for you to send yourself; nobody is emailed. Send shows the
+  email first (Send me a test emails it to the Notify me address in Quotes,
+  Settings), then emails and publishes now or later. Send only shows once email
+  is set up. Each Publish or Send freezes a version; the client always sees the
+  latest one at the same link. A published quote is locked: Revise opens a new
+  version, and the client keeps seeing the old one until you publish or send
+  it. Accepted quotes are locked the same way.
 - **The client's page** is `https://cyberx.la/proposal/?k=<token>` (in the
   website repo). The token is 192 random bits; Make a new link replaces it and
   Turn off the link makes the page say "This quote isn't available". Views are
@@ -356,7 +361,7 @@ they're separate things (`public.quotes` in the database is the requests,
   Sent, until a version of it is emailed.
 - **Changing a sent quote**: it's locked so the client always sees what you
   sent. Press **Revise** to edit; the client keeps seeing the sent version
-  until you send or publish the revision, at the same link. Recipient, Valid
+  until you publish or send the revision, at the same link. Recipient, Valid
   until, follow ups and internal notes stay editable without revising.
 - **Accepting**: the client picks a tier and add ons, then Accept asks for their
   name, title, email, a typed signature and the terms checkbox (with a
@@ -405,11 +410,12 @@ connected Resend account yet):
 3. Supabase, Edge Functions, Secrets: add `RESEND_API_KEY` with that key. It
    works right away. Quotes, Payments says "Quote emails: set up".
 
-Until then, Send shows **Publish without emailing**: it freezes the version,
+Until then, quotes show **Publish** and no Send: Publish freezes the version,
 makes the link live and copies it, so you can send it yourself. Send later,
 follow ups and the emails to you wait (nothing is lost; notices from the last
-3 days go out once the key is there). Publish without emailing is also there
-once email works, for quotes you'd rather send yourself.
+3 days go out once the key is there). Once email works, Send appears beside
+Publish (reload the dashboard if it's open), and Publish stays for quotes
+you'd rather send yourself.
 
 The other secrets are the ones submit-quote already uses. To deploy one from the dashboard: `npm run bundle-quote-public` (or
 `bundle-quote-action`, `bundle-quote-cron`, `bundle-stripe-webhook`), then paste

@@ -18,6 +18,7 @@
   import { ownerOptions, parseOwner } from "../lib/projects.ts";
   import { PROPOSAL_STATUS_LABEL, clientLink, ownerOf, quoteNo, quoteStats, quoteValue, valueText } from "../lib/quotes.ts";
   import { blankDoc, usd } from "../../../supabase/functions/_shared/proposal.ts";
+  import { emailStatus } from "../lib/email.ts";
   import { PROPOSAL_STATUSES, type Client, type Lead, type ProposalRow, type ProposalStatus, type ProposalTemplate } from "../lib/types.ts";
 
   let { proposals, clients, leads, onchanged, newFor = "" }: {
@@ -50,6 +51,17 @@
     { key: "valid", label: "Valid until", first: "asc", hide: "sm" },
   ];
   let sort = $state<Sort<Key>>({ key: "number", dir: "desc" });
+  // Until email is set up, a draft's quick action is Publish, not Send.
+  let emailReady = $state<boolean | null>(null);
+  $effect(() => { let gone = false; emailStatus().then((r) => { if (!gone) emailReady = r; }); return () => { gone = true; }; });
+  const go = (p: ProposalRow, act: "send" | "publish") => () => (location.hash = `#/quotes/${p.id}?${act}=1`);
+  function golive(p: ProposalRow) {
+    if (p.status === "draft" || p.status === "scheduled" || p.revising) {
+      const pub = { label: p.revising ? "Publish revision" : "Publish", onselect: go(p, "publish") };
+      return emailReady ? [pub, { label: p.revising ? "Send revision" : p.status === "scheduled" ? "Send now" : "Send", onselect: go(p, "send") }] : [pub];
+    }
+    return [{ label: p.link_only ? "Email it to the client" : "Email it again", onselect: go(p, "send") }];
+  }
   const sortBy = (k: Key) => (sort = pressed(sort, k, COLUMNS.find((c) => c.key === k)!.first));
   const rows = $derived.by(() => {
     const v = (p: ProposalRow) => { const x = quoteValue(p); return x.once + x.monthly * 12; };
@@ -202,7 +214,7 @@
             <td class="r acts" onclick={(e) => e.stopPropagation()}>
               <Menu label="Actions for {quoteNo(p)}" items={[
                 { label: "Open", onselect: () => open(p.id) },
-                { label: p.status === "draft" || p.status === "scheduled" || p.revising ? "Send" : "Email it again", onselect: () => (location.hash = `#/quotes/${p.id}?send=1`) },
+                ...golive(p),
                 { label: "Copy client link", onselect: () => copy(p) },
                 { label: "Duplicate", onselect: () => duplicate(p) },
               ]} />

@@ -742,7 +742,7 @@ const db: Db = {
     // Demo only: localStorage "demo.noEmail" shows the admin as it is before email is set up.
     const noEmail = (() => { try { return !!localStorage.getItem("demo.noEmail"); } catch { return false; } })();
     if (body.action === "status") return { ok: true, email: !noEmail, stripe: quoteSettings.stripe_mode, stripe_key: false, stripe_webhook: false, webhook_url: "https://YOUR-PROJECT.supabase.co/functions/v1/stripe-webhook" };
-    if (noEmail && body.action !== "test_payment") throw new Error("Email isn't set up yet, so nothing was sent. Use Publish without emailing and send the link yourself, or add the RESEND_API_KEY secret in Supabase (README, Setup for sending).");
+    if (noEmail && body.action !== "test_payment") throw new Error("Email isn't set up yet, so nothing was sent. Use Publish and send the link yourself, or add the RESEND_API_KEY secret in Supabase (README, Setup for sending).");
     if (body.action === "test_payment") throw new Error("Stripe isn't connected yet. Add the two Stripe secrets first (see README, Connect Stripe).");
     const qid = "id" in body ? body.id : "";
     const p = proposals.find((x) => x.id === qid)!;
