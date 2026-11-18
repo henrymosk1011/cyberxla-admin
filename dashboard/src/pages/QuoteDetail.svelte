@@ -663,7 +663,7 @@
         <div role="tabpanel" id="qs-tiers" aria-labelledby="qt-tiers" hidden={sec !== "tiers"}>
         <section class="card">
           <div class="card-head"><div><h2>Tiers</h2><p class="sub">{d.content.tiers.length === 1 ? "One tier shows as a simple quote: what's included and the total." : "The client picks one."}</p></div></div>
-          <ol class="list tierlist">
+          <ol class="list spaced">
             {#each d.content.tiers as t, i (t.key)}
               {@const m = doc && hasCosts ? tierMargin(doc, internal, t.key) : null}
               {@const svc = linked("tier", t.key)}
@@ -774,7 +774,7 @@
         <div role="tabpanel" id="qs-addons" aria-labelledby="qt-addons" hidden={sec !== "addons"}>
         <section class="card">
           <div class="card-head"><div><h2>Add ons</h2><p class="sub">Extras the client can tick. Per tier: can add, already included, or not offered.</p></div></div>
-          <ol class="list">
+          <ol class="list spaced">
             {#each d.content.addons as a, i (a.key)}
               {@const svc = linked("addon", a.key)}
               <li class="item">
@@ -1070,9 +1070,9 @@
   .row { display: flex; justify-content: flex-end; gap: 8px; }
   .list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
   .item { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--ink); }
-  /* Tiers are big blocks: more room between and inside them. */
-  .tierlist { gap: 28px; }
-  .tierlist > .item { padding: 18px; gap: 14px; }
+  /* Tiers and add ons are big blocks: more room between and inside them. */
+  .spaced { gap: 28px; }
+  .spaced > .item { padding: 18px; gap: 14px; }
   .itemhead { display: flex; gap: 10px; align-items: flex-end; }
   .itemhead > :global(.field) { flex: 1; }
   .num { width: 18px; padding-bottom: 12px; font-size: var(--fs-sm); }
