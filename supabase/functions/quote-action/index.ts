@@ -111,6 +111,12 @@ Deno.serve(async (req) => {
       return reply(200, { ok: true, url: out.url, mode }, headers);
     }
 
+    // Without the Resend key nothing can be emailed: refuse before Send now
+    // freezes a version, so a quote is never marked sent without its email.
+    if (!env("RESEND_API_KEY")) {
+      return reply(503, { error: "Email isn't set up yet, so nothing was sent. Use Publish without emailing and send the link yourself, or add the RESEND_API_KEY secret in Supabase (README, Setup for sending).", email: false }, headers);
+    }
+
     // Send now freezes the version first; Resend and the test only read.
     const ctx = (a.action === "send"
       ? await rpc("proposal_send", { p_id: a.id, p_subject: a.subject, p_note: a.note })

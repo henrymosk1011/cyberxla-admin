@@ -699,6 +699,14 @@ const db: Db = {
     const set = (patch: Partial<Proposal>) => { Object.assign(p, patch, { updated_at: new Date().toISOString() }); proposalsChanged(); };
     switch (fn) {
       case "proposal_schedule": set({ scheduled_at: String(args.p_at), send_subject: String(args.p_subject), send_note: String(args.p_note ?? ""), status: p.status === "draft" ? "scheduled" : p.status }); event(p.id, "scheduled", { at: args.p_at }); return null;
+      case "proposal_publish": {
+        if (!(p.status === "draft" || p.status === "scheduled" || p.revising)) throw new Error(`Q${p.number} was already sent. Use Revise to send a new version.`);
+        if (!p.recipient_email) throw new Error("Add the recipient's email first.");
+        freeze(p);
+        const sent = proposalEvents.filter((e) => e.proposal_id === p.id && e.kind === "sent").at(-1);
+        if (sent) sent.detail = { ...sent.detail, emailed: false };
+        return null;
+      }
       case "proposal_unschedule": set({ scheduled_at: null, status: p.status === "scheduled" ? "draft" : p.status }); event(p.id, "unscheduled", {}); return null;
       case "proposal_revise": set({ revising: true }); event(p.id, "revision_started", { version: p.version + 1 }); return null;
       case "proposal_discard_revision": {
@@ -730,7 +738,10 @@ const db: Db = {
     return null;
   },
   async quoteAction(body) {
-    if (body.action === "status") return { ok: true, email: true, stripe: quoteSettings.stripe_mode, stripe_key: false, stripe_webhook: false, webhook_url: "https://YOUR-PROJECT.supabase.co/functions/v1/stripe-webhook" };
+    // Demo only: localStorage "demo.noEmail" shows the admin as it is before email is set up.
+    const noEmail = (() => { try { return !!localStorage.getItem("demo.noEmail"); } catch { return false; } })();
+    if (body.action === "status") return { ok: true, email: !noEmail, stripe: quoteSettings.stripe_mode, stripe_key: false, stripe_webhook: false, webhook_url: "https://YOUR-PROJECT.supabase.co/functions/v1/stripe-webhook" };
+    if (noEmail && body.action !== "test_payment") throw new Error("Email isn't set up yet, so nothing was sent. Use Publish without emailing and send the link yourself, or add the RESEND_API_KEY secret in Supabase (README, Setup for sending).");
     if (body.action === "test_payment") throw new Error("Stripe isn't connected yet. Add the two Stripe secrets first (see README, Connect Stripe).");
     const qid = "id" in body ? body.id : "";
     const p = proposals.find((x) => x.id === qid)!;

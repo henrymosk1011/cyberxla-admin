@@ -8,7 +8,7 @@
   import { messageOf } from "../lib/toast.svelte.ts";
   import type { Proposal, QuoteSettings } from "../lib/types.ts";
 
-  let { open, mode, proposal, company, firstName, title, settings, onclose, onsend, onschedule, ontest }: {
+  let { open, mode, proposal, company, firstName, title, settings, emailReady = null, onclose, onsend, onschedule, ontest, onpublish }: {
     open: boolean;
     /** send: the first send or a revision. resend: email the latest version again. */
     mode: "send" | "resend";
@@ -18,10 +18,14 @@
     /** The title with placeholders filled in. */
     title: string;
     settings: QuoteSettings | null;
+    /** Whether email is set up (the RESEND_API_KEY secret); null while unknown. */
+    emailReady?: boolean | null;
     onclose: () => void;
     onsend: (subject: string, note: string) => Promise<void>;
     onschedule: (at: string, subject: string, note: string) => Promise<void>;
     ontest: (subject: string, note: string) => Promise<string>;
+    /** Freeze the version and make the link live without an email. */
+    onpublish: () => Promise<void>;
   } = $props();
 
   const number = $derived(`Q${proposal.number}`);
@@ -30,7 +34,8 @@
   let later = $state(false);
   let at = $state("");
   let view = $state<"email" | "text">("email");
-  let busy = $state<"" | "send" | "test">("");
+  let busy = $state<"" | "send" | "test" | "publish">("");
+  const noEmail = $derived(emailReady === false);
   let error = $state("");
   let done = $state("");
 
@@ -68,6 +73,16 @@
       busy = "";
     }
   }
+  async function publish() {
+    busy = "publish"; error = "";
+    try {
+      await onpublish();
+    } catch (e) {
+      error = messageOf(e, "That didn't go through. Try again.");
+    } finally {
+      busy = "";
+    }
+  }
   async function test() {
     if (subjectError || noteError) return;
     busy = "test"; error = ""; done = "";
@@ -86,13 +101,16 @@
   <div class="send">
     <p class="to"><span class="muted">To</span> <strong>{proposal.recipient_email ?? "No recipient yet"}</strong>{#if proposal.cc.length}<span class="muted"> cc</span> {proposal.cc.join(", ")}{/if}
       <span class="muted">· from {settings?.from_name ?? "Henry at cyberxLA"}, replies go to {settings?.reply_to ?? "henry@cyberx.la"}</span></p>
+    {#if noEmail}
+      <p class="callout warn" role="status">Email isn't set up yet, so this can't be emailed. {mode === "send" ? "Publish it without emailing, then copy the link and send it yourself." : "Copy the link and send it yourself."} To turn email on, add the RESEND_API_KEY secret in Supabase (README, Setup for sending).</p>
+    {/if}
     {#if mode === "send" && proposal.revising}
       <p class="callout">The client sees version {proposal.version} until this goes out. Same link, same number.</p>
     {/if}
     <Field id="sd-subject" label="Subject" required error={subjectError}>{#snippet children(a)}<input {...a} class="input" maxlength="200" bind:value={subject} />{/snippet}</Field>
     <Field id="sd-note" label="Note" hint="Shown above the View your quote button." error={noteError}>{#snippet children(a)}<textarea {...a} class="input" rows="5" maxlength="2000" bind:value={note}></textarea>{/snippet}</Field>
 
-    {#if mode === "send"}
+    {#if mode === "send" && !noEmail}
       <label class="check"><input type="checkbox" bind:checked={later} /> Send later</label>
       {#if later}
         <Field id="sd-at" label="Send on" hint="Your time zone. It goes out within a minute or two of this time.">{#snippet children(a)}<input {...a} class="input" type="datetime-local" bind:value={at} />{/snippet}</Field>
@@ -116,12 +134,17 @@
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if done}<p class="ok" role="status">{done}</p>{/if}
     <div class="row">
-      <button type="button" class="btn" disabled={busy !== ""} onclick={test}>{busy === "test" ? "Sending test…" : `Send me a test`}</button>
+      {#if !noEmail}<button type="button" class="btn" disabled={busy !== ""} onclick={test}>{busy === "test" ? "Sending test…" : `Send me a test`}</button>{/if}
+      {#if mode === "send" && !later}
+        <button type="button" class={noEmail ? "btn primary" : "btn ghost"} disabled={busy !== "" || !proposal.recipient_email} onclick={publish}>{busy === "publish" ? "Publishing…" : "Publish without emailing"}</button>
+      {/if}
       <span class="grow"></span>
       <button type="button" class="btn ghost" disabled={busy !== ""} onclick={onclose}>Cancel</button>
-      <button type="button" class="btn primary" disabled={busy !== "" || !proposal.recipient_email} onclick={go}>
-        {busy === "send" ? (later ? "Scheduling…" : "Sending…") : later ? "Schedule" : mode === "resend" ? "Send again" : "Send now"}
-      </button>
+      {#if !noEmail}
+        <button type="button" class="btn primary" disabled={busy !== "" || !proposal.recipient_email} onclick={go}>
+          {busy === "send" ? (later ? "Scheduling…" : "Sending…") : later ? "Schedule" : mode === "resend" ? "Send again" : "Send now"}
+        </button>
+      {/if}
     </div>
   </div>
 </Modal>
