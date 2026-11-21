@@ -307,6 +307,7 @@ begin
       or (old.scan_status = 'running'   and new.scan_status in ('done', 'failed', 'cancelled'))
       or (old.scan_status = 'failed'    and new.scan_status in ('queued', 'cancelled'))
       or (old.scan_status = 'cancelled' and new.scan_status = 'queued')
+      or (old.scan_status = 'done'      and new.scan_status = 'queued')
     ) then
       raise exception 'An audit scan can''t go from % to %', old.scan_status, new.scan_status using errcode = 'P0403';
     end if;

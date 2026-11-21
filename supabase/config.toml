@@ -16,6 +16,12 @@ verify_jwt = false
 [functions.quote-action]
 verify_jwt = false
 
+# The dashboard's prospect audit buttons (Run audit, Re-scan, Rebuild, Send,
+# Send me a copy, Cancel). Checks the caller itself (public.is_admin() with the
+# caller's token), then dispatches a workflow in the audit repo.
+[functions.audit-action]
+verify_jwt = false
+
 # The quote page's Accept, Request changes and Pay buttons. Public, so it does
 # its own checks (origin, Turnstile, rate limits, totals) like submit-quote.
 [functions.quote-public]
