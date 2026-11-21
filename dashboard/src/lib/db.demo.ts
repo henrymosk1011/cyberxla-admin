@@ -8,7 +8,7 @@ import monthlyPage1 from "./demo/report-monthly-1.png";
 import monthlyPage2 from "./demo/report-monthly-2.png";
 import { priceQuote } from "./catalog.ts";
 import { catalog as liveCatalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalStatus, ProposalTemplate, ProposalVersion, ProjectService, ProjectStatus, Quote, QuoteSettings, QuoteStatus, Report, ReportContent, ReportPage, ReportSettings, ServiceCategory, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
+import type { Audit, AuditAuthorization, AuditDelivery, AuditEntry, AuditFinding, AuditGrade, AuditRow, AuditSettings, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalStatus, ProposalTemplate, ProposalVersion, ProjectService, ProjectStatus, Prospect, ProspectNote, ProspectStatus, Quote, QuoteSettings, QuoteStatus, Report, ReportContent, ReportPage, ReportSettings, ServiceCategory, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
 import templateSeed from "../../../tests/fixtures/workspace-template.json";
 import { normalizeDoc, resolveDoc, totals as quoteTotals, varsFor, type ProposalDoc } from "../../../supabase/functions/_shared/proposal.ts";
 
@@ -271,6 +271,140 @@ const wait = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(structuredCl
 let signedOut = () => {};
 const listeners = new Set<(e: ChangeEvent) => void>();
 let state: AuthState = { step: "signed-out" };
+
+// ---------------------------------------------------------------------------
+// Prospecting demo data (sample businesses use the reserved .example domain)
+// ---------------------------------------------------------------------------
+const prospectingListeners = new Set<() => void>();
+const prospectingChanged = () => prospectingListeners.forEach((cb) => cb());
+const rmWhere = <T,>(arr: T[], pred: (x: T) => boolean) => { for (let i = arr.length - 1; i >= 0; i--) if (pred(arr[i]!)) arr.splice(i, 1); };
+const today = () => new Date().toISOString().slice(0, 10);
+
+const auditSettings: AuditSettings = {
+  mode: "preview", passive_enabled: true, active_enabled: false,
+  sender_email: "audits@cyberx.la", sender_name: "cyberxLA Security", reply_to: "henry@cyberx.la",
+  default_subject: "Security snapshot for {business}",
+  default_body: "Hi there,\n\nWe ran a quick, non intrusive check of {business}'s public web presence and put the results in the attached one page report. It only uses information anyone can see from the outside; nothing was accessed.\n\nHappy to walk you through it if that would help.\n\nHenry\ncyberxLA",
+  updated_at: new Date(now - 20 * 86400000).toISOString(),
+};
+
+const prospects: Prospect[] = [];
+const prospectNotes: ProspectNote[] = [];
+const audits: Audit[] = [];
+const authorizations: AuditAuthorization[] = [];
+
+// A small library of realistic passive findings.
+const F: Record<string, AuditFinding> = {
+  noDmarc: { id: "dmarc", category: "email", severity: "high", title: "No DMARC record", detail: "The domain publishes no DMARC policy, so anyone can send email that appears to come from this business. This is a common route for invoice and payroll fraud.", recommendation: "Publish a DMARC record, starting at p=none and moving to p=reject once legitimate mail passes.", service: "dmarc" },
+  noSpf: { id: "spf", category: "email", severity: "medium", title: "No SPF record", detail: "There is no SPF record naming which servers may send mail for the domain, which weakens spoofing protection and hurts deliverability.", recommendation: "Add an SPF record listing your real mail providers.", service: "dmarc" },
+  noHsts: { id: "hsts", category: "headers", severity: "medium", title: "HSTS not enabled", detail: "Browsers are not told to stay on HTTPS, which leaves a window for downgrade and interception on untrusted networks.", recommendation: "Send a Strict-Transport-Security header.", service: "surface" },
+  noCsp: { id: "csp", category: "headers", severity: "medium", title: "No Content Security Policy", detail: "Nothing restricts which scripts the site may run, so an injected script would have free rein over visitor sessions.", recommendation: "Add a Content-Security-Policy header.", service: "surface" },
+  noXfo: { id: "xfo", category: "headers", severity: "low", title: "No clickjacking protection", detail: "The site can be framed by other pages, which allows clickjacking of forms and buttons.", recommendation: "Add X-Frame-Options or a frame-ancestors policy.", service: "surface" },
+  oldJquery: { id: "jquery", category: "software", severity: "high", title: "Outdated jQuery 1.12.4", detail: "The site loads jQuery 1.12.4, which has published cross-site scripting vulnerabilities and is years out of support.", recommendation: "Update jQuery to a current, supported release.", service: "patching" },
+  serverBanner: { id: "banner", category: "exposure", severity: "low", title: "Software versions disclosed", detail: "Response headers reveal the exact web server and PHP versions, which hands an attacker a head start on matching known exploits.", recommendation: "Suppress Server and X-Powered-By version banners.", service: "surface" },
+  cookieFlags: { id: "cookies", category: "cookies", severity: "medium", title: "Session cookie missing Secure and HttpOnly", detail: "A session cookie is set without the Secure and HttpOnly flags, so it can leak over plain HTTP or be read by injected scripts.", recommendation: "Set Secure, HttpOnly and SameSite on session cookies.", service: "surface" },
+  wpExposed: { id: "wp-login", category: "exposure", severity: "medium", title: "WordPress login page open to the internet", detail: "The wp-login page is reachable with no rate limiting or extra factor, a frequent target for password guessing.", recommendation: "Add multi factor sign in and rate limiting, or restrict the admin area by network.", service: "mfa" },
+  tlsOk: { id: "tls-ok", category: "tls", severity: "info", title: "Valid, current TLS certificate", detail: "The certificate is valid, matches the hostname, and is not expiring soon.", passed: true },
+  dnssecOff: { id: "dnssec", category: "dns", severity: "low", title: "DNSSEC not enabled", detail: "DNS answers are not signed, which leaves room for DNS spoofing for visitors on a compromised network.", recommendation: "Enable DNSSEC at your DNS provider.", service: "surface" },
+  httpsOk: { id: "https-ok", category: "tls", severity: "info", title: "HTTP redirects to HTTPS", detail: "Plain HTTP requests are redirected to HTTPS.", passed: true },
+};
+
+const SCAN_SETS: { grade: AuditGrade; score: number; summary: string; findings: AuditFinding[] }[] = [
+  { grade: "C", score: 68, summary: "HTTPS and the certificate are healthy, but email spoofing protection and several security headers are missing.", findings: [F.noDmarc!, F.noHsts!, F.noCsp!, F.serverBanner!, F.tlsOk!, F.httpsOk!] },
+  { grade: "D", score: 52, summary: "An outdated front-end library and weak email and cookie settings leave real openings worth closing.", findings: [F.oldJquery!, F.noDmarc!, F.cookieFlags!, F.noCsp!, F.noXfo!, F.tlsOk!] },
+  { grade: "B", score: 83, summary: "A solid baseline. A couple of header and DNS hardening steps would take it further.", findings: [F.noHsts!, F.dnssecOff!, F.tlsOk!, F.httpsOk!] },
+  { grade: "F", score: 39, summary: "Several high risk gaps: no spoofing protection, an exposed admin login, and outdated software.", findings: [F.noDmarc!, F.noSpf!, F.wpExposed!, F.oldJquery!, F.cookieFlags!, F.noCsp!] },
+];
+
+/** Fill an audit with a believable result (the real scan runs in GitHub Actions). */
+function simulateScan(a: Audit) {
+  const set = SCAN_SETS[Math.floor(rand() * SCAN_SETS.length)]!;
+  const biz = prospects.find((p) => p.id === a.prospect_id);
+  const t = new Date().toISOString();
+  Object.assign(a, {
+    scan_status: "done", grade: set.grade, score: set.score, summary: set.summary, findings: set.findings,
+    meta: { ip: "203.0.113." + (10 + Math.floor(rand() * 200)), tls: { issuer: "Let's Encrypt", days_left: 61 } },
+    scanner_version: "0.1.0", started_at: t, finished_at: t, content_version: 1, rendered_version: 1, rendered_at: t, updated_at: t,
+    subject: a.subject ?? `Security snapshot for ${biz?.business_name ?? "your business"}`,
+    email_body: a.email_body ?? auditSettings.default_body,
+  });
+  if (biz && (biz.status === "new" || biz.status === "auditing")) { biz.status = "audited"; biz.updated_at = t; }
+}
+
+{
+  type Seed = { name: string; domain: string; city: string; industry: string; status: ProspectStatus; age: number; email?: string | null; contact?: string };
+  const seeds: Seed[] = [
+    { name: "Rosewood Dental Studio", domain: "rosewooddental.example", city: "Pasadena", industry: "Dentist", status: "audited", age: 6, email: "office@rosewooddental.example", contact: "Dana Brooks" },
+    { name: "Vista Auto Repair", domain: "vistaauto.example", city: "Glendale", industry: "Auto repair", status: "new", age: 2, email: null },
+    { name: "Lotus Thai Kitchen", domain: "lotusthai.example", city: "Burbank", industry: "Restaurant", status: "audited", age: 9, email: "hello@lotusthai.example", contact: "Noi Prasert" },
+    { name: "Keystone Property Group", domain: "keystonepg.example", city: "Los Angeles", industry: "Property management", status: "contacted", age: 15, email: "info@keystonepg.example", contact: "Marcus Field" },
+    { name: "Harborview Family Law", domain: "harborviewlaw.example", city: "Long Beach", industry: "Law firm", status: "new", age: 1, email: "intake@harborviewlaw.example" },
+    { name: "Summit Physical Therapy", domain: "summitpt.example", city: "Santa Monica", industry: "Physical therapy", status: "audited", age: 11, email: "front@summitpt.example", contact: "Elena Ruiz" },
+    { name: "Atlas Hardware Supply", domain: "atlashardware.example", city: "Inglewood", industry: "Retail", status: "responded", age: 22, email: "sales@atlashardware.example", contact: "Ray Okafor" },
+  ];
+  const by: Record<string, Prospect> = {};
+  seeds.forEach((s, i) => {
+    const created = new Date(now - s.age * 86400000);
+    const p: Prospect = {
+      id: uuid(), created_at: created.toISOString(), updated_at: created.toISOString(), business_name: s.name,
+      website: `https://${s.domain}`, domain: s.domain, contact_name: s.contact ?? null, email: s.email ?? null,
+      phone: `(${pick(["213", "310", "323", "818", "562"])}) 555-0${String(100 + i).slice(-3)}`,
+      city: s.city, region: "CA", industry: s.industry, status: s.status, source: pick(["yelp", "google_places", "manual"] as const),
+      source_ref: null, lead_id: null, notes: null, archived_at: null,
+    };
+    prospects.push(p);
+    by[s.name] = p;
+  });
+
+  const mkAudit = (p: Prospect, set: { grade: AuditGrade; score: number; summary: string; findings: AuditFinding[] }, o: { age: number; delivery?: AuditDelivery } = { age: 1 }): Audit => {
+    const created = new Date(now - o.age * 86400000);
+    const a: Audit = {
+      id: uuid(), created_at: created.toISOString(), updated_at: created.toISOString(), prospect_id: p.id, kind: "passive",
+      is_test: false, scan_status: "done", target_url: p.website, target_domain: p.domain, grade: set.grade, score: set.score,
+      summary: set.summary, scanner_version: "0.1.0", started_at: created.toISOString(), finished_at: created.toISOString(),
+      scan_error: null, attempts: 1, authorization_id: null, content_version: 1, rendered_version: 1, rendered_at: created.toISOString(),
+      render_error: null, delivery: o.delivery ?? "none", recipients: p.email ? [p.email] : [],
+      subject: `Security snapshot for ${p.business_name}`, sent_at: o.delivery === "sent" ? created.toISOString() : null, send_error: null,
+      findings: set.findings, meta: { ip: "203.0.113." + (20 + Math.floor(rand() * 200)), tls: { issuer: "Let's Encrypt", days_left: 61 } },
+      email_body: auditSettings.default_body,
+    };
+    audits.push(a);
+    return a;
+  };
+
+  mkAudit(by["Rosewood Dental Studio"]!, SCAN_SETS[0]!, { age: 5 });
+  mkAudit(by["Lotus Thai Kitchen"]!, SCAN_SETS[1]!, { age: 8 });
+  mkAudit(by["Keystone Property Group"]!, SCAN_SETS[2]!, { age: 13, delivery: "sent" });
+  mkAudit(by["Atlas Hardware Supply"]!, SCAN_SETS[2]!, { age: 20, delivery: "sent" });
+  mkAudit(by["Summit Physical Therapy"]!, SCAN_SETS[3]!, { age: 10 });
+
+  // Vista Auto Repair: a scan that failed because the site could not be reached.
+  {
+    const p = by["Vista Auto Repair"]!, created = new Date(now - 2 * 86400000).toISOString();
+    audits.push({ id: uuid(), created_at: created, updated_at: created, prospect_id: p.id, kind: "passive", is_test: false,
+      scan_status: "failed", target_url: p.website, target_domain: p.domain, grade: null, score: null, summary: null, scanner_version: "0.1.0",
+      started_at: created, finished_at: created, scan_error: "The site did not respond on HTTPS within the timeout.", attempts: 1,
+      authorization_id: null, content_version: 1, rendered_version: 0, rendered_at: null, render_error: null, delivery: "none",
+      recipients: [], subject: null, sent_at: null, send_error: null, findings: [], meta: {}, email_body: null });
+  }
+
+  // Summit Physical Therapy engaged us: a recorded authorization unlocks an active audit, now queued.
+  {
+    const p = by["Summit Physical Therapy"]!, at = new Date(now - 3 * 86400000);
+    const auth: AuditAuthorization = { id: uuid(), created_at: at.toISOString(), prospect_id: p.id, domain: p.domain!,
+      scope: "External active testing of the public web presence", method: "signed_doc", authorized_by_name: "Elena Ruiz",
+      authorized_by_title: "Owner", authorized_by_email: "front@summitpt.example", evidence: "Signed engagement letter 2026-11",
+      signed_on: at.toISOString().slice(0, 10), expires_on: new Date(now + 60 * 86400000).toISOString().slice(0, 10), revoked_at: null };
+    authorizations.push(auth);
+    const qAt = new Date(now - 1 * 86400000).toISOString();
+    audits.push({ id: uuid(), created_at: qAt, updated_at: qAt, prospect_id: p.id, kind: "active", is_test: false, scan_status: "queued",
+      target_url: p.website, target_domain: p.domain, grade: null, score: null, summary: null, scanner_version: null, started_at: null,
+      finished_at: null, scan_error: null, attempts: 0, authorization_id: auth.id, content_version: 1, rendered_version: 0, rendered_at: null,
+      render_error: null, delivery: "none", recipients: p.email ? [p.email] : [], subject: null, sent_at: null, send_error: null, findings: [], meta: {}, email_body: null });
+  }
+
+  prospectNotes.push({ id: uuid(), prospect_id: by["Keystone Property Group"]!.id, created_at: new Date(now - 12 * 86400000).toISOString(), body: "Sent the snapshot. Office manager replied, wants to talk after the holidays." });
+}
 
 const db: Db = {
   demo: true,
@@ -767,6 +901,114 @@ const db: Db = {
   async saveQuoteSettings(patch) { Object.assign(quoteSettings, patch, { updated_at: new Date().toISOString() }); },
   payments: () => wait(payments),
   subscribeProposals(cb) { proposalListeners.add(cb); return () => proposalListeners.delete(cb); },
+
+  // -- Prospecting -----------------------------------------------------------
+  prospects: () => wait([...prospects].sort((a, b) => b.updated_at.localeCompare(a.updated_at))),
+  prospect: (id) => wait(prospects.find((p) => p.id === id) ?? null),
+  createProspect: async (p) => {
+    const id = uuid(), t = new Date().toISOString();
+    const row: Prospect = { id, created_at: t, updated_at: t, status: "new", lead_id: null, archived_at: null, ...p } as Prospect;
+    prospects.unshift(row);
+    log("prospects", "insert", id, null, { status: "new", business_name: row.business_name });
+    prospectingChanged();
+    return id;
+  },
+  updateProspect: async (id, patch) => {
+    const p = prospects.find((x) => x.id === id);
+    if (p) { Object.assign(p, patch); p.updated_at = new Date().toISOString(); prospectingChanged(); }
+  },
+  deleteProspect: async (id) => {
+    rmWhere(audits, (a) => a.prospect_id === id);
+    rmWhere(prospectNotes, (n) => n.prospect_id === id);
+    rmWhere(authorizations, (a) => a.prospect_id === id);
+    rmWhere(prospects, (p) => p.id === id);
+    prospectingChanged();
+  },
+  archiveProspect: async (id, archived) => {
+    const p = prospects.find((x) => x.id === id);
+    if (p) { p.archived_at = archived ? new Date().toISOString() : null; p.updated_at = new Date().toISOString(); prospectingChanged(); }
+  },
+  importProspects: async (rows) => {
+    const t = new Date().toISOString();
+    for (const r of rows) prospects.unshift({ id: uuid(), created_at: t, updated_at: t, status: "new", lead_id: null, archived_at: null, ...r } as Prospect);
+    prospectingChanged();
+    return rows.length;
+  },
+  prospectNotes: (id) => wait(prospectNotes.filter((n) => n.prospect_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))),
+  addProspectNote: async (pid, body) => { prospectNotes.push({ id: uuid(), prospect_id: pid, created_at: new Date().toISOString(), body }); },
+  deleteProspectNote: async (id) => { rmWhere(prospectNotes, (n) => n.id === id); },
+  prospectActivity: (id) => wait(audit.filter((a) => a.row_id === id || a.new_data?.prospect_id === id || a.old_data?.prospect_id === id).map((a) => ({ ...a, hidden: hiddenIds.has(a.id) })).sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
+  convertProspect: async (id) => {
+    const p = prospects.find((x) => x.id === id);
+    if (!p) throw new Error("That prospect was deleted. Reload and try again.");
+    if (!p.email) throw new Error("Add a contact email to the prospect before converting it to a lead.");
+    const leadId = uuid(), t = new Date().toISOString();
+    leads.unshift({ id: leadId, created_at: t, updated_at: t, name: p.contact_name || p.business_name, company: p.business_name, email: p.email, phone: p.phone, status: "new", source: "manual", value_monthly: 0, value_one_time: 0, archived_at: null });
+    p.lead_id = leadId; p.status = "converted"; p.updated_at = t;
+    prospectingChanged();
+    return leadId;
+  },
+
+  audits: () => wait([...audits].sort((a, b) => b.created_at.localeCompare(a.created_at)) as AuditRow[]),
+  auditsFor: (pid) => wait(audits.filter((a) => a.prospect_id === pid).sort((a, b) => b.created_at.localeCompare(a.created_at)) as AuditRow[]),
+  audit: (id) => wait(audits.find((a) => a.id === id) ?? null),
+  auditPages: () => wait([]),
+  auditPdf: () => wait(null),
+  auditActivity: (id) => wait(audit.filter((a) => a.table_name === "audits" && a.row_id === id).map((a) => ({ ...a, hidden: hiddenIds.has(a.id) })).sort((a, b) => b.at.localeCompare(a.at) || b.id - a.id)),
+  updateAudit: async (id, patch) => {
+    const a = audits.find((x) => x.id === id);
+    if (a) { Object.assign(a, patch); a.updated_at = new Date().toISOString(); prospectingChanged(); }
+  },
+  deleteAudit: async (id) => { rmWhere(audits, (a) => a.id === id); prospectingChanged(); },
+  startAudit: async (prospectId, kind, isTest) => {
+    if (kind === "active" && !authorizations.some((a) => a.prospect_id === prospectId && !a.revoked_at && a.signed_on <= today() && a.expires_on >= today()))
+      throw new Error("An active audit needs a current signed authorization for this domain.");
+    const p = prospects.find((x) => x.id === prospectId);
+    const id = uuid(), t = new Date().toISOString();
+    audits.unshift({ id, created_at: t, updated_at: t, prospect_id: prospectId, kind, is_test: isTest, scan_status: "queued", target_url: p?.website ?? null, target_domain: p?.domain ?? null, grade: null, score: null, summary: null, scanner_version: null, started_at: null, finished_at: null, scan_error: null, attempts: 0, authorization_id: kind === "active" ? (authorizations.find((a) => a.prospect_id === prospectId && !a.revoked_at)?.id ?? null) : null, content_version: 1, rendered_version: 0, rendered_at: null, render_error: null, delivery: "none", recipients: p?.email ? [p.email] : [], subject: null, sent_at: null, send_error: null, findings: [], meta: {}, email_body: null });
+    log("audits", "insert", id, null, { kind, prospect_id: prospectId });
+    prospectingChanged();
+    return id;
+  },
+  auditAction: async (id, action) => {
+    const a = audits.find((x) => x.id === id);
+    if (!a) throw new Error("That audit was deleted. Reload and try again.");
+    if (action === "scan" || action === "rescan") { simulateScan(a); prospectingChanged(); return { started: "scan" }; }
+    if (action === "send_now") {
+      a.delivery = "sent"; a.sent_at = new Date().toISOString(); a.updated_at = a.sent_at;
+      const p = prospects.find((x) => x.id === a.prospect_id);
+      if (p && (p.status === "audited" || p.status === "auditing")) { p.status = "contacted"; p.updated_at = a.sent_at; }
+      prospectingChanged();
+      return { started: "send" };
+    }
+    if (action === "copy") return { started: "copy" };
+    if (action === "rebuild") return { started: "render" };
+    if (action === "cancel") { if (a.scan_status === "queued" || a.scan_status === "running") { a.scan_status = "cancelled"; prospectingChanged(); } return { started: null }; }
+    return { started: null };
+  },
+
+  authorizations: (pid) => wait(authorizations.filter((a) => a.prospect_id === pid).sort((a, b) => b.created_at.localeCompare(a.created_at))),
+  addAuthorization: async (a) => { authorizations.unshift({ id: uuid(), created_at: new Date().toISOString(), revoked_at: null, ...a }); prospectingChanged(); },
+  setAuthorizationRevoked: async (id, revoked) => { const a = authorizations.find((x) => x.id === id); if (a) { a.revoked_at = revoked ? new Date().toISOString() : null; prospectingChanged(); } },
+  deleteAuthorization: async (id) => { rmWhere(authorizations, (a) => a.id === id); prospectingChanged(); },
+
+  auditSettings: () => wait(auditSettings),
+  saveAuditSettings: async (patch) => { Object.assign(auditSettings, patch); auditSettings.updated_at = new Date().toISOString(); },
+  discoverProspects: async (params) => {
+    const names = ["Bayside", "Copper Kettle", "Elm Street", "Granite Peak", "Harbor Point", "Ironwood", "Jasmine", "Kingfisher"];
+    const n = Math.min(params.limit || 5, 8), t = new Date().toISOString();
+    let added = 0;
+    for (let i = 0; i < n; i++) {
+      const nm = `${names[(i + Math.floor(rand() * names.length)) % names.length]} ${params.term || "Services"}`;
+      const dom = nm.toLowerCase().replace(/[^a-z]/g, "") + ".example";
+      if (prospects.some((p) => p.domain === dom)) continue;
+      prospects.unshift({ id: uuid(), created_at: t, updated_at: t, business_name: nm, website: `https://${dom}`, domain: dom, contact_name: null, email: null, phone: null, city: params.location || "Los Angeles", region: "CA", industry: params.term || null, status: "new", source: params.source, source_ref: uuid(), lead_id: null, notes: null, archived_at: null });
+      added++;
+    }
+    prospectingChanged();
+    return { found: n, added };
+  },
+  subscribeProspecting: (cb) => { prospectingListeners.add(cb); return () => prospectingListeners.delete(cb); },
 };
 
 // ---------------------------------------------------------------------------

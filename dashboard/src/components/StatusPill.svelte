@@ -18,6 +18,10 @@
   .st-contacted, .st-reviewing, .st-in_progress { background: var(--st-contacted); }
   .st-proposal, .st-sent, .st-proposed { background: var(--st-proposal); }
   .st-won, .st-accepted, .st-active, .st-done { background: var(--st-won); }
-  .st-paused, .st-on_hold { background: var(--warning); }
-  .st-lost, .st-declined, .st-former, .st-cancelled { background: var(--st-lost); }
+  .st-paused, .st-on_hold, .st-sending { background: var(--warning); }
+  .st-lost, .st-declined, .st-former, .st-cancelled, .st-failed { background: var(--st-lost); }
+  /* Prospecting: in-progress states blue, a finished audit purple, engaged/converted green. */
+  .st-queued, .st-auditing, .st-running { background: var(--st-contacted); }
+  .st-audited { background: var(--st-proposal); }
+  .st-responded, .st-converted { background: var(--st-won); }
 </style>

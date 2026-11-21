@@ -56,7 +56,8 @@ export type AuditEntry = {
   action: "insert" | "update" | "delete";
   table_name: "leads" | "quotes" | "lead_notes" | "clients" | "client_services" | "services" | "service_categories"
     | "projects" | "project_services" | "project_credentials" | "reports" | "report_settings"
-    | "proposals" | "proposal_versions" | "proposal_events" | "proposal_acceptances" | "proposal_templates" | "payments" | "quote_settings";
+    | "proposals" | "proposal_versions" | "proposal_events" | "proposal_acceptances" | "proposal_templates" | "payments" | "quote_settings"
+    | "prospects" | "prospect_notes" | "audits" | "audit_authorizations" | "audit_settings";
   row_id: string | null;
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
@@ -205,6 +206,50 @@ export interface Db {
   payments(): Promise<Payment[]>;
   /** Called on any change to quotes or their timelines. */
   subscribeProposals(cb: () => void): () => void;
+
+  // Prospecting: outbound security audits
+  prospects(): Promise<Prospect[]>;
+  prospect(id: string): Promise<Prospect | null>;
+  createProspect(p: ProspectInput): Promise<string>;
+  updateProspect(id: string, patch: Partial<ProspectInput>): Promise<void>;
+  deleteProspect(id: string): Promise<void>;
+  archiveProspect(id: string, archived: boolean): Promise<void>;
+  /** Bulk add from a CSV import; returns how many were newly added (duplicates by domain are skipped). */
+  importProspects(rows: ProspectInput[]): Promise<number>;
+  prospectNotes(id: string): Promise<ProspectNote[]>;
+  addProspectNote(prospectId: string, body: string): Promise<void>;
+  deleteProspectNote(id: string): Promise<void>;
+  prospectActivity(id: string): Promise<AuditEntry[]>;
+  /** Turn a prospect into a sales lead; returns the lead id. */
+  convertProspect(id: string): Promise<string>;
+
+  /** Recent audits (light columns only), newest first. */
+  audits(): Promise<AuditRow[]>;
+  auditsFor(prospectId: string): Promise<AuditRow[]>;
+  audit(id: string): Promise<Audit | null>;
+  /** The prospect-facing PDF's pages as image sources, in order. */
+  auditPages(id: string): Promise<ReportPage[]>;
+  /** A PDF as base64, or null if it hasn't been rendered. */
+  auditPdf(id: string, kind: "client" | "internal"): Promise<string | null>;
+  auditActivity(id: string): Promise<AuditEntry[]>;
+  updateAudit(id: string, patch: AuditPatch): Promise<void>;
+  deleteAudit(id: string): Promise<void>;
+  /** Queue a new audit for a prospect (active needs a live authorization); returns the audit id. */
+  startAudit(prospectId: string, kind: AuditKind, isTest: boolean): Promise<string>;
+  /** Start the scan, re-render the PDFs, send now, or send me a copy (the audit-action Edge Function). */
+  auditAction(id: string, action: AuditAction): Promise<{ started: "scan" | "render" | "send" | "copy" | null }>;
+
+  authorizations(prospectId: string): Promise<AuditAuthorization[]>;
+  addAuthorization(a: AuthorizationInput): Promise<void>;
+  setAuthorizationRevoked(id: string, revoked: boolean): Promise<void>;
+  deleteAuthorization(id: string): Promise<void>;
+
+  auditSettings(): Promise<AuditSettings>;
+  saveAuditSettings(patch: Partial<Omit<AuditSettings, "updated_at">>): Promise<void>;
+  /** Find local businesses and queue them as prospects (the discover Edge Function). */
+  discoverProspects(params: DiscoverParams): Promise<{ found: number; added: number }>;
+  /** Called on any change to prospects or audits; refetch what you show. */
+  subscribeProspecting(cb: () => void): () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -629,3 +674,146 @@ export type ReportPatch = Partial<Pick<Report, "status" | "send_at" | "recipient
 export type ReportFile = { kind: "client" | "internal" | "page"; page: number; version: number; size: number; created_at: string };
 /** src is a data: URL (or a bundled image in the demo). */
 export type ReportPage = { page: number; version: number; src: string };
+
+// ---------------------------------------------------------------------------
+// Prospecting: find local businesses, audit their public security posture, and
+// send a branded report. The schema and rules live in
+// supabase/migrations/0023_prospecting.sql; the scanner runs in GitHub Actions.
+// ---------------------------------------------------------------------------
+
+export const PROSPECT_STATUSES = ["new", "auditing", "audited", "contacted", "responded", "converted", "declined"] as const;
+export type ProspectStatus = (typeof PROSPECT_STATUSES)[number];
+export const OPEN_PROSPECT_STATUSES: readonly ProspectStatus[] = ["new", "auditing", "audited", "contacted", "responded"];
+export const PROSPECT_SOURCES = ["manual", "csv", "yelp", "google_places", "import"] as const;
+export type ProspectSource = (typeof PROSPECT_SOURCES)[number];
+
+export type Prospect = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  business_name: string;
+  /** The site we audit. */
+  website: string | null;
+  /** The normalized apex domain, for DNS checks and de-duplication. */
+  domain: string | null;
+  contact_name: string | null;
+  /** Where an audit would be sent. Null until we find one. */
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  region: string | null;
+  industry: string | null;
+  status: ProspectStatus;
+  source: ProspectSource;
+  source_ref: string | null;
+  /** Set when the prospect is turned into a sales lead. */
+  lead_id: string | null;
+  notes: string | null;
+  archived_at: string | null;
+};
+export type ProspectInput = Omit<Prospect, "id" | "created_at" | "updated_at" | "status" | "lead_id" | "archived_at"> & { status?: ProspectStatus };
+
+export type ProspectNote = { id: string; prospect_id: string; created_at: string; body: string };
+
+export const AUDIT_KINDS = ["passive", "active"] as const;
+export type AuditKind = (typeof AUDIT_KINDS)[number];
+export const AUDIT_SCAN_STATUSES = ["queued", "running", "done", "failed", "cancelled"] as const;
+export type AuditScanStatus = (typeof AUDIT_SCAN_STATUSES)[number];
+export const AUDIT_DELIVERY_STATUSES = ["none", "sending", "sent", "failed"] as const;
+export type AuditDelivery = (typeof AUDIT_DELIVERY_STATUSES)[number];
+export const AUDIT_GRADES = ["A", "B", "C", "D", "E", "F"] as const;
+export type AuditGrade = (typeof AUDIT_GRADES)[number];
+export const FINDING_SEVERITIES = ["critical", "high", "medium", "low", "info"] as const;
+export type FindingSeverity = (typeof FINDING_SEVERITIES)[number];
+/** What a finding points at, used to group findings and map them to a cyberxLA service. */
+export const FINDING_CATEGORIES = ["tls", "headers", "email", "cookies", "software", "exposure", "dns", "privacy"] as const;
+export type FindingCategory = (typeof FINDING_CATEGORIES)[number];
+
+export type AuditAction = "scan" | "rescan" | "rebuild" | "send_now" | "copy" | "cancel";
+
+/** One observation from a scan. The shape is shared with the runner (scanner/lib). */
+export type AuditFinding = {
+  id: string;
+  category: FindingCategory | string;
+  severity: FindingSeverity;
+  title: string;
+  detail: string;
+  evidence?: string | null;
+  recommendation?: string | null;
+  /** Maps the finding to a cyberxLA service, for the pitch. */
+  service?: string | null;
+  /** A check that passed, shown as a positive rather than a problem. */
+  passed?: boolean;
+};
+
+/** An audit as listed (no findings or scan metadata). */
+export type AuditRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  prospect_id: string;
+  kind: AuditKind;
+  is_test: boolean;
+  scan_status: AuditScanStatus;
+  target_url: string | null;
+  target_domain: string | null;
+  grade: AuditGrade | null;
+  score: number | null;
+  summary: string | null;
+  scanner_version: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  scan_error: string | null;
+  attempts: number;
+  authorization_id: string | null;
+  content_version: number;
+  rendered_version: number;
+  rendered_at: string | null;
+  render_error: string | null;
+  delivery: AuditDelivery;
+  recipients: string[];
+  subject: string | null;
+  sent_at: string | null;
+  send_error: string | null;
+};
+export type Audit = AuditRow & {
+  findings: AuditFinding[];
+  meta: Record<string, unknown>;
+  email_body: string | null;
+};
+export type AuditPatch = Partial<Pick<Audit, "subject" | "email_body" | "recipients" | "findings" | "grade" | "score" | "summary">>;
+
+export const AUTH_METHODS = ["signed_doc", "contract", "email", "verbal_recorded"] as const;
+export type AuthMethod = (typeof AUTH_METHODS)[number];
+/** A recorded authorization: the gate an active (intrusive) audit needs. */
+export type AuditAuthorization = {
+  id: string;
+  created_at: string;
+  prospect_id: string;
+  domain: string;
+  scope: string;
+  method: AuthMethod;
+  authorized_by_name: string;
+  authorized_by_title: string | null;
+  authorized_by_email: string;
+  evidence: string | null;
+  signed_on: string;
+  expires_on: string;
+  revoked_at: string | null;
+};
+export type AuthorizationInput = Omit<AuditAuthorization, "id" | "created_at" | "revoked_at">;
+
+export type AuditSettings = {
+  /** preview: audit emails go to henry@cyberx.la only. live: they go to the prospect. */
+  mode: "preview" | "live";
+  passive_enabled: boolean;
+  active_enabled: boolean;
+  sender_email: string;
+  sender_name: string;
+  reply_to: string;
+  default_subject: string;
+  default_body: string;
+  updated_at: string;
+};
+
+export type DiscoverParams = { term: string; location: string; limit: number; source: "yelp" | "google_places" };

@@ -24,7 +24,7 @@
   import { arrival, leave, pageHeading } from "./lib/nav.svelte.ts";
   import { ms } from "./lib/motion.ts";
   import { messageOf, toast } from "./lib/toast.svelte.ts";
-  import type { AuthState, Client, ClientService, Lead, LeadStatus, Project, ProjectService, ProposalRow, Quote } from "./lib/types.ts";
+  import type { AuditRow, AuthState, Client, ClientService, Lead, LeadStatus, Project, ProjectService, Prospect, ProposalRow, Quote } from "./lib/types.ts";
 
   const IDLE_MS = 30 * 60 * 1000;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,6 +37,8 @@
   let projects = $state<Project[]>([]);
   let projectLines = $state<ProjectService[]>([]);
   let proposals = $state<ProposalRow[]>([]);
+  let prospects = $state<Prospect[]>([]);
+  let prospectAudits = $state<AuditRow[]>([]);
   let loaded = $state(false);
   let stale = $state(false);
   let loadError = $state("");
@@ -68,6 +70,12 @@
     if (h === "/reports/template") return { page: "report-template" as const };
     const r = h.match(/^\/reports\/([^/]+)$/);
     if (r) return UUID.test(r[1]!) ? { page: "report" as const, id: r[1]! } : { page: "notfound" as const };
+    if (h === "/prospects") return { page: "prospects" as const };
+    if (h === "/prospects/settings") return { page: "prospect-settings" as const };
+    const pr = h.match(/^\/prospects\/([^/]+)$/);
+    if (pr) return UUID.test(pr[1]!) ? { page: "prospect" as const, id: pr[1]! } : { page: "notfound" as const };
+    const ad = h.match(/^\/audits\/([^/]+)$/);
+    if (ad) return UUID.test(ad[1]!) ? { page: "audit" as const, id: ad[1]! } : { page: "notfound" as const };
     const c = h.match(/^\/clients\/([^/]+)$/);
     if (c) return UUID.test(c[1]!) ? { page: "client" as const, id: c[1]! } : { page: "notfound" as const };
     const p = h.match(/^\/projects\/([^/]+)$/);
@@ -82,6 +90,7 @@
     return quotes.filter((q) => !q.archived_at && ids.has(q.lead_id));
   });
   const newCount = $derived(activeLeads.filter((l) => l.status === "new").length);
+  const newProspects = $derived(prospects.filter((p) => p.status === "new" && !p.archived_at).length);
 
   $effect(() => {
     // Every history entry carries a number, so a leave that is turned down can
@@ -131,8 +140,8 @@
   async function refresh() {
     stale = true;
     try {
-      [leads, quotes, clients, clientLines, projects, projectLines, catalog.categories, catalog.services, proposals] = await Promise.all([
-        db.leads(), db.quotes(), db.clients(), db.allClientServices(), db.projects(), db.allProjectServices(), db.categories(), db.services(), db.proposals(),
+      [leads, quotes, clients, clientLines, projects, projectLines, catalog.categories, catalog.services, proposals, prospects, prospectAudits] = await Promise.all([
+        db.leads(), db.quotes(), db.clients(), db.allClientServices(), db.projects(), db.allProjectServices(), db.categories(), db.services(), db.proposals(), db.prospects(), db.audits(),
       ]);
       loaded = true;
       loadError = "";
@@ -160,9 +169,10 @@
     });
     // Quotes you send: a client opening, accepting or asking for changes refreshes the lists.
     const unsubQuotes = db.subscribeProposals(() => { clearTimeout(pending); pending = setTimeout(refresh, 600); });
+    const unsubProspecting = db.subscribeProspecting(() => { clearTimeout(pending); pending = setTimeout(refresh, 400); });
     live = true;
     const stopIdle = watchIdle(IDLE_MS, () => db.signOut());
-    return () => { unsub(); unsubQuotes(); stopIdle(); clearTimeout(pending); live = false; };
+    return () => { unsub(); unsubQuotes(); unsubProspecting(); stopIdle(); clearTimeout(pending); live = false; };
   });
 
   // The browser tab names the page you are on.
@@ -186,6 +196,10 @@
       case "report": return "Report";
       case "report-settings": return "Report settings";
       case "report-template": return "Report template";
+      case "prospects": return "Prospects";
+      case "prospect": { const p = prospects.find((x) => x.id === route.id); return p ? p.business_name : "Prospect"; }
+      case "audit": return "Audit";
+      case "prospect-settings": return "Audit settings";
       default: return "Page not found";
     }
   });
@@ -220,6 +234,7 @@
     { group: "Sales", items: [
       { href: "#/leads", label: "Leads", match: ["leads", "lead", "board"], icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19v-1a4 4 0 0 0-3-3.87M15.5 4.13a3 3 0 0 1 0 5.74" },
       { href: "#/quotes", label: "Quotes", match: ["quotes", "quote", "quote-templates", "quote-settings", "payments"], icon: "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7M9 8h3" },
+      { href: "#/prospects", label: "Prospects", match: ["prospects", "prospect", "prospect-settings", "audit"], icon: "M12 3l7 3v5c0 4.7-3.1 7.8-7 9-3.9-1.2-7-4.3-7-9V6zM9 12l2 2 4-4" },
     ] },
     { group: "Client work", items: [
       { href: "#/clients", label: "Clients", match: ["clients", "client"], icon: "M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01" },
@@ -299,6 +314,7 @@
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={n.icon} /></svg>
                 <span class="label">{n.label}</span>
                 {#if n.label === "Leads" && newCount}<span class="badge num">{newCount}<span class="sr-only"> new</span></span>{/if}
+                {#if n.label === "Prospects" && newProspects}<span class="badge num">{newProspects}<span class="sr-only"> new</span></span>{/if}
               </a>
             {/each}
           </div>
@@ -369,6 +385,14 @@
         {#await import("./pages/ReportSettings.svelte")}{@render pageLoading()}{:then { default: ReportSettings }}<ReportSettings {clients} />{:catch}{@render pageFailed()}{/await}
       {:else if route.page === "report-template"}
         {#await import("./pages/ReportTemplate.svelte")}{@render pageLoading()}{:then { default: ReportTemplate }}<ReportTemplate />{:catch}{@render pageFailed()}{/await}
+      {:else if route.page === "prospects"}
+        {#await import("./pages/Prospects.svelte")}{@render pageLoading()}{:then { default: Prospects }}<Prospects {prospects} audits={prospectAudits} onchanged={refresh} />{:catch}{@render pageFailed()}{/await}
+      {:else if route.page === "prospect"}
+        {#await import("./pages/ProspectDetail.svelte")}{@render pageLoading()}{:then { default: ProspectDetail }}<ProspectDetail id={route.id} {version} onchanged={refresh} />{:catch}{@render pageFailed()}{/await}
+      {:else if route.page === "audit"}
+        {#await import("./pages/AuditDetail.svelte")}{@render pageLoading()}{:then { default: AuditDetail }}<AuditDetail id={route.id} {version} onchanged={refresh} />{:catch}{@render pageFailed()}{/await}
+      {:else if route.page === "prospect-settings"}
+        {#await import("./pages/AuditSettings.svelte")}{@render pageLoading()}{:then { default: AuditSettings }}<AuditSettings />{:catch}{@render pageFailed()}{/await}
       {:else}
         <div class="empty"><h1 class="nf" use:pageHeading>Page not found</h1><p>That address doesn't match a page. <a href="#/">Go to the overview</a></p></div>
       {/if}
