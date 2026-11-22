@@ -10,9 +10,11 @@ export class BadRequest extends Error {}
 
 // scan/rescan: run (or re-run) the scan. rebuild: re-render the PDF. send_now:
 // send the report. copy: email Henry a copy (any done audit, changes nothing).
-// cancel: stop a queued or running scan.
-export type Action = "scan" | "rescan" | "rebuild" | "send_now" | "copy" | "cancel";
-export const ACTIONS: readonly Action[] = ["scan", "rescan", "rebuild", "send_now", "copy", "cancel"];
+// cancel: stop a queued or running scan. scan_pending: drain the queue (one run
+// scans every queued audit), for a bulk "Scan now" or auto-scan after discovery;
+// it takes no audit_id because the queue was just filled by scan_prospects().
+export type Action = "scan" | "rescan" | "rebuild" | "send_now" | "copy" | "cancel" | "scan_pending";
+export const ACTIONS: readonly Action[] = ["scan", "rescan", "rebuild", "send_now", "copy", "cancel", "scan_pending"];
 
 export type AuditState = {
   id: string;
@@ -20,12 +22,17 @@ export type AuditState = {
   delivery: "none" | "sending" | "sent" | "failed";
 };
 
-/** { action, audit_id } from the dashboard, or BadRequest. */
+/** { action, audit_id } from the dashboard, or BadRequest. scan_pending is the
+ *  one action that carries no audit_id: it drains the whole queue. */
 export function parseAction(body: unknown): { action: Action; auditId: string } {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new BadRequest("body");
   const b = body as Record<string, unknown>;
   if (Object.keys(b).some((k) => k !== "action" && k !== "audit_id")) throw new BadRequest("body");
   if (!ACTIONS.includes(b.action as Action)) throw new BadRequest("action");
+  if (b.action === "scan_pending") {
+    if (b.audit_id !== undefined) throw new BadRequest("audit_id"); // a drain takes no id
+    return { action: "scan_pending", auditId: "" };
+  }
   if (typeof b.audit_id !== "string" || !UUID.test(b.audit_id)) throw new BadRequest("audit_id");
   return { action: b.action as Action, auditId: b.audit_id.toLowerCase() };
 }
@@ -44,10 +51,12 @@ export type Workflow = "audit-scan.yml" | "audit-send.yml" | "audit-render.yml";
 
 /** The GitHub call that starts a workflow for one audit. force (render only)
  *  renders even when up to date; copy (send only) emails Henry a copy. */
-export function dispatchRequest(repo: string, workflow: Workflow, id: string, token: string, force = false, copy = false) {
+export function dispatchRequest(repo: string, workflow: Workflow, id: string | null, token: string, force = false, copy = false) {
   if (!REPO.test(repo)) throw new Error("AUDIT_REPO must look like owner/name");
-  if (!UUID.test(id)) throw new Error("bad audit id");
-  const inputs = force && workflow === "audit-render.yml" ? { audit_id: id, force: "true" }
+  if (id !== null && !UUID.test(id)) throw new Error("bad audit id");
+  // id null = drain: the runner scans every queued audit (no single target).
+  const inputs = id === null ? {}
+    : force && workflow === "audit-render.yml" ? { audit_id: id, force: "true" }
     : copy && workflow === "audit-send.yml" ? { audit_id: id, copy: "true" }
     : { audit_id: id };
   return {

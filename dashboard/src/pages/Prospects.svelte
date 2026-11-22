@@ -69,6 +69,49 @@
 
   const openProspect = (id: string) => (location.hash = `#/prospects/${id}`);
 
+  // --- Bulk select + scan now ---
+  // Only prospects with a website can be scanned, so only those are selectable.
+  let selected = $state(new Set<string>());
+  let scanning = $state(false);
+  const scannable = $derived(rows.filter((p) => !!p.website));
+  const selCount = $derived([...selected].filter((id) => scannable.some((p) => p.id === id)).length);
+  const allSelected = $derived(scannable.length > 0 && scannable.every((p) => selected.has(p.id)));
+  const someSelected = $derived(scannable.some((p) => selected.has(p.id)));
+
+  function toggle(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    selected = next;
+  }
+  function toggleAll() {
+    const next = new Set(selected);
+    if (allSelected) for (const p of scannable) next.delete(p.id);
+    else for (const p of scannable) next.add(p.id);
+    selected = next;
+  }
+  const clearSelection = () => (selected = new Set());
+
+  async function scanSelected() {
+    const ids = [...selected].filter((id) => scannable.some((p) => p.id === id));
+    if (!ids.length || scanning) return;
+    scanning = true;
+    try {
+      const n = await db.scanProspects(ids, true);
+      if (n > 0) {
+        await db.scanQueue();
+        toast.success(`Scanning ${n} ${n === 1 ? "prospect" : "prospects"}. Grades fill in here as each one finishes.`);
+      } else {
+        toast.info("Already scanning", "The selected prospects each already have a scan in flight.");
+      }
+      selected = new Set();
+      onchanged?.();
+    } catch (e) {
+      toast.error(messageOf(e, "Couldn't start the scans."));
+    } finally {
+      scanning = false;
+    }
+  }
+
   // --- Add a prospect by hand ---
   let adding = $state(false);
   let saving = $state(false);
@@ -99,6 +142,7 @@
   // --- Find businesses (Yelp / Google Places) ---
   let discovering = $state(false);
   let dBusy = $state(false);
+  let autoScan = $state(true);
   let dForm = $state<DiscoverParams>({ term: "", location: "", limit: 10, source: "yelp" });
   async function runDiscover(e: SubmitEvent) {
     e.preventDefault();
@@ -108,7 +152,23 @@
       const { found, added } = await db.discoverProspects({ ...dForm, term: dForm.term.trim(), location: dForm.location.trim() });
       discovering = false;
       onchanged?.();
-      toast.success(added ? `Added ${added} new ${added === 1 ? "business" : "businesses"} (${found} found).` : `No new businesses (all ${found} were already on your list).`);
+      // Auto-scan the fresh finds: scanProspects(null) queues a passive scan for
+      // every prospect with a website that hasn't been audited yet, then one
+      // dispatch drains the queue. Scanning is a bonus, so a hiccup here never
+      // turns the discovery itself into an error.
+      let scanMsg = "";
+      if (added > 0 && autoScan) {
+        try {
+          const n = await db.scanProspects(null, false);
+          if (n > 0) { await db.scanQueue(); scanMsg = ` Scanning ${n} now.`; }
+        } catch {
+          scanMsg = " You can scan them from the list.";
+        }
+        onchanged?.();
+      }
+      toast.success(added
+        ? `Added ${added} new ${added === 1 ? "business" : "businesses"} (${found} found).${scanMsg}`
+        : `No new businesses (all ${found} were already on your list).`);
     } catch (err) {
       toast.error(messageOf(err, "Couldn't run discovery."));
     } finally {
@@ -194,16 +254,36 @@
   <div class="phonesort"><SortSelect id="prospect-sort" columns={COLUMNS} {sort} onchange={(s) => (sort = s)} /></div>
 </div>
 
+{#if selCount > 0}
+  <div class="selbar" role="region" aria-label="Selected prospects">
+    <span class="selcount">{selCount} selected</span>
+    <div class="selacts">
+      <button class="btn ghost sm" onclick={clearSelection}>Clear</button>
+      <button class="btn primary sm" disabled={scanning} onclick={scanSelected}>{scanning ? "Starting…" : `Scan ${selCount} now`}</button>
+    </div>
+  </div>
+{/if}
+
 <section class="card flush">
   {#if rows.length}
     <div class="scroll">
       <table class="table cards">
         <caption class="sr-only">Prospects, sorted by {COLUMNS.find((c) => c.key === sort.key)!.label.toLowerCase()}. Column headings sort the table.</caption>
-        <thead><tr>{#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={sortBy} right={c.right} hide={c.hide ?? ""} />{/each}</tr></thead>
+        <thead><tr>
+          <th class="c-check" scope="col">
+            <input type="checkbox" class="cbx" aria-label="Select every prospect with a website" checked={allSelected} indeterminate={someSelected && !allSelected} disabled={!scannable.length} onchange={toggleAll} />
+          </th>
+          {#each COLUMNS as c (c.key)}<SortTh key={c.key} label={c.label} {sort} onsort={sortBy} right={c.right} hide={c.hide ?? ""} />{/each}
+        </tr></thead>
         <tbody>
           {#each rows as p (p.id)}
             {@const a = latest.m.get(p.id)}
-            <tr class="link" onclick={() => openProspect(p.id)}>
+            <tr class="link" class:sel={selected.has(p.id)} onclick={() => openProspect(p.id)}>
+              <td class="c-check" onclick={(e) => e.stopPropagation()}>
+                {#if p.website}
+                  <input type="checkbox" class="cbx" aria-label={`Select ${p.business_name}`} checked={selected.has(p.id)} onchange={() => toggle(p.id)} />
+                {/if}
+              </td>
               <td class="c-main">
                 <a class="who" href="#/prospects/{p.id}" onclick={(e) => e.stopPropagation()}>
                   <strong>{p.business_name}</strong>
@@ -266,7 +346,7 @@
 
 <Modal open={discovering} title="Find local businesses" onclose={() => (discovering = false)}>
   <form class="stack" onsubmit={runDiscover}>
-    <p class="muted hint">Searches a business directory and adds the matches as prospects. Nothing is scanned yet; you pick which to audit.</p>
+    <p class="muted hint">Searches a business directory and adds the matches as prospects. With auto-scan on, each new one with a website gets a passive external audit right away.</p>
     <div class="two">
       <Field id="d-term" label="What" required><input id="d-term" class="input" bind:value={dForm.term} placeholder="dentist, law firm, HVAC…" required /></Field>
       <Field id="d-loc" label="Where" required><input id="d-loc" class="input" bind:value={dForm.location} placeholder="Pasadena, CA" required /></Field>
@@ -275,6 +355,7 @@
       <Field id="d-src" label="Source"><select id="d-src" class="input" bind:value={dForm.source}><option value="yelp">Yelp</option><option value="google_places">Google Places</option></select></Field>
       <Field id="d-lim" label="How many"><input id="d-lim" class="input" type="number" min="1" max="50" bind:value={dForm.limit} /></Field>
     </div>
+    <label class="chk"><input type="checkbox" bind:checked={autoScan} /> <span>Scan each new business automatically <span class="muted">(passive external check, no permission needed)</span></span></label>
     <div class="actions">
       <button type="button" class="btn" onclick={() => (discovering = false)}>Cancel</button>
       <button class="btn primary" disabled={dBusy || !dForm.term.trim() || !dForm.location.trim()}>{dBusy ? "Searching…" : "Find businesses"}</button>
@@ -289,6 +370,15 @@
   .scroll { overflow-x: auto; }
   .small { font-size: var(--fs-xs); }
   .bad { color: #ff6b6b; }
+  .selbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; padding: 8px 10px 8px 14px; border: 1px solid var(--line-2); border-radius: var(--radius-md); background: var(--surface-2); }
+  .selcount { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+  .selacts { display: flex; gap: 8px; }
+  .c-check { width: 36px; text-align: center; padding-right: 0; }
+  .cbx { width: 16px; height: 16px; cursor: pointer; accent-color: var(--lime); vertical-align: middle; margin: 0; }
+  .cbx:disabled { cursor: default; opacity: 0.35; }
+  tr.sel { background: color-mix(in srgb, var(--lime) 8%, transparent); }
+  .chk { display: flex; align-items: flex-start; gap: 8px; font-size: var(--fs-sm); cursor: pointer; line-height: 1.45; }
+  .chk input { margin: 2px 0 0; accent-color: var(--lime); width: 15px; height: 15px; flex: none; }
   .emptyacts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .stack { display: flex; flex-direction: column; gap: 14px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -303,5 +393,10 @@
   @media (max-width: 640px) {
     .two { grid-template-columns: 1fr; }
     .table td.c-count { display: none; }
+    /* On the card layout the checkbox floats in the top-right corner, out of the
+       grid flow, so it never pushes the business name onto a line of its own. */
+    .table.cards tbody tr { position: relative; }
+    .table.cards td.c-check { position: absolute; top: 12px; right: 10px; width: auto; }
+    .table.cards td.c-main { padding-right: 26px; }
   }
 </style>

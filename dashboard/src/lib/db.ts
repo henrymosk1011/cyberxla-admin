@@ -848,6 +848,27 @@ const db: Db = {
     return { started: (data as { started: "scan" | "render" | "send" | "copy" | null }).started };
   },
 
+  async scanProspects(ids, rescan) {
+    const { data, error } = await sb.rpc("scan_prospects", { p_ids: ids, p_rescan: rescan });
+    fail(auditError(error));
+    return Array.isArray(data) ? data.length : data ? 1 : 0;
+  },
+
+  async scanQueue() {
+    const { error } = await sb.functions.invoke("audit-action", { body: { action: "scan_pending" } });
+    if (error) {
+      let message = "Couldn't start the scans. Try again.";
+      if (error instanceof FunctionsHttpError) {
+        try {
+          message = String((await error.context.json()).error ?? message);
+        } catch {
+          // keep the generic message
+        }
+      }
+      throw new Error(message);
+    }
+  },
+
   async authorizations(prospectId) {
     const { data, error } = await sb.from("audit_authorizations").select("*").eq("prospect_id", prospectId).order("created_at", { ascending: false });
     fail(error);
