@@ -90,7 +90,7 @@ function asUser(authorization: string) {
 // The scanner is hosted in the patch-reports repo; override with AUDIT_REPO.
 const DEFAULT_REPO = "henrymosk1011/cyberxla-patch-reports";
 
-async function dispatch(workflow: "audit-scan.yml" | "audit-send.yml" | "audit-render.yml", id: string, force = false, copy = false) {
+async function dispatch(workflow: "audit-scan.yml" | "audit-send.yml" | "audit-render.yml", id: string | null, force = false, copy = false) {
   const { url, init } = dispatchRequest(Deno.env.get("AUDIT_REPO") ?? DEFAULT_REPO, workflow, id, env("GH_ACTIONS_TOKEN"), force, copy);
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) });
   if (res.status !== 204) {
@@ -122,6 +122,14 @@ Deno.serve(async (req) => {
   const db = asUser(authorization);
   try {
     if (!(await db.isAdmin())) return reply(403, { error: "Only an admin who finished MFA can do this." }, headers);
+
+    // Drain: scan every queued audit in one run. The dashboard has just filled
+    // the queue with scan_prospects(); there is no single audit to look up.
+    if (action === "scan_pending") {
+      await dispatch("audit-scan.yml", null);
+      return reply(200, { ok: true, started: "scan" }, headers);
+    }
+
     const a = await db.audit(auditId);
     if (!a) return reply(404, { error: "Audit not found." }, headers);
 

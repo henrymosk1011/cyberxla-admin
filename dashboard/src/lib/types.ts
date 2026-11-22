@@ -238,6 +238,11 @@ export interface Db {
   startAudit(prospectId: string, kind: AuditKind, isTest: boolean): Promise<string>;
   /** Start the scan, re-render the PDFs, send now, or send me a copy (the audit-action Edge Function). */
   auditAction(id: string, action: AuditAction): Promise<{ started: "scan" | "render" | "send" | "copy" | null }>;
+  /** Queue passive scans for many prospects at once; returns how many were queued. With ids null,
+   *  every eligible prospect that has never been audited; rescan re-queues even ones already done. */
+  scanProspects(ids: string[] | null, rescan: boolean): Promise<number>;
+  /** Dispatch one scan run that drains the whole queue (call after scanProspects). */
+  scanQueue(): Promise<void>;
 
   authorizations(prospectId: string): Promise<AuditAuthorization[]>;
   addAuthorization(a: AuthorizationInput): Promise<void>;

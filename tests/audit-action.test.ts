@@ -4,11 +4,17 @@ import { parseAction, workflowFor, dispatchRequest, publishableKey, BadRequest, 
 
 const UUID = "11111111-1111-1111-1111-111111111111";
 
-test("parseAction accepts the known actions and a uuid", () => {
-  for (const action of ACTIONS) {
+test("parseAction accepts the per-audit actions with a uuid", () => {
+  for (const action of ACTIONS.filter((a) => a !== "scan_pending")) {
     assert.deepEqual(parseAction({ action, audit_id: UUID }), { action, auditId: UUID });
   }
   assert.deepEqual(parseAction({ action: "scan", audit_id: UUID.toUpperCase() }).auditId, UUID);
+});
+
+test("parseAction: scan_pending (the drain) takes no audit_id", () => {
+  assert.deepEqual(parseAction({ action: "scan_pending" }), { action: "scan_pending", auditId: "" });
+  // an id on a drain is a mistake, not silently ignored
+  assert.throws(() => parseAction({ action: "scan_pending", audit_id: UUID }), BadRequest);
 });
 
 test("parseAction rejects junk", () => {
@@ -32,6 +38,10 @@ test("dispatchRequest builds a valid GitHub workflow dispatch", () => {
   assert.equal(init.method, "POST");
   assert.deepEqual(JSON.parse(init.body as string), { ref: "main", inputs: { audit_id: UUID } });
   assert.match((init.headers as Record<string, string>).Authorization, /^Bearer tok$/);
+});
+
+test("dispatchRequest with a null id drains (no audit_id input)", () => {
+  assert.deepEqual(JSON.parse(dispatchRequest("a/b", "audit-scan.yml", null, "t").init.body as string), { ref: "main", inputs: {} });
 });
 
 test("dispatchRequest passes force for render and copy for send", () => {

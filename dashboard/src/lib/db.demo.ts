@@ -986,6 +986,24 @@ const db: Db = {
     if (action === "cancel") { if (a.scan_status === "queued" || a.scan_status === "running") { a.scan_status = "cancelled"; prospectingChanged(); } return { started: null }; }
     return { started: null };
   },
+  scanProspects: async (ids, rescan) => {
+    const targets = prospects.filter((p) => !p.archived_at && p.website
+      && (ids === null || ids.includes(p.id))
+      && !audits.some((a) => a.prospect_id === p.id && (a.scan_status === "queued" || a.scan_status === "running"))
+      && (rescan || !audits.some((a) => a.prospect_id === p.id)));
+    const t = new Date().toISOString();
+    for (const p of targets) {
+      const id = uuid();
+      audits.unshift({ id, created_at: t, updated_at: t, prospect_id: p.id, kind: "passive", is_test: false, scan_status: "queued", target_url: p.website ?? null, target_domain: p.domain ?? null, grade: null, score: null, summary: null, scanner_version: null, started_at: null, finished_at: null, scan_error: null, attempts: 0, authorization_id: null, content_version: 1, rendered_version: 0, rendered_at: null, render_error: null, delivery: "none", recipients: p.email ? [p.email] : [], subject: null, sent_at: null, send_error: null, findings: [], meta: {}, email_body: null });
+      log("audits", "insert", id, null, { kind: "passive", prospect_id: p.id });
+    }
+    prospectingChanged();
+    return targets.length;
+  },
+  scanQueue: async () => {
+    for (const a of audits.filter((x) => x.scan_status === "queued")) simulateScan(a);
+    prospectingChanged();
+  },
 
   authorizations: (pid) => wait(authorizations.filter((a) => a.prospect_id === pid).sort((a, b) => b.created_at.localeCompare(a.created_at))),
   addAuthorization: async (a) => { authorizations.unshift({ id: uuid(), created_at: new Date().toISOString(), revoked_at: null, ...a }); prospectingChanged(); },
