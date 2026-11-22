@@ -300,7 +300,7 @@
   .finding.ok .f-head { color: var(--good-text); }
   .f-head { display: flex; align-items: center; gap: 8px; }
   .f-head strong { font-weight: 600; flex: 1; min-width: 0; }
-  .cat { font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .cat { font-size: var(--fs-xs); color: #ff6b6b; text-transform: uppercase; letter-spacing: 0.06em; }
   .finding p { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); }
   .finding .rec { color: var(--text); }
 
