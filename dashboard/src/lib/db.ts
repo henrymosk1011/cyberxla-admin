@@ -935,6 +935,24 @@ const db: Db = {
     return data as QuickScanResult;
   },
 
+  async saveQuickAudit(prospectId, result) {
+    // Store the quick scan as a completed passive audit, seeding the email
+    // subject and body from settings the way the full scan's put_findings does,
+    // so the lead's audit is the scan we already ran (no second scan).
+    const settings = await db.auditSettings();
+    const subject = settings.default_subject.replace(/\{business\}/g, result.domain).replace(/\{grade\}/g, result.grade ?? "");
+    const now = new Date().toISOString();
+    const { data, error } = await sb.from("audits").insert({
+      prospect_id: prospectId, kind: "passive", is_test: false, scan_status: "done",
+      grade: result.grade, score: result.score, summary: result.summary?.slice(0, 600) ?? null,
+      findings: result.findings, meta: { quick: true }, target_url: result.target, target_domain: result.domain,
+      started_at: now, finished_at: now, subject, email_body: settings.default_body,
+    }).select("id").single();
+    fail(auditError(error));
+    await sb.from("prospects").update({ status: "audited" }).eq("id", prospectId).eq("status", "new");
+    return (data as { id: string }).id;
+  },
+
   subscribeProspecting(cb) {
     const ch = sb.channel("prospecting")
       .on("postgres_changes", { event: "*", schema: "public", table: "prospects" }, () => cb())
