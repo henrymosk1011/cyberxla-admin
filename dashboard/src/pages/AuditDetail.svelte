@@ -9,6 +9,7 @@
   import LoadState from "../components/LoadState.svelte";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
   import { dateTime, shortDate } from "../lib/format.ts";
+  import { remediationFor } from "../lib/remediation.ts";
   import { FINDING_SEVERITIES, type Audit, type AuditFinding, type AuditSettings, type FindingSeverity, type Prospect, type ReportPage } from "../lib/types.ts";
 
   let { id, version, onchanged }: { id: string; version: number; onchanged?: () => void } = $props();
@@ -81,6 +82,14 @@
       await load();
     } catch (e) { toast.error(messageOf(e, "Couldn't save the email.")); }
     finally { busy = false; }
+  }
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied.");
+    } catch {
+      toast.error("Couldn't copy it. Select the text and copy it by hand.");
+    }
   }
   async function del() {
     if (!audit) return;
@@ -224,10 +233,41 @@
 {/if}
 
 {#snippet finding(f: AuditFinding)}
+  {@const fix = remediationFor(f.id)}
   <li class="finding">
     <div class="f-head"><span class="dot sev-{f.severity}" aria-hidden="true"></span><strong>{f.title}</strong><span class="cat">{f.category}</span></div>
     {#if f.detail}<p>{f.detail}</p>{/if}
-    {#if f.recommendation}<p class="rec"><span class="muted">Fix:</span> {f.recommendation}</p>{/if}
+    {#if fix}
+      <details class="fix">
+        <summary>How to fix<span class="fixmeta">{fix.effort}</span></summary>
+        <div class="fixbody">
+          <p class="fixlede">{fix.summary}</p>
+          <p class="fixwho"><span class="muted">Who does it:</span> {fix.who}</p>
+          <ol class="steps">{#each fix.steps as s, i (i)}<li>{s}</li>{/each}</ol>
+          {#if fix.snippet}
+            <div class="snip">
+              <div class="snip-head"><span class="muted">{fix.snippet.label}</span><button type="button" class="copy" onclick={() => copy(fix.snippet!.code)}>Copy</button></div>
+              <code class="snip-code">{fix.snippet.code}</code>
+            </div>
+          {/if}
+          {#if fix.providers}
+            <div class="provs">
+              <span class="provlabel muted">Exact steps for your provider</span>
+              {#each fix.providers as pv (pv.name)}
+                <details class="prov">
+                  <summary>{pv.name}</summary>
+                  <ol class="steps">{#each pv.steps as s, i (i)}<li>{s}</li>{/each}</ol>
+                </details>
+              {/each}
+            </div>
+          {/if}
+          {#if fix.verify}<p class="verify"><Icon name="check" size={13} /> <span>{fix.verify}</span></p>{/if}
+          {#if fix.learn}<p class="learnline">{#each fix.learn as l, i (l.url)}{#if i > 0} · {/if}<a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a>{/each}</p>{/if}
+        </div>
+      </details>
+    {:else if f.recommendation}
+      <p class="rec"><span class="muted">Fix:</span> {f.recommendation}</p>
+    {/if}
   </li>
 {/snippet}
 
@@ -263,6 +303,41 @@
   .cat { font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
   .finding p { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); }
   .finding .rec { color: var(--text); }
+
+  /* How to fix: a collapsed accordion per finding, with provider sub-steps. */
+  .fix { margin-top: 10px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--ink); }
+  .fix > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: var(--fs-sm); font-weight: 600; color: var(--text); user-select: none; border-radius: var(--radius-sm); }
+  .fix > summary::-webkit-details-marker { display: none; }
+  .fix > summary::after { content: ""; width: 7px; height: 7px; margin-left: auto; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.15s; }
+  .fix[open] > summary::after { transform: rotate(225deg); }
+  .fix > summary:hover { background: color-mix(in srgb, var(--lime) 7%, transparent); }
+  .fix > summary:focus-visible { outline: 2px solid var(--lime); outline-offset: -2px; }
+  .fixmeta { font-weight: 400; color: var(--muted); font-size: var(--fs-xs); }
+  .fixbody { padding: 2px 12px 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+  .fixlede { margin-top: 10px; font-size: var(--fs-sm); color: var(--text); }
+  .fixwho { font-size: var(--fs-xs); color: var(--text-2); margin: 0; }
+  .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); color: var(--text-2); }
+  .steps li { padding-left: 3px; }
+  .snip { border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--surface-2); overflow: hidden; }
+  .snip-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px 6px 10px; border-bottom: 1px solid var(--line); }
+  .snip-head .muted { font-size: var(--fs-xs); }
+  .snip-code { display: block; padding: 10px; font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-xs); line-height: 1.5; color: var(--lime); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .copy { flex: none; border: 1px solid var(--line-2); background: var(--ink); color: var(--text); border-radius: var(--radius-sm); padding: 3px 10px; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
+  .copy:hover { border-color: var(--lime); color: var(--lime); }
+  .provs { display: flex; flex-direction: column; gap: 5px; }
+  .provlabel { font-size: var(--fs-xs); font-weight: 600; }
+  .prov { border: 1px solid var(--line); border-radius: var(--radius-sm); }
+  .prov > summary { cursor: pointer; list-style: none; display: flex; align-items: center; padding: 7px 10px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-2); }
+  .prov > summary::-webkit-details-marker { display: none; }
+  .prov > summary::after { content: ""; width: 6px; height: 6px; margin-left: auto; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.15s; }
+  .prov[open] > summary::after { transform: rotate(225deg); }
+  .prov > summary:hover { color: var(--text); }
+  .prov > summary:focus-visible { outline: 2px solid var(--lime); outline-offset: -2px; }
+  .prov .steps { padding: 0 12px 10px 30px; font-size: var(--fs-xs); }
+  .verify { display: flex; gap: 7px; align-items: flex-start; margin: 0; font-size: var(--fs-xs); color: var(--good-text); background: color-mix(in srgb, var(--good) 8%, transparent); border: 1px solid color-mix(in srgb, var(--good) 24%, var(--line)); border-radius: var(--radius-sm); padding: 8px 10px; }
+  .verify :global(svg) { flex: none; margin-top: 1px; }
+  .learnline { font-size: var(--fs-xs); margin: 0; }
+  .learnline a { color: var(--lime); }
   .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--muted); }
   .dot.sev-critical { background: #ff6b6b; }
   .dot.sev-high { background: #ff8f5a; }
