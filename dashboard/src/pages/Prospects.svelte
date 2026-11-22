@@ -301,15 +301,15 @@
   <div class="phonesort"><SortSelect id="prospect-sort" columns={COLUMNS} {sort} onchange={(s) => (sort = s)} /></div>
 </div>
 
-{#if selCount > 0}
-  <div class="selbar" role="region" aria-label="Selected prospects">
-    <span class="selcount">{selCount} selected</span>
-    <div class="selacts">
-      <button class="btn ghost sm" onclick={clearSelection}>Clear</button>
-      <button class="btn primary sm" disabled={scanning} onclick={scanSelected}>{scanning ? "Starting…" : `Scan ${selCount} now`}</button>
-    </div>
+<!-- Always in the layout (its space is reserved) so the list never shifts; just
+     hidden when nothing is selected. -->
+<div class="selbar" class:empty={selCount === 0} role="region" aria-label="Selected prospects" aria-hidden={selCount === 0}>
+  <span class="selcount">{selCount} selected</span>
+  <div class="selacts">
+    <button class="btn ghost sm" onclick={clearSelection}>Clear</button>
+    <button class="btn primary sm" disabled={scanning || selCount === 0} onclick={scanSelected}>{scanning ? "Starting…" : `Scan ${selCount} now`}</button>
   </div>
-{/if}
+</div>
 
 <section class="card flush">
   {#if rows.length}
@@ -459,6 +459,8 @@
   .small { font-size: var(--fs-xs); }
   .bad { color: #ff6b6b; }
   .selbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; padding: 8px 10px 8px 14px; border: 1px solid var(--line-2); border-radius: var(--radius-md); background: var(--surface-2); }
+  /* Keep the row's space reserved when nothing is selected, so the list below never moves. */
+  .selbar.empty { visibility: hidden; }
   .selcount { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
   .selacts { display: flex; gap: 8px; }
   .c-check { width: 36px; text-align: center; padding-right: 0; }
