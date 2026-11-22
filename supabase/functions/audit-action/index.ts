@@ -87,7 +87,7 @@ function asUser(authorization: string) {
   };
 }
 
-async function dispatch(workflow: "scan.yml" | "send.yml" | "render.yml", id: string, force = false, copy = false) {
+async function dispatch(workflow: "audit-scan.yml" | "audit-send.yml" | "audit-render.yml", id: string, force = false, copy = false) {
   const { url, init } = dispatchRequest(env("AUDIT_REPO"), workflow, id, env("GH_ACTIONS_TOKEN"), force, copy);
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) });
   if (res.status !== 204) {
@@ -96,7 +96,6 @@ async function dispatch(workflow: "scan.yml" | "send.yml" | "render.yml", id: st
   }
 }
 
-const started = (w: "scan.yml" | "send.yml" | "render.yml") => (w === "scan.yml" ? "scan" : w === "send.yml" ? "send" : "render");
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -132,12 +131,12 @@ Deno.serve(async (req) => {
     if (action === "send_now" || action === "copy") {
       if (a.scan_status !== "done") return reply(409, { error: "Run the scan first: there's nothing to send yet." }, headers);
       if (action === "send_now" && a.delivery !== "none" && a.delivery !== "failed") return reply(409, { error: `This report is already ${a.delivery}.` }, headers);
-      await dispatch("send.yml", auditId, false, action === "copy");
+      await dispatch("audit-send.yml", auditId, false, action === "copy");
       return reply(200, { ok: true, started: "send" }, headers);
     }
 
     if (action === "rebuild") {
-      await dispatch("render.yml", auditId, true);
+      await dispatch("audit-render.yml", auditId, true);
       return reply(200, { ok: true, started: "render" }, headers);
     }
 
@@ -150,7 +149,7 @@ Deno.serve(async (req) => {
     } else if (a.scan_status !== "queued") {
       return reply(409, { error: "This audit has already run. Use Re-scan to run it again." }, headers);
     }
-    await dispatch("scan.yml", auditId);
+    await dispatch("audit-scan.yml", auditId);
     return reply(200, { ok: true, started: "scan" }, headers);
   } catch (e) {
     const err = e as Error & { status?: number; github?: boolean; dbMessage?: string };

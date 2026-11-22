@@ -32,21 +32,23 @@ export function parseAction(body: unknown): { action: Action; auditId: string } 
 
 /** Which workflow an action dispatches, or null when the action is only a database change. */
 export function workflowFor(action: Action): Workflow | null {
-  if (action === "scan" || action === "rescan") return "scan.yml";
-  if (action === "rebuild") return "render.yml";
-  if (action === "send_now" || action === "copy") return "send.yml";
+  if (action === "scan" || action === "rescan") return "audit-scan.yml";
+  if (action === "rebuild") return "audit-render.yml";
+  if (action === "send_now" || action === "copy") return "audit-send.yml";
   return null; // cancel
 }
 
-export type Workflow = "scan.yml" | "send.yml" | "render.yml";
+// The audit workflows live in the patch-reports repo, so they carry an audit-
+// prefix to avoid colliding with its own send.yml / render.yml.
+export type Workflow = "audit-scan.yml" | "audit-send.yml" | "audit-render.yml";
 
 /** The GitHub call that starts a workflow for one audit. force (render only)
  *  renders even when up to date; copy (send only) emails Henry a copy. */
 export function dispatchRequest(repo: string, workflow: Workflow, id: string, token: string, force = false, copy = false) {
   if (!REPO.test(repo)) throw new Error("AUDIT_REPO must look like owner/name");
   if (!UUID.test(id)) throw new Error("bad audit id");
-  const inputs = force && workflow === "render.yml" ? { audit_id: id, force: "true" }
-    : copy && workflow === "send.yml" ? { audit_id: id, copy: "true" }
+  const inputs = force && workflow === "audit-render.yml" ? { audit_id: id, force: "true" }
+    : copy && workflow === "audit-send.yml" ? { audit_id: id, copy: "true" }
     : { audit_id: id };
   return {
     url: `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`,

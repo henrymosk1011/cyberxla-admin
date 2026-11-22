@@ -18,29 +18,29 @@ test("parseAction rejects junk", () => {
 });
 
 test("workflowFor maps actions to workflows (cancel is database only)", () => {
-  assert.equal(workflowFor("scan"), "scan.yml");
-  assert.equal(workflowFor("rescan"), "scan.yml");
-  assert.equal(workflowFor("rebuild"), "render.yml");
-  assert.equal(workflowFor("send_now"), "send.yml");
-  assert.equal(workflowFor("copy"), "send.yml");
+  assert.equal(workflowFor("scan"), "audit-scan.yml");
+  assert.equal(workflowFor("rescan"), "audit-scan.yml");
+  assert.equal(workflowFor("rebuild"), "audit-render.yml");
+  assert.equal(workflowFor("send_now"), "audit-send.yml");
+  assert.equal(workflowFor("copy"), "audit-send.yml");
   assert.equal(workflowFor("cancel"), null);
 });
 
 test("dispatchRequest builds a valid GitHub workflow dispatch", () => {
-  const { url, init } = dispatchRequest("acme/audits", "scan.yml", UUID, "tok");
-  assert.equal(url, "https://api.github.com/repos/acme/audits/actions/workflows/scan.yml/dispatches");
+  const { url, init } = dispatchRequest("acme/audits", "audit-scan.yml", UUID, "tok");
+  assert.equal(url, "https://api.github.com/repos/acme/audits/actions/workflows/audit-scan.yml/dispatches");
   assert.equal(init.method, "POST");
   assert.deepEqual(JSON.parse(init.body as string), { ref: "main", inputs: { audit_id: UUID } });
   assert.match((init.headers as Record<string, string>).Authorization, /^Bearer tok$/);
 });
 
 test("dispatchRequest passes force for render and copy for send", () => {
-  assert.deepEqual(JSON.parse(dispatchRequest("a/b", "render.yml", UUID, "t", true).init.body as string).inputs, { audit_id: UUID, force: "true" });
-  assert.deepEqual(JSON.parse(dispatchRequest("a/b", "send.yml", UUID, "t", false, true).init.body as string).inputs, { audit_id: UUID, copy: "true" });
+  assert.deepEqual(JSON.parse(dispatchRequest("a/b", "audit-render.yml", UUID, "t", true).init.body as string).inputs, { audit_id: UUID, force: "true" });
+  assert.deepEqual(JSON.parse(dispatchRequest("a/b", "audit-send.yml", UUID, "t", false, true).init.body as string).inputs, { audit_id: UUID, copy: "true" });
 });
 
 test("dispatchRequest rejects a bad repo", () => {
-  assert.throws(() => dispatchRequest("not-a-repo", "scan.yml", UUID, "t"), /AUDIT_REPO/);
+  assert.throws(() => dispatchRequest("not-a-repo", "audit-scan.yml", UUID, "t"), /AUDIT_REPO/);
 });
 
 test("publishableKey prefers the explicit secret, then the list, then the legacy key", () => {

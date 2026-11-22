@@ -47,6 +47,7 @@ access to any table.
 | `supabase/migrations/0021_quote_publish.sql` | Publish (link live, no email) |
 | `supabase/migrations/0022_quote_link_only.sql` | Remembers when a quote was published without an email ("Published, not emailed") |
 | `supabase/migrations/0023_prospecting.sql` | Prospecting: prospects, external security audits (passive and active), the active-audit authorization gate, audit settings, and the `audit_runner` role and its functions |
+| `supabase/migrations/0024_prospecting_runner_grant.sql` | Lets the patch-reports runner role (`report_writer`) also call the prospecting functions, since the audit scanner is hosted in that repo |
 | `supabase/functions/quote-public/` | The quote page's Accept, Request changes and Pay buttons (Turnstile, rate limits, totals checked on the server, Stripe Checkout) |
 | `supabase/functions/quote-cron/` | The scheduler's worker, woken by pg_cron: Send later, follow ups, emails to you, Stripe on or off |
 | `supabase/functions/stripe-webhook/` | Stripe's payment events, signature checked, each applied once |
