@@ -1026,6 +1026,13 @@ const db: Db = {
     prospectingChanged();
     return { found: n, added };
   },
+  quickScan: async (url) => {
+    const target = /^https?:\/\//i.test(url) ? url : "https://" + url;
+    let domain = "example.com";
+    try { domain = new URL(target).hostname.replace(/^www\./, ""); } catch { /* keep default */ }
+    const set = SCAN_SETS[1 % SCAN_SETS.length]!; // deterministic demo result
+    return { reachable: true, domain, target, grade: set.grade, score: set.score, summary: set.summary, findings: set.findings, checked_at: new Date().toISOString(), notes: ["Quick scan: certificate details are read by the full audit after you add it."] };
+  },
   subscribeProspecting: (cb) => { prospectingListeners.add(cb); return () => prospectingListeners.delete(cb); },
 };
 
