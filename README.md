@@ -48,6 +48,8 @@ access to any table.
 | `supabase/migrations/0022_quote_link_only.sql` | Remembers when a quote was published without an email ("Published, not emailed") |
 | `supabase/migrations/0023_prospecting.sql` | Prospecting: prospects, external security audits (passive and active), the active-audit authorization gate, audit settings, and the `audit_runner` role and its functions |
 | `supabase/migrations/0024_prospecting_runner_grant.sql` | Lets the patch-reports runner role (`report_writer`) also call the prospecting functions, since the audit scanner is hosted in that repo |
+| `supabase/migrations/0025_prospect_discover.sql` | `public.add_prospects()`: the admin-gated wrapper the Find businesses button adds discovered prospects through (over `prospecting.add_prospects()`) |
+| `supabase/functions/prospect-discover/` | The Prospects page's Find businesses button: searches a business directory (Apify, reusing lead-finder's `APIFY_TOKEN`) and adds what it finds |
 | `supabase/functions/quote-public/` | The quote page's Accept, Request changes and Pay buttons (Turnstile, rate limits, totals checked on the server, Stripe Checkout) |
 | `supabase/functions/quote-cron/` | The scheduler's worker, woken by pg_cron: Send later, follow ups, emails to you, Stripe on or off |
 | `supabase/functions/stripe-webhook/` | Stripe's payment events, signature checked, each applied once |
@@ -58,7 +60,7 @@ access to any table.
 | `supabase/functions/submit-quote/index.ts` | The public endpoint |
 | `supabase/functions/submit-quote/lib.ts` | Validation and pricing (catalog passed in from the database) |
 | `tests/` | Unit tests: `npm test` |
-| `scripts/bundle-function.mjs` | `npm run bundle-function` writes `dist/submit-quote.ts` (`npm run bundle-report-action` writes `dist/report-action.ts`, and the same for `bundle-quote-action`, `bundle-quote-public`, `bundle-quote-cron`, `bundle-stripe-webhook`), one file to paste into the Supabase editor |
+| `scripts/bundle-function.mjs` | `npm run bundle-function` writes `dist/submit-quote.ts` (`npm run bundle-report-action` writes `dist/report-action.ts`, and the same for `bundle-audit-action`, `bundle-prospect-discover`, `bundle-quote-action`, `bundle-quote-public`, `bundle-quote-cron`, `bundle-stripe-webhook`), one file to paste into the Supabase editor |
 
 ## One-time setup
 
@@ -324,6 +326,15 @@ patch-report pipelines and shares their safety model.
   found by a directory search (Find businesses). This repo is public, so demo
   data uses made-up names and the reserved `.example` domain; real prospect
   details live only in the database.
+- **Find businesses** searches a business directory for a term in a location
+  (say "dentists" in "Glendale, CA") and adds the results as prospects. It calls
+  the `prospect-discover` Edge Function, which checks the caller with
+  `public.is_admin()` (allowlist plus MFA, like the other dashboard functions),
+  runs the search on Apify (reusing the `APIFY_TOKEN` the lead-finder function
+  already uses, so no new directory key), and adds what it finds through
+  `public.add_prospects()`, which de-dupes on (source, source_ref). Both source
+  options (Google Places, Yelp) discover through the same proven Apify directory
+  for now, so every found prospect is recorded as `google_places`.
 - **Audits** come in two kinds. A **passive** audit only observes what is
   already public (TLS and certificate health, HTTP security headers,
   SPF/DKIM/DMARC in DNS, cookie flags, outdated front-end libraries, subdomains
@@ -345,11 +356,16 @@ patch-report pipelines and shares their safety model.
   functions in the `prospecting` schema; PDFs live in `audit_files`; every
   change is written to `audit_log`. No service-role key.
 
+The `prospect-discover` Edge Function (Find businesses) is live and needs only
+the `APIFY_TOKEN` secret, which the lead-finder function already set. It has
+"Verify JWT" off and checks the caller itself, like the other dashboard
+functions; `supabase/config.toml` says the same for the CLI.
+
 The scanner itself (the GitHub Actions runner that performs the audit, renders
-the PDF and sends it) and the `audit-action` / `prospect-discover` Edge
-Functions the dashboard calls are set up in a follow-up, the same way the
-patch-report runner is (its `audit_runner` role password and `AUDIT_DB_URL`
-secret mirror `report_writer` and `REPORTS_DB_URL` above).
+the PDF and sends it) and the `audit-action` Edge Function's GitHub side are set
+up in a follow-up, the same way the patch-report runner is (its `audit_runner`
+role password and `AUDIT_DB_URL` secret mirror `report_writer` and
+`REPORTS_DB_URL` above).
 
 ## Activity log
 
