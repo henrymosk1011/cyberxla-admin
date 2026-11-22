@@ -46,6 +46,8 @@ access to any table.
 | `supabase/migrations/0020_quote_flows.sql` | Accepting and Request changes from the quote page, the scheduler (Send later, follow ups, notices to you, expiry), and Stripe payments |
 | `supabase/migrations/0021_quote_publish.sql` | Publish (link live, no email) |
 | `supabase/migrations/0022_quote_link_only.sql` | Remembers when a quote was published without an email ("Published, not emailed") |
+| `supabase/migrations/0023_prospecting.sql` | Prospecting: prospects, external security audits (passive and active), the active-audit authorization gate, audit settings, and the `audit_runner` role and its functions |
+| `supabase/migrations/0024_prospecting_runner_grant.sql` | Lets the patch-reports runner role (`report_writer`) also call the prospecting functions, since the audit scanner is hosted in that repo |
 | `supabase/functions/quote-public/` | The quote page's Accept, Request changes and Pay buttons (Turnstile, rate limits, totals checked on the server, Stripe Checkout) |
 | `supabase/functions/quote-cron/` | The scheduler's worker, woken by pg_cron: Send later, follow ups, emails to you, Stripe on or off |
 | `supabase/functions/stripe-webhook/` | Stripe's payment events, signature checked, each applied once |
@@ -310,6 +312,44 @@ How it's kept safe:
    it arrives in your inbox. Hold another and check it stays put.
 8. **Go live** before the Monday you want clients to get them: Reports,
    Settings, Live.
+
+## Prospecting (security audits)
+
+**Prospects** (in the menu under Sales) is outbound lead generation for the
+security side: find a local business, run an external security audit on its
+public web presence, and send it a branded report. It mirrors the quote and
+patch-report pipelines and shares their safety model.
+
+- **Prospects** are businesses to audit, added by hand, imported from a CSV, or
+  found by a directory search (Find businesses). This repo is public, so demo
+  data uses made-up names and the reserved `.example` domain; real prospect
+  details live only in the database.
+- **Audits** come in two kinds. A **passive** audit only observes what is
+  already public (TLS and certificate health, HTTP security headers,
+  SPF/DKIM/DMARC in DNS, cookie flags, outdated front-end libraries, subdomains
+  from certificate-transparency logs). It is one HTTPS request plus DNS lookups,
+  so it is safe to run on any prospect. An **active** audit is intrusive testing
+  and is blocked unless a current, signed **authorization** for that exact
+  domain is on file (who authorized it, their title and email, when it was
+  signed, and when it expires). The gate is enforced in the database
+  (`guard_audit()` and `audit_authorized()`), not just the UI.
+- Each audit gets an A to F grade, a findings list mapped to cyberxLA services,
+  and a report PDF, reviewed and edited on the audit's page before it goes.
+- **Preview vs live** works like patch reports (Prospects > Settings):
+  **preview** (the starting mode) sends every audit email to henry@cyberx.la
+  only; **live** sends to the prospect, with replies to Henry. Test audits
+  always stay in preview. Two master switches (passive, active) turn each kind
+  of scan on or off for the runner.
+- Security model: the admin (allowlisted, MFA) reads and edits through RLS;
+  GitHub Actions logs in as the `audit_runner` role, which can only call the
+  functions in the `prospecting` schema; PDFs live in `audit_files`; every
+  change is written to `audit_log`. No service-role key.
+
+The scanner itself (the GitHub Actions runner that performs the audit, renders
+the PDF and sends it) and the `audit-action` / `prospect-discover` Edge
+Functions the dashboard calls are set up in a follow-up, the same way the
+patch-report runner is (its `audit_runner` role password and `AUDIT_DB_URL`
+secret mirror `report_writer` and `REPORTS_DB_URL` above).
 
 ## Activity log
 

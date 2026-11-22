@@ -4,7 +4,7 @@
 import { createClient, FunctionsHttpError, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
 import { catalog } from "./store.svelte.ts";
-import type { AuditEntry, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalRow, ProposalTemplate, ProposalVersion, ProjectService, Quote, QuoteSettings, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
+import type { Audit, AuditAuthorization, AuditEntry, AuditRow, AuditSettings, AuthorizationInput, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalRow, ProposalTemplate, ProposalVersion, ProjectService, Prospect, ProspectInput, ProspectNote, Quote, QuoteSettings, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -694,6 +694,217 @@ const db: Db = {
       .subscribe();
     return () => void sb.removeChannel(ch);
   },
+
+  // -- Prospecting: outbound security audits ---------------------------------
+  async prospects() {
+    const { data, error } = await sb.from("prospects").select("*").order("updated_at", { ascending: false }).limit(5000);
+    fail(error);
+    return (data ?? []) as Prospect[];
+  },
+
+  async prospect(id) {
+    if (!UUID.test(id)) return null;
+    const { data, error } = await sb.from("prospects").select("*").eq("id", id).maybeSingle();
+    fail(error);
+    return (data as Prospect) ?? null;
+  },
+
+  async createProspect(p) {
+    const { data, error } = await sb.from("prospects").insert(cleanProspect(p)).select("id").single();
+    if (error?.code === "23505") throw new Error("A prospect from that source is already on the list.");
+    fail(friendly(error));
+    return (data as { id: string }).id;
+  },
+
+  async updateProspect(id, patch) {
+    const { error } = await sb.from("prospects").update(cleanProspect(patch)).eq("id", id);
+    fail(friendly(error));
+  },
+
+  async deleteProspect(id) {
+    const { error, count } = await sb.from("prospects").delete({ count: "exact" }).eq("id", id);
+    if (error?.code === "23503") throw new Error("This prospect has a sent audit, which is kept for the record. Archive it instead.");
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async archiveProspect(id, archived) {
+    const { error } = await sb.from("prospects").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", id);
+    fail(error);
+  },
+
+  async importProspects(rows) {
+    if (!rows.length) return 0;
+    const { data, error } = await sb.from("prospects").insert(rows.map(cleanProspect)).select("id");
+    fail(friendly(error));
+    return (data ?? []).length;
+  },
+
+  async prospectNotes(id) {
+    const { data, error } = await sb.from("prospect_notes").select("id, prospect_id, created_at, body").eq("prospect_id", id).order("created_at", { ascending: false });
+    fail(error);
+    return (data ?? []) as ProspectNote[];
+  },
+
+  async addProspectNote(prospectId, body) {
+    const { error } = await sb.from("prospect_notes").insert({ prospect_id: prospectId, body });
+    fail(error);
+  },
+
+  async deleteProspectNote(id) {
+    const { error, count } = await sb.from("prospect_notes").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async prospectActivity(id) {
+    if (!UUID.test(id)) return [];
+    const { data, error } = await sb.from("audit_log").select("*")
+      .or(`row_id.eq.${id},new_data->>prospect_id.eq.${id},old_data->>prospect_id.eq.${id}`)
+      .order("at", { ascending: false }).limit(200);
+    fail(error);
+    return (data ?? []) as AuditEntry[];
+  },
+
+  async convertProspect(id) {
+    const p = await db.prospect(id);
+    if (!p) throw new Error("That prospect was deleted. Reload and try again.");
+    if (!p.email) throw new Error("Add a contact email to the prospect before converting it to a lead.");
+    const leadId = await db.createLead({ name: p.contact_name || p.business_name, company: p.business_name, email: p.email, phone: p.phone });
+    const { error } = await sb.from("prospects").update({ lead_id: leadId, status: "converted" }).eq("id", id);
+    fail(error);
+    return leadId;
+  },
+
+  async audits() {
+    const { data, error } = await sb.from("audits").select(AUDIT_LIST).order("created_at", { ascending: false }).limit(1000);
+    fail(error);
+    return (data ?? []).map(normAudit);
+  },
+
+  async auditsFor(prospectId) {
+    const { data, error } = await sb.from("audits").select(AUDIT_LIST).eq("prospect_id", prospectId).order("created_at", { ascending: false });
+    fail(error);
+    return (data ?? []).map(normAudit);
+  },
+
+  async audit(id) {
+    if (!UUID.test(id)) return null;
+    const { data, error } = await sb.from("audits").select(`${AUDIT_LIST}, findings, meta, email_body`).eq("id", id).maybeSingle();
+    fail(error);
+    return data ? (normAudit(data) as Audit) : null;
+  },
+
+  async auditPages(id) {
+    const { data, error } = await sb.rpc("audit_pages", { p_audit: id });
+    fail(error);
+    return ((data ?? []) as { page: number; version: number; png: string }[]).map((p) => ({ page: p.page, version: p.version, src: `data:image/png;base64,${p.png}` }));
+  },
+
+  async auditPdf(id, kind) {
+    const { data, error } = await sb.rpc("audit_file", { p_audit: id, p_kind: kind });
+    fail(error);
+    return (data as string | null) ?? null;
+  },
+
+  async auditActivity(id) {
+    if (!UUID.test(id)) return [];
+    const { data, error } = await sb.from("audit_log").select("*").eq("table_name", "audits").eq("row_id", id).order("at", { ascending: false }).limit(100);
+    fail(error);
+    return (data ?? []) as AuditEntry[];
+  },
+
+  async updateAudit(id, patch) {
+    const { error, count } = await sb.from("audits").update(patch, { count: "exact" }).eq("id", id);
+    fail(auditError(error));
+    if (count === 0) throw new Error("Nothing was saved. Reload the audit and try again.");
+  },
+
+  async deleteAudit(id) {
+    const { error, count } = await sb.from("audits").delete({ count: "exact" }).eq("id", id);
+    fail(auditError(error));
+    if (count === 0) throw new Error("Nothing was deleted. Reload and try again.");
+  },
+
+  async startAudit(prospectId, kind, isTest) {
+    const { data, error } = await sb.from("audits").insert({ prospect_id: prospectId, kind, is_test: isTest, scan_status: "queued" }).select("id").single();
+    fail(auditError(error));
+    return (data as { id: string }).id;
+  },
+
+  async auditAction(id, action) {
+    const { data, error } = await sb.functions.invoke("audit-action", { body: { action, audit_id: id } });
+    if (error) {
+      let message = "Couldn't reach the audit service. Try again.";
+      if (error instanceof FunctionsHttpError) {
+        try {
+          message = String((await error.context.json()).error ?? message);
+        } catch {
+          // keep the generic message
+        }
+      }
+      throw new Error(message);
+    }
+    return { started: (data as { started: "scan" | "render" | "send" | "copy" | null }).started };
+  },
+
+  async authorizations(prospectId) {
+    const { data, error } = await sb.from("audit_authorizations").select("*").eq("prospect_id", prospectId).order("created_at", { ascending: false });
+    fail(error);
+    return (data ?? []) as AuditAuthorization[];
+  },
+
+  async addAuthorization(a) {
+    const { error } = await sb.from("audit_authorizations").insert(a as AuthorizationInput);
+    fail(friendly(error));
+  },
+
+  async setAuthorizationRevoked(id, revoked) {
+    const { error } = await sb.from("audit_authorizations").update({ revoked_at: revoked ? new Date().toISOString() : null }).eq("id", id);
+    fail(error);
+  },
+
+  async deleteAuthorization(id) {
+    const { error, count } = await sb.from("audit_authorizations").delete({ count: "exact" }).eq("id", id);
+    fail(error);
+    if (count === 0) throw new Error("Nothing was deleted. Try signing in again.");
+  },
+
+  async auditSettings() {
+    const { data, error } = await sb.from("audit_settings").select("mode, passive_enabled, active_enabled, sender_email, sender_name, reply_to, default_subject, default_body, updated_at").eq("id", 1).single();
+    fail(error);
+    return data as AuditSettings;
+  },
+
+  async saveAuditSettings(patch) {
+    const { error, count } = await sb.from("audit_settings").update(patch, { count: "exact" }).eq("id", 1);
+    fail(friendly(error));
+    if (count === 0) throw new Error("Nothing was saved. Try signing in again.");
+  },
+
+  async discoverProspects(params) {
+    const { data, error } = await sb.functions.invoke("prospect-discover", { body: params });
+    if (error) {
+      let message = "Couldn't run discovery. Try again.";
+      if (error instanceof FunctionsHttpError) {
+        try {
+          message = String((await error.context.json()).error ?? message);
+        } catch {
+          // keep the generic message
+        }
+      }
+      throw new Error(message);
+    }
+    return data as { found: number; added: number };
+  },
+
+  subscribeProspecting(cb) {
+    const ch = sb.channel("prospecting")
+      .on("postgres_changes", { event: "*", schema: "public", table: "prospects" }, () => cb())
+      .on("postgres_changes", { event: "*", schema: "public", table: "audits" }, () => cb())
+      .subscribe();
+    return () => void sb.removeChannel(ch);
+  },
 };
 
 const PROPOSAL_LIST = "id, number, created_at, updated_at, lead_id, client_id, title, status, recipient_name, recipient_email, cc, prepared_on, valid_until, content, token, version, revising, link_only, scheduled_at, send_subject, send_note, reminders, sent_at, last_sent_at, first_viewed_at, last_viewed_at, view_count, changes_requested_at, accepted_at, accepted_version, accepted_once, accepted_monthly, archived_at";
@@ -762,6 +973,42 @@ const ownerGone = (e: { message: string; code?: string } | null) =>
 
 function normQuote(r: Record<string, unknown>): Quote {
   return { ...(r as Quote), monthly_total: Number(r.monthly_total), one_time_total: Number(r.one_time_total) };
+}
+
+const AUDIT_LIST = "id, created_at, updated_at, prospect_id, kind, is_test, scan_status, target_url, target_domain, grade, score, summary, scanner_version, started_at, finished_at, scan_error, attempts, authorization_id, content_version, rendered_version, rendered_at, render_error, delivery, recipients, subject, sent_at, send_error";
+
+function normAudit(r: Record<string, unknown>): AuditRow {
+  return { ...(r as AuditRow), score: r.score === null || r.score === undefined ? null : Number(r.score) };
+}
+
+/** Normalize a prospect before it is saved: trim and lower-case the domain and
+ *  email, make sure the website has a scheme, and derive the domain from the
+ *  website when it is missing. */
+function cleanProspect<T extends Record<string, unknown>>(p: T): T {
+  const out: Record<string, unknown> = { ...p };
+  if (typeof out.email === "string") out.email = out.email.trim().toLowerCase() || null;
+  if (typeof out.website === "string") {
+    const w = out.website.trim();
+    out.website = w ? (/^https?:\/\//i.test(w) ? w : `https://${w}`) : null;
+  }
+  if (typeof out.domain === "string") out.domain = out.domain.trim().toLowerCase() || null;
+  if ((out.domain === undefined || out.domain === null) && typeof out.website === "string") {
+    try {
+      out.domain = new URL(out.website).hostname.replace(/^www\./, "").toLowerCase() || null;
+    } catch {
+      // leave the domain unset if the website isn't a valid URL
+    }
+  }
+  return out as T;
+}
+
+/** Audit rule violations as plain sentences (the guard's own messages already are). */
+function auditError(e: { message: string; code?: string } | null) {
+  if (!e) return null;
+  if (e.code === "23514") return { message: "Something isn't valid: check the recipients (up to 10 real addresses) and the lengths." };
+  if (e.code === "23503") return { message: "That prospect was deleted. Reload and try again." };
+  if (e.code === "42501") return { message: "That change isn't allowed here. Sign in again if this keeps happening." };
+  return e; // P0403 (the guard, incl. the authorization gate) is already a plain sentence
 }
 
 export default db;
