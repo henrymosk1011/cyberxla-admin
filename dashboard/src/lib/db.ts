@@ -4,7 +4,7 @@
 import { createClient, FunctionsHttpError, type SupabaseClient } from "@supabase/supabase-js";
 import { priceQuote } from "./catalog.ts";
 import { catalog } from "./store.svelte.ts";
-import type { Audit, AuditAuthorization, AuditEntry, AuditRow, AuditSettings, AuthorizationInput, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalRow, ProposalTemplate, ProposalVersion, ProjectService, Prospect, ProspectInput, ProspectNote, Quote, QuoteSettings, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
+import type { Audit, AuditAuthorization, AuditEntry, AuditRow, AuditSettings, AuthorizationInput, AuthState, ChangeEvent, Client, ClientService, Credential, Db, Enrollment, Lead, LeadStatus, Note, PackageRow, Payment, Project, Proposal, ProposalAcceptance, ProposalEvent, ProposalRow, ProposalTemplate, ProposalVersion, ProjectService, Prospect, ProspectInput, ProspectNote, QuickScanResult, Quote, QuoteSettings, QuoteStatus, Report, ReportFile, ReportRow, ReportSettings, ServiceLine, ServiceRow, UnifiStatus, VaultConfig } from "./types.ts";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -917,6 +917,22 @@ const db: Db = {
       throw new Error(message);
     }
     return data as { found: number; added: number };
+  },
+
+  async quickScan(url) {
+    const { data, error } = await sb.functions.invoke("quick-scan", { body: { url } });
+    if (error) {
+      let message = "Couldn't run the quick scan. Try again.";
+      if (error instanceof FunctionsHttpError) {
+        try {
+          message = String((await error.context.json()).error ?? message);
+        } catch {
+          // keep the generic message
+        }
+      }
+      throw new Error(message);
+    }
+    return data as QuickScanResult;
   },
 
   subscribeProspecting(cb) {

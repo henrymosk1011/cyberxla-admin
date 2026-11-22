@@ -28,6 +28,12 @@ verify_jwt = false
 [functions.prospect-discover]
 verify_jwt = false
 
+# The Prospects page's "Quick scan" button. Checks the caller itself
+# (public.is_admin() with the caller's token), then runs a passive external scan
+# of one URL and returns a provisional grade and findings. Adds nothing.
+[functions.quick-scan]
+verify_jwt = false
+
 # The quote page's Accept, Request changes and Pay buttons. Public, so it does
 # its own checks (origin, Turnstile, rate limits, totals) like submit-quote.
 [functions.quote-public]

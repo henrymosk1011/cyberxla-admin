@@ -253,6 +253,8 @@ export interface Db {
   saveAuditSettings(patch: Partial<Omit<AuditSettings, "updated_at">>): Promise<void>;
   /** Find local businesses and queue them as prospects (the discover Edge Function). */
   discoverProspects(params: DiscoverParams): Promise<{ found: number; added: number }>;
+  /** Run a passive scan of one URL and return a provisional grade and findings, adding nothing (the quick-scan Edge Function). */
+  quickScan(url: string): Promise<QuickScanResult>;
   /** Called on any change to prospects or audits; refetch what you show. */
   subscribeProspecting(cb: () => void): () => void;
 }
@@ -822,3 +824,16 @@ export type AuditSettings = {
 };
 
 export type DiscoverParams = { term: string; location: string; limit: number; source: "yelp" | "google_places" };
+
+/** The result of a manual Quick scan of one URL (the quick-scan Edge Function). */
+export type QuickScanResult = {
+  reachable: boolean;
+  domain: string;
+  target: string;
+  grade: AuditGrade | null;
+  score: number | null;
+  summary: string | null;
+  findings: AuditFinding[];
+  checked_at: string;
+  notes: string[];
+};

@@ -11,7 +11,7 @@
   import { by, pressed, text, type Sort, type SortDir } from "../lib/sort.ts";
   import { ago, STATUS_LABEL } from "../lib/format.ts";
   import { messageOf, toast } from "../lib/toast.svelte.ts";
-  import { PROSPECT_STATUSES, OPEN_PROSPECT_STATUSES, type AuditRow, type DiscoverParams, type Prospect, type ProspectInput } from "../lib/types.ts";
+  import { PROSPECT_STATUSES, OPEN_PROSPECT_STATUSES, type AuditRow, type DiscoverParams, type Prospect, type ProspectInput, type QuickScanResult } from "../lib/types.ts";
 
   let { prospects, audits, onchanged }: { prospects: Prospect[]; audits: AuditRow[]; onchanged?: () => void } = $props();
 
@@ -176,6 +176,52 @@
     }
   }
 
+  // --- Quick scan one URL, then choose to add it ---
+  let quickOpen = $state(false);
+  let qUrl = $state("");
+  let qRunning = $state(false);
+  let qResult = $state<QuickScanResult | null>(null);
+  let qAdding = $state(false);
+  const qProblems = $derived((qResult?.findings ?? []).filter((f) => !f.passed && f.severity !== "info"));
+
+  function openQuick() { quickOpen = true; qUrl = ""; qResult = null; }
+  async function runQuickScan(e: SubmitEvent) {
+    e.preventDefault();
+    const u = qUrl.trim();
+    if (!u || qRunning) return;
+    qRunning = true;
+    qResult = null;
+    try {
+      qResult = await db.quickScan(u);
+    } catch (err) {
+      toast.error(messageOf(err, "Couldn't run the quick scan."));
+    } finally {
+      qRunning = false;
+    }
+  }
+  async function addFromQuick() {
+    if (!qResult || qAdding) return;
+    qAdding = true;
+    const r = qResult;
+    try {
+      const id = await db.createProspect({
+        business_name: r.domain, website: r.target, domain: r.domain, contact_name: null, email: null,
+        phone: null, city: null, region: null, industry: null, source: "manual", source_ref: null, notes: null,
+      });
+      // Add first, then run a full audit so the branded PDF and report exist. The
+      // prospect stays added even if the scan can't start right now.
+      try { if (await db.scanProspects([id], true)) await db.scanQueue(); } catch { /* added regardless */ }
+      quickOpen = false; qResult = null; qUrl = "";
+      onchanged?.();
+      toast.success("Added as a lead. A full audit is running.");
+      openProspect(id);
+    } catch (err) {
+      toast.error(messageOf(err, "Couldn't add it as a lead."));
+    } finally {
+      qAdding = false;
+    }
+  }
+
   // --- CSV import ---
   let fileInput: HTMLInputElement;
   async function importCsv(e: Event) {
@@ -236,6 +282,7 @@
 
 <PageHeader title="Prospects" sub="Local businesses to audit and reach out to">
   <input class="input search" type="search" placeholder="Search prospects" aria-label="Search prospects by name, domain, email, city or industry" bind:value={q} />
+  <button class="btn" onclick={openQuick}>Quick scan</button>
   <button class="btn" onclick={() => (discovering = true)}>Find businesses</button>
   <button class="btn" onclick={() => fileInput.click()}>Import CSV</button>
   <button class="btn primary" onclick={() => (adding = true)}>Add prospect</button>
@@ -363,6 +410,47 @@
   </form>
 </Modal>
 
+<Modal open={quickOpen} title="Quick scan" onclose={() => (quickOpen = false)}>
+  <form class="stack" onsubmit={runQuickScan}>
+    <p class="muted hint">Scan one website's public security posture right now. Nothing is saved until you add it as a lead.</p>
+    <Field id="q-url" label="Website" required><input id="q-url" class="input" bind:value={qUrl} placeholder="example.com" maxlength="300" required /></Field>
+    {#if !qResult && !qRunning}
+      <div class="actions"><button class="btn primary" disabled={!qUrl.trim()}>Scan</button></div>
+    {/if}
+  </form>
+
+  {#if qRunning}
+    <div class="qstate"><span class="spinner" aria-hidden="true"></span> <span>Checking the public posture…</span></div>
+  {:else if qResult}
+    {@const r = qResult}
+    {#if r.reachable && r.grade}
+      <div class="qhead">
+        <GradePill grade={r.grade} score={r.score} size="lg" />
+        <div class="qhead-txt">
+          <strong>{r.summary}</strong>
+          <span class="muted small">{r.domain} · {qProblems.length} {qProblems.length === 1 ? "issue" : "issues"}</span>
+        </div>
+      </div>
+      {#if qProblems.length}
+        <ul class="qfindings">
+          {#each qProblems as f (f.id)}
+            <li><span class="dot sev-{f.severity}" aria-hidden="true"></span><span class="qf-title">{f.title}</span><span class="qf-cat">{f.category}</span></li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="empty">No external issues found. A clean public posture.</p>
+      {/if}
+      {#if r.notes.length}<p class="qnote muted small">{r.notes[0]}</p>{/if}
+    {:else}
+      <p class="qunreach">{r.notes[0] ?? "Couldn't load the site over HTTPS."}</p>
+    {/if}
+    <div class="actions">
+      <button type="button" class="btn" onclick={() => { qResult = null; qUrl = ""; }}>Scan another</button>
+      <button type="button" class="btn primary" disabled={qAdding} onclick={addFromQuick}>{qAdding ? "Adding…" : "Add as lead"}</button>
+    </div>
+  {/if}
+</Modal>
+
 <style>
   .filters { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
   .filters .seg { flex-wrap: wrap; border-radius: var(--radius); }
@@ -384,6 +472,26 @@
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .hint { font-size: var(--fs-sm); margin: -2px 0 2px; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  /* Quick scan modal */
+  .qstate { display: flex; align-items: center; gap: 10px; padding: 20px 2px; color: var(--text-2); font-size: var(--fs-sm); }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--line-2); border-top-color: var(--lime); border-radius: 50%; animation: spin 0.7s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+  .qhead { display: flex; align-items: center; gap: 14px; padding: 14px 0 8px; }
+  .qhead-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .qhead-txt strong { font-weight: 600; }
+  .qfindings { list-style: none; display: flex; flex-direction: column; margin-top: 2px; }
+  .qfindings li { display: flex; align-items: center; gap: 9px; padding: 9px 2px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+  .qf-title { flex: 1; min-width: 0; }
+  .qf-cat { font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--muted); }
+  .dot.sev-critical { background: #ff6b6b; }
+  .dot.sev-high { background: #ff8f5a; }
+  .dot.sev-medium { background: var(--warning); }
+  .dot.sev-low { background: var(--st-contacted); }
+  .dot.sev-info { background: var(--muted); }
+  .qnote { margin-top: 12px; }
+  .qunreach { padding: 16px 0; font-size: var(--fs-sm); color: var(--text-2); }
   @media (max-width: 860px) {
     .filters { flex-direction: column; align-items: stretch; }
     .filters .seg { flex-wrap: nowrap; border-radius: var(--radius-pill); overflow-x: auto; scroll-snap-type: x proximity; }
