@@ -1033,6 +1033,15 @@ const db: Db = {
     const set = SCAN_SETS[1 % SCAN_SETS.length]!; // deterministic demo result
     return { reachable: true, domain, target, grade: set.grade, score: set.score, summary: set.summary, findings: set.findings, checked_at: new Date().toISOString(), notes: ["Quick scan: certificate details are read by the full audit after you add it."] };
   },
+  saveQuickAudit: async (prospectId, result) => {
+    const p = prospects.find((x) => x.id === prospectId);
+    const id = uuid(), t = new Date().toISOString();
+    audits.unshift({ id, created_at: t, updated_at: t, prospect_id: prospectId, kind: "passive", is_test: false, scan_status: "done", target_url: result.target, target_domain: result.domain, grade: result.grade, score: result.score, summary: result.summary, scanner_version: null, started_at: t, finished_at: t, scan_error: null, attempts: 0, authorization_id: null, content_version: 1, rendered_version: 1, rendered_at: t, render_error: null, delivery: "none", recipients: p?.email ? [p.email] : [], subject: `Security snapshot for ${p?.business_name ?? result.domain}`, sent_at: null, send_error: null, findings: result.findings, meta: { quick: true }, email_body: "" });
+    if (p && p.status === "new") { p.status = "audited"; p.updated_at = t; }
+    log("audits", "insert", id, null, { kind: "passive", prospect_id: prospectId });
+    prospectingChanged();
+    return id;
+  },
   subscribeProspecting: (cb) => { prospectingListeners.add(cb); return () => prospectingListeners.delete(cb); },
 };
 

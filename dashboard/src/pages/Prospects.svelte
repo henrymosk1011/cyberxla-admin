@@ -208,12 +208,19 @@
         business_name: r.domain, website: r.target, domain: r.domain, contact_name: null, email: null,
         phone: null, city: null, region: null, industry: null, source: "manual", source_ref: null, notes: null,
       });
-      // Add first, then run a full audit so the branded PDF and report exist. The
-      // prospect stays added even if the scan can't start right now.
-      try { if (await db.scanProspects([id], true)) await db.scanQueue(); } catch { /* added regardless */ }
+      if (r.reachable && r.grade) {
+        // Reuse the scan we just ran: save it as this lead's completed audit, then
+        // render the branded PDF from those findings. No second scan of the site.
+        const auditId = await db.saveQuickAudit(id, r);
+        try { await db.auditAction(auditId, "rebuild"); } catch { /* findings are saved; the PDF can be built later */ }
+        toast.success("Added as a lead with its scan. Building the report PDF.");
+      } else {
+        // The quick scan couldn't reach the site, so fall back to a full scan.
+        try { if (await db.scanProspects([id], true)) await db.scanQueue(); } catch { /* added regardless */ }
+        toast.success("Added as a lead. The quick scan couldn't reach it, so a full scan is running.");
+      }
       quickOpen = false; qResult = null; qUrl = "";
       onchanged?.();
-      toast.success("Added as a lead. A full audit is running.");
       openProspect(id);
     } catch (err) {
       toast.error(messageOf(err, "Couldn't add it as a lead."));

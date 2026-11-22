@@ -255,6 +255,8 @@ export interface Db {
   discoverProspects(params: DiscoverParams): Promise<{ found: number; added: number }>;
   /** Run a passive scan of one URL and return a provisional grade and findings, adding nothing (the quick-scan Edge Function). */
   quickScan(url: string): Promise<QuickScanResult>;
+  /** Save a quick-scan result as a prospect's completed audit (no re-scan); returns the audit id. */
+  saveQuickAudit(prospectId: string, result: QuickScanResult): Promise<string>;
   /** Called on any change to prospects or audits; refetch what you show. */
   subscribeProspecting(cb: () => void): () => void;
 }
