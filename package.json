@@ -7,6 +7,7 @@
     "bundle-function": "node scripts/bundle-function.mjs",
     "bundle-report-action": "node scripts/bundle-function.mjs report-action",
     "bundle-audit-action": "node scripts/bundle-function.mjs audit-action",
+    "bundle-prospect-discover": "node scripts/bundle-function.mjs prospect-discover",
     "bundle-quote-action": "node scripts/bundle-function.mjs quote-action",
     "bundle-quote-public": "node scripts/bundle-function.mjs quote-public",
     "bundle-quote-cron": "node scripts/bundle-function.mjs quote-cron",
