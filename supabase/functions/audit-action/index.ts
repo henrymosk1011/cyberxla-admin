@@ -87,8 +87,11 @@ function asUser(authorization: string) {
   };
 }
 
+// The scanner is hosted in the patch-reports repo; override with AUDIT_REPO.
+const DEFAULT_REPO = "henrymosk1011/cyberxla-patch-reports";
+
 async function dispatch(workflow: "audit-scan.yml" | "audit-send.yml" | "audit-render.yml", id: string, force = false, copy = false) {
-  const { url, init } = dispatchRequest(env("AUDIT_REPO"), workflow, id, env("GH_ACTIONS_TOKEN"), force, copy);
+  const { url, init } = dispatchRequest(Deno.env.get("AUDIT_REPO") ?? DEFAULT_REPO, workflow, id, env("GH_ACTIONS_TOKEN"), force, copy);
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) });
   if (res.status !== 204) {
     const detail = res.status === 401 ? "the GitHub token has expired or was revoked" : res.status === 404 ? "the audit repo or its workflows aren't set up yet" : `GitHub answered ${res.status}`;
