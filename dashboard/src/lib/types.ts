@@ -585,7 +585,8 @@ export type ReportComputer = {
   status: string;
   tone: Tone;
   hidden: boolean;
-  updates: { count: number; items: { name: string; count: number; severity: string | null }[]; empty: string };
+  /** failed: updates that did not install (reports made before Nov 2026 have none). */
+  updates: { count: number; items: { name: string; count: number; severity: string | null }[]; failed?: { name: string }[]; empty: string };
 };
 
 /** One UniFi device as the Check UniFi status job saves it (lib/unifi.js statusData in the reports repo). */

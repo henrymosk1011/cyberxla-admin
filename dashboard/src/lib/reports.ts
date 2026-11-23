@@ -202,6 +202,10 @@ export function contentProblem(c: unknown): string | null {
     if (!isObj(r) || !isText(r.name)) return `computers.list[${i}].name must be text.`;
     if (r.host !== undefined && r.host !== null && !isText(r.host)) return `computers.list[${i}].host must be text.`;
     if (!isObj(r.updates) || !Array.isArray(r.updates.items)) return `computers.list[${i}].updates.items must be a list.`;
+    if (r.updates.failed !== undefined && r.updates.failed !== null) {
+      if (!Array.isArray(r.updates.failed)) return `computers.list[${i}].updates.failed must be a list.`;
+      for (const [j, u] of r.updates.failed.entries()) if (!isObj(u) || !isText(u.name)) return `computers.list[${i}].updates.failed[${j}].name must be text.`;
+    }
     if (!TONE_SET.has(r.tone as Tone)) return `computers.list[${i}].tone must be good, warn, bad, info or lime.`;
   }
   if (!isObj(c.security) || !isText(c.security.text) || !Array.isArray(c.security.apps)) return "security needs text and apps.";
@@ -212,7 +216,7 @@ export function contentProblem(c: unknown): string | null {
 /** A computer row the admin adds by hand. */
 export const blankComputer = (): ReportContent["computers"]["list"][number] => ({
   name: "New computer", host: "", run: "Success", pending: "0", crit: "0", status: "Protected", tone: "good", hidden: false,
-  updates: { count: 0, items: [], empty: "Already up to date. Nothing new to install." },
+  updates: { count: 0, items: [], failed: [], empty: "Already up to date. Nothing new to install." },
 });
 
 /** What Send now will do, for its confirmation. */

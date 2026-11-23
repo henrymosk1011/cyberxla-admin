@@ -663,7 +663,7 @@
                 {#each draft.computers.list as pc, i (i)}
                   <li class:hiddenpc={pc.hidden}>
                     <details>
-                      <summary><strong>{pc.name || "Unnamed"}</strong> <span class="muted">{pc.run} · {pc.status}{pc.hidden ? " · hidden" : ""}{isLeftOff(client?.report_exclude, pc.name) ? " · always left off" : ""} · {pc.updates.count} {pc.updates.count === 1 ? "update" : "updates"}</span></summary>
+                      <summary><strong>{pc.name || "Unnamed"}</strong> <span class="muted">{pc.run} · {pc.status}{pc.hidden ? " · hidden" : ""}{isLeftOff(client?.report_exclude, pc.name) ? " · always left off" : ""} · {pc.updates.count} {pc.updates.count === 1 ? "update" : "updates"}{pc.updates.failed?.length ? `, ${pc.updates.failed.length} failed` : ""}</span></summary>
                       <div class="pc">
                         <div class="grid">
                           <div class="field"><label for="pc-{i}-n">Name</label><input id="pc-{i}-n" class="input" bind:value={pc.name} /></div>
@@ -699,6 +699,17 @@
                             </div>
                           {/each}
                           <button type="button" class="btn sm" onclick={() => pc.updates.items.push({ name: "", count: 1, severity: null })}>Add update<span class="sr-only"> to {pc.name}</span></button>
+                        </fieldset>
+                        <fieldset class="updates">
+                          <legend>Updates that failed on {pc.name || "this computer"}</legend>
+                          <p class="hint">Listed after the installed updates, tagged Failed.</p>
+                          {#each pc.updates.failed ?? [] as u, j (j)}
+                            <div class="upd">
+                              <div class="field grow"><label for="pc-{i}-f{j}-n">Failed update {j + 1}</label><input id="pc-{i}-f{j}-n" class="input" bind:value={u.name} /></div>
+                              <button type="button" class="btn sm ghost" onclick={() => pc.updates.failed?.splice(j, 1)}>Remove<span class="sr-only"> failed update {j + 1} from {pc.name}</span></button>
+                            </div>
+                          {/each}
+                          <button type="button" class="btn sm" onclick={() => (pc.updates.failed ??= []).push({ name: "" })}>Add failed update<span class="sr-only"> to {pc.name}</span></button>
                         </fieldset>
                         <div class="pcacts">
                           <button type="button" class="btn sm ghost" disabled={i === 0} onclick={() => move(draft!.computers.list, i, -1)}>Move up<span class="sr-only"> {pc.name}</span></button>

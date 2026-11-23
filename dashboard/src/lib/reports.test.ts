@@ -96,6 +96,19 @@ test("content checks match the renderer's", () => {
   assert.match(contentProblem({ ...weekly, extra: { title: "x", items: [{ title: "Router" }] } })!, /extra\.items\[0\]/);
 });
 
+test("failed updates are optional and checked like the renderer checks them", () => {
+  const withFailed = (failed: unknown) => {
+    const c = structuredClone(weekly);
+    (c.computers.list[0].updates as Record<string, unknown>).failed = failed;
+    return c;
+  };
+  assert.equal(contentProblem(withFailed([{ name: "Adobe Acrobat Pro 26.003.22110" }])), null);
+  assert.equal(contentProblem(withFailed(undefined)), null);
+  assert.equal(contentProblem(withFailed([])), null);
+  assert.match(contentProblem(withFailed("Acrobat"))!, /updates\.failed must be a list/);
+  assert.match(contentProblem(withFailed([{ title: "x" }]))!, /updates\.failed\[0\]\.name/);
+});
+
 test("dash check", () => {
   assert.deepEqual(dashFields({ content: weekly, email: FIX.weekly.email }), []);
   const c = structuredClone(weekly);
